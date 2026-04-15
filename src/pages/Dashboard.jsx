@@ -1,0 +1,1158 @@
+// ─── Dashboard ───────────────────────────────────────────────────────────────
+import { useState, useRef, useEffect } from 'react'
+import { useApp, ROLES } from '../context/AppContext'
+import { t } from '../i18n/translations'
+import { Card, StatCard, Badge, Table, TR, TD, Btn, Avatar, Divider, SectionLabel, statusColor, Input, Select, Textarea } from '../components/UI'
+import { SAMPLE_USERS, SAMPLE_ORDERS, INVENTORY_ITEMS, TABLES, MENU_CATEGORIES, MENU_ITEMS, SAMPLE_INVOICES, SUPPLIER_INVOICES } from '../lib/mockData'
+
+export function Dashboard({ navTo }) {
+  const { user, lang } = useApp()
+  const isManagement = ['superadmin','admin','owner','manager','supervisor'].includes(user?.role)
+  const [users, setUsers] = useState(SAMPLE_USERS)
+
+  return (
+    <div>
+      {isManagement && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+          <StatCard label="Today's sales" value="€2,840" sub="+12% vs yesterday" />
+          <StatCard label="Orders" value="47" sub="8 pending" />
+          <StatCard label="Tables" value="9/12" sub="75% occupied" />
+          <StatCard label="Low stock" value="3" sub="Restock needed" subColor="text-red-500" />
+        </div>
+      )}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-medium text-gray-900 dark:text-white text-sm">Recent activity</h2>
+            <Badge color="blue">Live</Badge>
+          </div>
+          <Table headers={['Time','Action','User','Status']}>
+            {[['14:32','Order #047 placed','Maria G.','cooking'],['14:28','Invoice #312 paid','John C.','paid'],['14:15','New user request','Manager','pending'],['13:55','Stock updated','Supplier','active'],['13:40','Table 6 cleared','Waiter','free']].map(([time,action,u,s]) => (
+              <TR key={time}>
+                <TD>{time}</TD><TD>{action}</TD><TD>{u}</TD>
+                <TD><Badge color={statusColor(s)}>{s}</Badge></TD>
+              </TR>
+            ))}
+          </Table>
+        </Card>
+        <div className="space-y-4">
+          {isManagement && (
+            <Card>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="font-medium text-gray-900 dark:text-white text-sm">Pending approvals</h2>
+                <Badge color="red">{users.filter(u => u.status === 'pending').length}</Badge>
+              </div>
+              {users.filter(u => u.status === 'pending').map(u => (
+                <div key={u.id} className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700 last:border-0">
+                  <div className="flex items-center gap-2">
+                    <Avatar name={u.full_name} />
+                    <div>
+                      <div className="text-sm text-gray-800 dark:text-gray-200">{u.full_name}</div>
+                      <div className="text-xs text-gray-400">{ROLES[u.role]?.label}</div>
+                    </div>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <Btn size="sm" variant="success" onClick={() => setUsers(p => p.map(x => x.id === u.id ? {...x, status:'active'} : x))}>Approve</Btn>
+                    <Btn size="sm" variant="danger" onClick={() => setUsers(p => p.filter(x => x.id !== u.id))}>Reject</Btn>
+                  </div>
+                </div>
+              ))}
+              {users.filter(u => u.status === 'pending').length === 0 && <p className="text-sm text-gray-400 text-center py-3">All users approved</p>}
+            </Card>
+          )}
+          <Card>
+            <h2 className="font-medium text-gray-900 dark:text-white text-sm mb-3">Low stock alerts</h2>
+            {INVENTORY_ITEMS.filter(i => i.quantity < i.min_stock).map(item => (
+              <div key={item.id} className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700 last:border-0">
+                <span className="text-sm text-gray-700 dark:text-gray-300">{item.item_name}</span>
+                <span className="text-xs text-red-500">{item.quantity}{item.unit} / min {item.min_stock}{item.unit}</span>
+              </div>
+            ))}
+            <Btn size="sm" variant="primary" className="mt-3" onClick={() => navTo('inventory')}>View Inventory</Btn>
+          </Card>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Users ────────────────────────────────────────────────────────────────────
+export function Users() {
+  const { lang } = useApp()
+  const [users, setUsers] = useState(SAMPLE_USERS)
+  const [showForm, setShowForm] = useState(false)
+  const [form, setForm] = useState({ full_name:'', username:'', role:'waiter', password:'' })
+
+  function createUser() {
+    setUsers(p => [...p, { id: Date.now().toString(), ...form, status:'pending', created_by:'Manager' }])
+    setShowForm(false)
+    setForm({ full_name:'', username:'', role:'waiter', password:'' })
+    alert(t('userCreated', lang))
+  }
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-medium text-gray-900 dark:text-white">Staff accounts</h2>
+        <Btn variant="primary" size="sm" onClick={() => setShowForm(!showForm)}>+ Add User</Btn>
+      </div>
+      {showForm && (
+        <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 mb-4">
+          <div className="grid grid-cols-2 gap-3">
+            <Input label="Full Name" value={form.full_name} onChange={e => setForm(p=>({...p,full_name:e.target.value}))} placeholder="e.g. Maria Galea" />
+            <Input label="Username" value={form.username} onChange={e => setForm(p=>({...p,username:e.target.value}))} placeholder="mgalea" />
+            <Select label="Role" value={form.role} onChange={e => setForm(p=>({...p,role:e.target.value}))}>
+              {Object.entries(ROLES).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
+            </Select>
+            <Input label="Temp Password" type="password" value={form.password} onChange={e => setForm(p=>({...p,password:e.target.value}))} placeholder="Temp@1234" />
+          </div>
+          <div className="flex gap-2">
+            <Btn variant="success" onClick={createUser}>Create (send for approval)</Btn>
+            <Btn onClick={() => setShowForm(false)}>Cancel</Btn>
+          </div>
+        </div>
+      )}
+      <Table headers={['Name','Role','Created by','Status','Action']}>
+        {users.map(u => (
+          <TR key={u.id}>
+            <TD><div className="flex items-center gap-2"><Avatar name={u.full_name} />{u.full_name}</div></TD>
+            <TD><Badge color={statusColor(u.role)}>{ROLES[u.role]?.label || u.role}</Badge></TD>
+            <TD><span className="text-gray-500 dark:text-gray-400">{u.created_by}</span></TD>
+            <TD><Badge color={statusColor(u.status)}>{u.status}</Badge></TD>
+            <TD>
+              <div className="flex gap-1.5">
+                {u.status === 'pending' && <Btn size="sm" variant="success" onClick={() => setUsers(p => p.map(x => x.id===u.id?{...x,status:'active'}:x))}>Approve</Btn>}
+                <Btn size="sm">Edit</Btn>
+              </div>
+            </TD>
+          </TR>
+        ))}
+      </Table>
+    </Card>
+  )
+}
+
+// ─── Tables ───────────────────────────────────────────────────────────────────
+export function Tables({ navTo, setOrderContext }) {
+  const { liveOrders } = useApp()
+  const [tables, setTables] = useState(TABLES)
+
+  function selectTable(table) {
+    if (table.status === 'free') {
+      setOrderContext({ tableId: table.id, tableNumber: table.number, isTakeaway: false, existingOrder: null })
+      navTo('orders')
+    } else {
+      // Occupied — open existing order to add items
+      const existingOrder = liveOrders.find(o => o.table_id === table.id)
+      if (existingOrder) {
+        setOrderContext({ tableId: table.id, tableNumber: table.number, isTakeaway: false, existingOrder })
+        navTo('orders')
+      }
+    }
+  }
+
+  function takeaway() {
+    setOrderContext({ tableId: null, tableNumber: null, isTakeaway: true, existingOrder: null })
+    navTo('orders')
+  }
+
+  function addToOrder(order) {
+    setOrderContext({
+      tableId: order.table_id,
+      tableNumber: order.table_number,
+      isTakeaway: order.order_type === 'takeaway',
+      existingOrder: order,
+    })
+    navTo('orders')
+  }
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <Card>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-medium text-gray-900 dark:text-white">Table layout</h2>
+          <div className="flex gap-2">
+            <Badge color="green">Free: {tables.filter(t=>t.status==='free').length}</Badge>
+            <Badge color="red">Occ: {tables.filter(t=>t.status==='occupied').length}</Badge>
+          </div>
+        </div>
+        <div className="grid grid-cols-4 gap-2 mb-4">
+          {tables.map(table => (
+            <button key={table.id} onClick={() => selectTable(table)}
+              className={`aspect-square flex flex-col items-center justify-center rounded-xl border text-sm font-medium transition-all active:scale-95 ${
+                table.status === 'free'
+                  ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300 hover:border-emerald-500'
+                  : 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-300 dark:border-indigo-700 text-indigo-600 dark:text-indigo-300 hover:border-indigo-500 cursor-pointer'
+              }`}>
+              <span className="text-lg font-bold">{table.number}</span>
+              <span className="text-xs opacity-70">{table.status === 'free' ? 'Free' : '+ Add'}</span>
+            </button>
+          ))}
+        </div>
+        <Btn variant="warning" fullWidth size="lg" onClick={takeaway}>🛍 Takeaway Order</Btn>
+      </Card>
+      <Card>
+        <h2 className="font-medium text-gray-900 dark:text-white mb-3">Active orders</h2>
+        <Table headers={['Table','Type','Status','Action']}>
+          {liveOrders.map(o => (
+            <TR key={o.id}>
+              <TD className="font-medium">{o.order_type === 'takeaway' ? 'Takeaway' : `T${o.table_number}`}</TD>
+              <TD><Badge color={o.order_type==='takeaway'?'orange':'blue'}>{o.order_type==='takeaway'?'Takeaway':'Dine-in'}</Badge></TD>
+              <TD><Badge color={statusColor(o.status)}>{o.status}</Badge></TD>
+              <TD>
+                <div className="flex gap-1.5">
+                  {o.status === 'ready'
+                    ? <Btn size="sm" variant="primary" onClick={() => navTo('billing')}>Bill</Btn>
+                    : null
+                  }
+                  <Btn size="sm" variant="success" onClick={() => addToOrder(o)}>+ Add</Btn>
+                </div>
+              </TD>
+            </TR>
+          ))}
+        </Table>
+      </Card>
+    </div>
+  )
+}
+
+// ─── Orders ───────────────────────────────────────────────────────────────────
+export function Orders({ navTo, orderContext }) {
+  const { lang, user, liveOrders, setLiveOrders, nextOrderNum, setNextOrderNum } = useApp()
+  const [newItems, setNewItems] = useState([])
+  const [cat, setCat] = useState('cat1')
+  const [notes, setNotes] = useState('')
+
+  const isAddingToExisting = !!orderContext?.existingOrder
+  const existingOrder = orderContext?.existingOrder || null
+  const existingItems = existingOrder?.items || []
+  const round = isAddingToExisting ? (existingOrder.rounds ?? 1) + 1 : 1
+
+  const label = orderContext?.isTakeaway ? 'Takeaway' : orderContext?.tableNumber ? `Table ${orderContext.tableNumber}` : 'New Order'
+  const catItems = MENU_ITEMS.filter(m => m.category_id === cat && m.available)
+
+  const existingSubtotal = existingItems.reduce((a, i) => a + i.price * i.qty, 0)
+  const newSubtotal = newItems.reduce((a, i) => a + i.price * i.qty, 0)
+  const grandTotal = existingSubtotal + newSubtotal
+
+  function addItem(item) {
+    setNewItems(p => {
+      const ex = p.find(i => i.id === item.id)
+      if (ex) return p.map(i => i.id === item.id ? { ...i, qty: i.qty + 1 } : i)
+      return [...p, { ...item, qty: 1 }]
+    })
+  }
+
+  function changeQty(id, delta) {
+    setNewItems(p => p.map(i => i.id === id ? { ...i, qty: i.qty + delta } : i).filter(i => i.qty > 0))
+  }
+
+  function sendKitchen() {
+    if (!newItems.length) return
+
+    if (isAddingToExisting) {
+      // Append new items to existing order
+      setLiveOrders(prev => prev.map(o =>
+        o.id === existingOrder.id
+          ? { ...o, items: [...o.items, ...newItems.map(i => ({ name: i.name_en, qty: i.qty, price: i.price }))], rounds: round, status: 'cooking' }
+          : o
+      ))
+      alert(`Round ${round} sent to kitchen!\n${newItems.length} new item(s) added to ${label}`)
+    } else {
+      // New order
+      const newOrder = {
+        id: `o${Date.now()}`,
+        order_number: nextOrderNum,
+        table_id: orderContext?.tableId || null,
+        table_number: orderContext?.tableNumber || null,
+        order_type: orderContext?.isTakeaway ? 'takeaway' : 'dinein',
+        status: 'cooking',
+        waiter: user?.full_name || 'Staff',
+        notes,
+        created_at: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        items: newItems.map(i => ({ name: i.name_en, qty: i.qty, price: i.price })),
+        rounds: 1,
+      }
+      setLiveOrders(prev => [...prev, newOrder])
+      setNextOrderNum(n => n + 1)
+      alert(`Order #${nextOrderNum} sent to kitchen!\n${newItems.length} item(s) for ${label}`)
+    }
+
+    setNewItems([])
+    setNotes('')
+    navTo('tables')
+  }
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* Menu side */}
+      <div>
+        <Card className="mb-4">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-semibold text-gray-900 dark:text-white">{label}</h2>
+            <div className="flex items-center gap-2">
+              {isAddingToExisting && <Badge color="indigo">Round {round}</Badge>}
+              <Badge color={orderContext?.isTakeaway ? 'orange' : 'blue'}>{orderContext?.isTakeaway ? 'Takeaway' : 'Dine-in'}</Badge>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2 mb-3">
+            {MENU_CATEGORIES.map(c => (
+              <button key={c.id} onClick={() => setCat(c.id)}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${cat === c.id ? 'bg-indigo-600 text-white border-indigo-600' : 'border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-indigo-300'}`}>
+                {c.icon} {c.name_en}
+              </button>
+            ))}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {catItems.map(item => (
+              <button key={item.id} onClick={() => addItem(item)}
+                className="border border-gray-200 dark:border-gray-600 rounded-xl p-3 text-left hover:border-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 active:scale-95 transition-all">
+                <div className="text-sm font-semibold text-gray-800 dark:text-gray-200">{item.name_en}</div>
+                <div className="text-sm text-indigo-600 font-bold mt-1">€{item.price.toFixed(2)}</div>
+                <div className="text-xs text-gray-400 mt-0.5 truncate">{item.description_en}</div>
+              </button>
+            ))}
+          </div>
+        </Card>
+      </div>
+
+      {/* Order side */}
+      <div className="space-y-3">
+
+        {/* Already ordered (existing rounds) */}
+        {isAddingToExisting && existingItems.length > 0 && (
+          <Card>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-semibold text-gray-500 dark:text-gray-400 text-sm">
+                Already ordered
+                {existingOrder.rounds > 1 && <span className="ml-1 text-xs">({existingOrder.rounds} round{existingOrder.rounds > 1 ? 's' : ''})</span>}
+              </h2>
+              <Badge color="gray">€{existingSubtotal.toFixed(2)}</Badge>
+            </div>
+            {existingItems.map((item, i) => (
+              <div key={i} className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700 last:border-0 opacity-60">
+                <span className="flex-1 text-sm text-gray-600 dark:text-gray-400">{item.name}</span>
+                <span className="text-xs text-gray-400 mr-3">x{item.qty}</span>
+                <span className="text-sm text-gray-500 dark:text-gray-400 w-14 text-right">€{(item.price * item.qty).toFixed(2)}</span>
+              </div>
+            ))}
+          </Card>
+        )}
+
+        {/* New items being added */}
+        <Card>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-semibold text-gray-900 dark:text-white text-sm">
+              {isAddingToExisting ? `Round ${round} — adding now` : 'Order summary'}
+            </h2>
+            {newItems.length > 0 && <Badge color="indigo">+€{newSubtotal.toFixed(2)}</Badge>}
+          </div>
+          {newItems.length === 0
+            ? (
+              <div className="text-center py-6">
+                <p className="text-sm text-gray-400">
+                  {isAddingToExisting ? 'Select items to add to this order' : 'No items added yet'}
+                </p>
+              </div>
+            )
+            : newItems.map(item => (
+              <div key={item.id} className="flex items-center gap-2 py-2 border-b border-gray-100 dark:border-gray-700 last:border-0">
+                <span className="flex-1 text-sm text-gray-800 dark:text-gray-200">{item.name_en}</span>
+                <button onClick={() => changeQty(item.id, -1)} className="w-7 h-7 flex items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 font-bold">−</button>
+                <span className="text-sm font-bold w-5 text-center text-gray-800 dark:text-gray-200">{item.qty}</span>
+                <button onClick={() => changeQty(item.id, 1)} className="w-7 h-7 flex items-center justify-center rounded-lg bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 font-bold">+</button>
+                <span className="text-sm font-semibold text-gray-800 dark:text-gray-200 w-14 text-right">€{(item.price * item.qty).toFixed(2)}</span>
+              </div>
+            ))
+          }
+          {newItems.length > 0 && (
+            <>
+              <Divider />
+              <div className="space-y-1">
+                {isAddingToExisting && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">Previous total</span>
+                    <span className="text-gray-400">€{existingSubtotal.toFixed(2)}</span>
+                  </div>
+                )}
+                {isAddingToExisting && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Round {round} adds</span>
+                    <span className="text-indigo-600 font-semibold">+€{newSubtotal.toFixed(2)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-sm font-bold pt-1 border-t border-gray-100 dark:border-gray-700">
+                  <span className="text-gray-700 dark:text-gray-200">{isAddingToExisting ? 'Running total' : 'Subtotal'}</span>
+                  <span className="text-gray-900 dark:text-white text-base">€{grandTotal.toFixed(2)}</span>
+                </div>
+              </div>
+            </>
+          )}
+        </Card>
+
+        {/* Notes (only for new orders) */}
+        {!isAddingToExisting && (
+          <Card>
+            <Textarea label="Notes / Allergies" value={notes} onChange={e => setNotes(e.target.value)} placeholder="e.g. Nut allergy, no garlic..." />
+            <div className="flex flex-wrap gap-1.5">
+              {['Nut allergy','Gluten free','Lactose','Vegan','No spice'].map(tag => (
+                <button key={tag} onClick={() => setNotes(p => p ? p+'. '+tag : tag)}
+                  className="px-2 py-1 text-xs border border-gray-200 dark:border-gray-600 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700">
+                  {tag}
+                </button>
+              ))}
+            </div>
+          </Card>
+        )}
+
+        <Btn
+          variant="success"
+          fullWidth
+          size="lg"
+          onClick={sendKitchen}
+          disabled={newItems.length === 0}
+        >
+          {isAddingToExisting ? `Send Round ${round} to Kitchen` : 'Send to Kitchen'}
+        </Btn>
+        <Btn fullWidth onClick={() => navTo('tables')}>Back to Tables</Btn>
+      </div>
+    </div>
+  )
+}
+
+// ─── Kitchen ──────────────────────────────────────────────────────────────────
+export function Kitchen() {
+  const [orders, setOrders] = useState([
+    { id:'k1', order_number:44, table:'Table 2', items:['Pasta Carbonara x2','Garlic Bread x1'], time:'14:28', status:'pending' },
+    { id:'k2', order_number:45, table:'Table 5', items:['Grilled Sea Bass x1','Mixed Salad x2'], time:'14:15', status:'cooking' },
+    { id:'k3', order_number:46, table:'Takeaway', items:['Margherita Pizza x2'], time:'14:05', status:'ready' },
+    { id:'k4', order_number:47, table:'Table 9', items:['Beef Burger x1','Soft Drink x2'], time:'13:55', status:'pending' },
+  ])
+
+  function advance(id) {
+    setOrders(p => p.map(o => {
+      if (o.id !== id) return o
+      if (o.status === 'pending') return { ...o, status: 'cooking' }
+      if (o.status === 'cooking') return { ...o, status: 'ready' }
+      return o
+    }).filter(o => !(o.id === id && o.status === 'ready' && orders.find(x=>x.id===id)?.status==='ready')))
+  }
+
+  const borderColor = { pending: 'border-l-amber-400', cooking: 'border-l-blue-500', ready: 'border-l-green-500' }
+  const btnVariant = { pending: 'primary', cooking: 'success', ready: 'default' }
+  const btnLabel = { pending: 'Start Cooking', cooking: 'Mark Ready', ready: 'Served — Clear' }
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {orders.map(o => (
+        <Card key={o.id} className={`border-l-4 ${borderColor[o.status]}`}>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-base font-semibold text-gray-900 dark:text-white">{o.table}</span>
+            <Badge color={statusColor(o.status)}>{o.status}</Badge>
+          </div>
+          <div className="text-xs text-gray-400 mb-3">{o.time} — #{o.order_number}</div>
+          {o.items.map((item, i) => (
+            <div key={i} className="text-sm py-2 border-b border-gray-100 dark:border-gray-700 last:border-0 text-gray-700 dark:text-gray-300">{item}</div>
+          ))}
+          <Btn variant={btnVariant[o.status]} fullWidth size="lg" className="mt-3" onClick={() => advance(o.id)}>
+            {btnLabel[o.status]}
+          </Btn>
+        </Card>
+      ))}
+    </div>
+  )
+}
+
+// ─── Billing ──────────────────────────────────────────────────────────────────
+export function Billing() {
+  const { lang, company, liveOrders } = useApp()
+  const vatRate = company.vat_rate / 100
+
+  // ── Cart state ──────────────────────────────────────────────────────────────
+  const [cart, setCart] = useState([])
+  const [payMethod, setPayMethod] = useState(null)
+  const [cashGiven, setCashGiven] = useState(0)
+  const [receipt, setReceipt] = useState(null)
+
+  // ── Product browser state ───────────────────────────────────────────────────
+  const [activeCat, setActiveCat] = useState('all')
+  const [search, setSearch] = useState('')
+  const [barcodeInput, setBarcodeInput] = useState('')
+  const [barcodeFlash, setBarcodeFlash] = useState(null) // item id that was just scanned
+  const [imgErrors, setImgErrors] = useState({})
+  const searchRef = useRef(null)
+  const barcodeRef = useRef(null)
+
+  // ── Filtered items ──────────────────────────────────────────────────────────
+  const visibleItems = MENU_ITEMS.filter(item => {
+    if (!item.available) return false
+    const q = search.trim().toLowerCase()
+    const matchCat = activeCat === 'all' || item.category_id === activeCat
+    const matchSearch = !q || item.name_en.toLowerCase().includes(q)
+                            || item.code?.toLowerCase().includes(q)
+                            || item.barcode?.includes(q)
+    return matchCat && matchSearch
+  })
+
+  // ── Cart helpers ────────────────────────────────────────────────────────────
+  function addToCart(item) {
+    setBarcodeFlash(item.id)
+    setTimeout(() => setBarcodeFlash(null), 500)
+    setCart(p => {
+      const ex = p.find(i => i.id === item.id)
+      if (ex) return p.map(i => i.id === item.id ? { ...i, qty: i.qty + 1 } : i)
+      return [...p, { ...item, qty: 1 }]
+    })
+  }
+
+  function changeQty(id, delta) {
+    setCart(p => p.map(i => i.id === id ? { ...i, qty: i.qty + delta } : i).filter(i => i.qty > 0))
+  }
+
+  function removeFromCart(id) {
+    setCart(p => p.filter(i => i.id !== id))
+  }
+
+  // ── Barcode scanner ─────────────────────────────────────────────────────────
+  // Barcode scanners act as keyboard — they type fast and press Enter
+  function handleBarcodeKey(e) {
+    if (e.key === 'Enter') {
+      const val = barcodeInput.trim()
+      const found = MENU_ITEMS.find(m => m.barcode === val || m.code === val || m.id === val)
+      if (found) {
+        addToCart(found)
+        setBarcodeInput('')
+        setSearch('')
+        setActiveCat('all')
+      } else {
+        // Fall through to search
+        setSearch(val)
+        setBarcodeInput('')
+      }
+    }
+  }
+
+  // ── Totals ──────────────────────────────────────────────────────────────────
+  const subtotal = cart.reduce((a, i) => a + i.price * i.qty, 0)
+  const vat = subtotal * vatRate
+  const total = subtotal + vat
+
+  // ── Confirm payment ─────────────────────────────────────────────────────────
+  function confirmPayment() {
+    if (!payMethod || cart.length === 0) return
+    setReceipt({
+      items: cart,
+      subtotal, vat, total, payMethod, cashGiven,
+      change: cashGiven > 0 ? Math.max(0, cashGiven - total) : 0,
+      date: new Date(),
+      order_number: Math.floor(Math.random() * 900) + 100,
+    })
+  }
+
+  // ── Receipt view ─────────────────────────────────────────────────────────────
+  if (receipt) {
+    return (
+      <div className="max-w-sm mx-auto">
+        <Card>
+          <div className="text-center pb-4 border-b-2 border-dashed border-gray-200 dark:border-gray-600 mb-4">
+            <div className="text-base font-bold text-gray-900 dark:text-white">{company.name}</div>
+            <div className="text-xs text-gray-400">{company.address}</div>
+            <div className="text-xs text-gray-400 mt-1">
+              {receipt.date.toLocaleDateString()} {receipt.date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+            </div>
+            <div className="flex justify-center gap-2 mt-2">
+              <Badge color="green" dot>Paid</Badge>
+              <Badge color="indigo">#{receipt.order_number}</Badge>
+            </div>
+          </div>
+          {receipt.items.map((item, i) => (
+            <div key={i} className="flex justify-between text-sm py-1.5 border-b border-gray-100 dark:border-gray-700">
+              <span className="text-gray-700 dark:text-gray-300">{item.emoji} {item.name_en} ×{item.qty}</span>
+              <span className="font-medium text-gray-800 dark:text-gray-200">€{(item.price * item.qty).toFixed(2)}</span>
+            </div>
+          ))}
+          <Divider />
+          <div className="space-y-1.5 text-sm">
+            <div className="flex justify-between text-gray-500"><span>Subtotal</span><span>€{receipt.subtotal.toFixed(2)}</span></div>
+            <div className="flex justify-between text-gray-500"><span>VAT {company.vat_rate}%</span><span>€{receipt.vat.toFixed(2)}</span></div>
+            <div className="flex justify-between font-bold text-base text-gray-900 dark:text-white pt-2 border-t-2 border-gray-200 dark:border-gray-600">
+              <span>Total</span><span>€{receipt.total.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-gray-500 capitalize"><span>Payment</span><span>{receipt.payMethod}</span></div>
+            {receipt.change > 0 && (
+              <div className="flex justify-between text-emerald-600 dark:text-emerald-400 font-semibold">
+                <span>Change</span><span>€{receipt.change.toFixed(2)}</span>
+              </div>
+            )}
+          </div>
+          {/* Barcode */}
+          <div className="flex flex-col items-center mt-5 mb-3">
+            <div className="text-2xl tracking-widest font-mono text-gray-700 dark:text-gray-300">▌▌▐▌▌▐▌▐▌▌▐</div>
+            <div className="text-xs text-gray-400 mt-1 font-mono">#{receipt.order_number}</div>
+          </div>
+          <div className="text-center text-xs text-gray-400 mb-5 italic">{company.receipt_footer}</div>
+          <div className="grid grid-cols-2 gap-2">
+            <Btn variant="primary" onClick={() => alert('Sending to printer...')}>🖨 Print</Btn>
+            <Btn onClick={() => alert('Share via email/WhatsApp...')}>📤 Share</Btn>
+          </div>
+          <Btn variant="success" fullWidth className="mt-2" onClick={() => {
+            setReceipt(null); setCart([]); setPayMethod(null); setCashGiven(0)
+          }}>
+            New Sale
+          </Btn>
+        </Card>
+      </div>
+    )
+  }
+
+  // ── Main POS layout ──────────────────────────────────────────────────────────
+  return (
+    <div className="flex gap-4 h-[calc(100vh-130px)] min-h-0">
+
+      {/* ── LEFT: Product browser ── */}
+      <div className="flex-1 flex flex-col min-w-0 gap-3">
+
+        {/* Search + Barcode row */}
+        <div className="flex gap-2">
+          {/* Text / code search */}
+          <div className="flex-1 relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-base">🔍</span>
+            <input
+              ref={searchRef}
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search by name, code (M001, S002…)"
+              className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
+            />
+          </div>
+          {/* Barcode scanner input */}
+          <div className="relative w-52">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-base">📷</span>
+            <input
+              ref={barcodeRef}
+              value={barcodeInput}
+              onChange={e => setBarcodeInput(e.target.value)}
+              onKeyDown={handleBarcodeKey}
+              placeholder="Scan barcode…"
+              className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-indigo-200 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-900/20 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
+            />
+          </div>
+        </div>
+
+        {/* Category tabs */}
+        <div className="flex gap-1.5 flex-wrap">
+          <button
+            onClick={() => setActiveCat('all')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${activeCat === 'all' ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-indigo-300'}`}
+          >
+            🍴 All Items ({MENU_ITEMS.filter(m => m.available).length})
+          </button>
+          {MENU_CATEGORIES.map(cat => (
+            <button
+              key={cat.id}
+              onClick={() => setActiveCat(cat.id)}
+              className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${activeCat === cat.id ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-indigo-300'}`}
+            >
+              {cat.icon} {cat.name_en} ({MENU_ITEMS.filter(m => m.category_id === cat.id && m.available).length})
+            </button>
+          ))}
+        </div>
+
+        {/* Product grid — large buttons with image */}
+        <div className="flex-1 overflow-y-auto">
+          {visibleItems.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-40 text-gray-400">
+              <div className="text-4xl mb-2">🔍</div>
+              <div className="text-sm font-medium">No items found</div>
+              <div className="text-xs mt-1">Try a different search or category</div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 xl:grid-cols-4 gap-3 pb-2">
+              {visibleItems.map(item => (
+                <button
+                  key={item.id}
+                  onClick={() => addToCart(item)}
+                  className={`relative flex flex-col items-center justify-between rounded-2xl border-2 p-3 text-left transition-all active:scale-95 cursor-pointer group
+                    ${barcodeFlash === item.id
+                      ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/30 scale-95'
+                      : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:shadow-card-md'
+                    }`}
+                >
+                  {/* Item image */}
+                  <div className="w-full aspect-square rounded-xl overflow-hidden mb-2 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-600 group-hover:scale-105 transition-transform duration-200 shadow-sm">
+                    {item.image_url && !imgErrors[item.id] ? (
+                      <img
+                        src={item.image_url}
+                        alt={item.name_en}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                        onError={() => setImgErrors(p => ({ ...p, [item.id]: true }))}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-4xl">
+                        {item.emoji}
+                      </div>
+                    )}
+                  </div>
+                  {/* Name */}
+                  <div className="w-full">
+                    <div className="text-xs font-bold text-gray-800 dark:text-gray-100 leading-tight truncate">{item.name_en}</div>
+                    <div className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 font-mono">{item.code}</div>
+                    <div className="text-sm font-extrabold text-indigo-600 dark:text-indigo-400 mt-1">€{item.price.toFixed(2)}</div>
+                  </div>
+                  {/* Cart qty badge */}
+                  {cart.find(c => c.id === item.id) && (
+                    <span className="absolute -top-1.5 -right-1.5 bg-indigo-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center shadow">
+                      {cart.find(c => c.id === item.id).qty}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── RIGHT: Cart + Payment ── */}
+      <div className="w-80 flex-shrink-0 flex flex-col gap-3">
+
+        {/* Cart */}
+        <Card className="flex-1 flex flex-col min-h-0 !p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-bold text-gray-900 dark:text-white">Cart</h2>
+            {cart.length > 0 && (
+              <button onClick={() => setCart([])} className="text-xs text-rose-500 hover:text-rose-600 font-semibold">Clear all</button>
+            )}
+          </div>
+          <div className="flex-1 overflow-y-auto space-y-1 min-h-0">
+            {cart.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-gray-300 dark:text-gray-600 py-8">
+                <div className="text-4xl mb-2">🛒</div>
+                <div className="text-sm">Cart is empty</div>
+                <div className="text-xs mt-1 text-center">Tap a product or scan a barcode</div>
+              </div>
+            ) : cart.map(item => (
+              <div key={item.id} className="flex items-center gap-2 py-2 px-1 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                <span className="text-xl flex-shrink-0">{item.emoji}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-semibold text-gray-800 dark:text-gray-200 truncate">{item.name_en}</div>
+                  <div className="text-xs text-indigo-600 font-bold">€{item.price.toFixed(2)}</div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => changeQty(item.id, -1)} className="w-6 h-6 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 font-bold text-sm flex items-center justify-center hover:bg-rose-100 hover:text-rose-600 dark:hover:bg-rose-900/30">−</button>
+                  <span className="text-xs font-bold w-4 text-center text-gray-800 dark:text-gray-200">{item.qty}</span>
+                  <button onClick={() => changeQty(item.id, 1)} className="w-6 h-6 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 font-bold text-sm flex items-center justify-center hover:bg-indigo-200">+</button>
+                </div>
+                <span className="text-xs font-extrabold text-gray-800 dark:text-gray-200 w-12 text-right">€{(item.price * item.qty).toFixed(2)}</span>
+                <button onClick={() => removeFromCart(item.id)} className="text-gray-300 hover:text-rose-500 text-xs ml-0.5">✕</button>
+              </div>
+            ))}
+          </div>
+
+          {/* Totals */}
+          {cart.length > 0 && (
+            <>
+              <Divider />
+              <div className="space-y-1 text-sm">
+                <div className="flex justify-between text-gray-400"><span>Subtotal</span><span>€{subtotal.toFixed(2)}</span></div>
+                <div className="flex justify-between text-gray-400"><span>VAT {company.vat_rate}%</span><span>€{vat.toFixed(2)}</span></div>
+                <div className="flex justify-between font-extrabold text-lg text-gray-900 dark:text-white pt-1 border-t-2 border-indigo-100 dark:border-indigo-900/40">
+                  <span>Total</span>
+                  <span className="text-indigo-600 dark:text-indigo-400">€{total.toFixed(2)}</span>
+                </div>
+              </div>
+            </>
+          )}
+        </Card>
+
+        {/* Payment */}
+        <Card className="!p-4">
+          <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Payment Method</div>
+          <div className="grid grid-cols-3 gap-2 mb-3">
+            {[['💵', 'Cash', 'cash'], ['💳', 'Card', 'card'], ['📱', 'Mobile', 'mobile']].map(([icon, label, val]) => (
+              <button
+                key={val}
+                onClick={() => setPayMethod(val)}
+                className={`py-3 rounded-xl border-2 text-center transition-all ${
+                  payMethod === val
+                    ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30'
+                    : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+                }`}
+              >
+                <div className="text-2xl">{icon}</div>
+                <div className="text-xs font-bold text-gray-700 dark:text-gray-300 mt-1">{label}</div>
+              </button>
+            ))}
+          </div>
+
+          {/* Cash denomination quick-buttons */}
+          {payMethod === 'cash' && (
+            <div className="mb-3">
+              <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Cash tendered</div>
+              <div className="grid grid-cols-4 gap-1.5 mb-2">
+                {[5, 10, 20, 50, 100, 200].map(a => (
+                  <button
+                    key={a}
+                    onClick={() => setCashGiven(a)}
+                    className={`py-1.5 rounded-lg text-sm font-bold border transition-all ${cashGiven === a ? 'bg-indigo-600 text-white border-indigo-600' : 'border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                  >
+                    €{a}
+                  </button>
+                ))}
+              </div>
+              <div className="flex justify-between items-center bg-emerald-50 dark:bg-emerald-900/20 rounded-xl px-3 py-2">
+                <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">Change</span>
+                <span className="text-base font-extrabold text-emerald-600 dark:text-emerald-400">
+                  €{Math.max(0, cashGiven - total).toFixed(2)}
+                </span>
+              </div>
+            </div>
+          )}
+
+          <Btn
+            variant="success"
+            fullWidth
+            size="lg"
+            disabled={!payMethod || cart.length === 0}
+            onClick={confirmPayment}
+            className="text-base"
+          >
+            ✅ Confirm & Print Receipt
+          </Btn>
+        </Card>
+      </div>
+    </div>
+  )
+}
+
+// ─── Inventory ────────────────────────────────────────────────────────────────
+export function Inventory() {
+  const [items, setItems] = useState(INVENTORY_ITEMS)
+  return (
+    <Card>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-medium text-gray-900 dark:text-white">Stock levels</h2>
+        <Btn variant="primary" size="sm" onClick={() => alert('Request stock form — connects to Supabase')}>+ Request Stock</Btn>
+      </div>
+      <Table headers={['Item','Stock','Unit','Min','Level','Status']}>
+        {items.map(item => {
+          const pct = Math.min(100, Math.round((item.quantity / item.min_stock) * 100))
+          const barColor = pct < 50 ? 'bg-red-500' : pct < 100 ? 'bg-amber-400' : 'bg-green-500'
+          return (
+            <TR key={item.id}>
+              <TD className="font-medium">{item.item_name}</TD>
+              <TD className={item.quantity < item.min_stock ? 'text-red-500 font-medium' : ''}>{item.quantity}</TD>
+              <TD>{item.unit}</TD>
+              <TD>{item.min_stock}</TD>
+              <TD>
+                <div className="w-16 h-1.5 bg-gray-200 dark:bg-gray-600 rounded-full">
+                  <div className={`h-full rounded-full ${barColor}`} style={{width:`${pct}%`}} />
+                </div>
+              </TD>
+              <TD><Badge color={pct<50?'red':pct<100?'yellow':'green'}>{pct<50?'Low':pct<100?'OK':'Good'}</Badge></TD>
+            </TR>
+          )
+        })}
+      </Table>
+    </Card>
+  )
+}
+
+// ─── Reports ──────────────────────────────────────────────────────────────────
+export function Reports() {
+  const bars = [65,80,45,90,70,110,85,95,60,100,75,88,92,78]
+  const maxBar = Math.max(...bars)
+  return (
+    <div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        <StatCard label="This month" value="€48,200" sub="+8% vs last month" />
+        <StatCard label="Total orders" value="1,284" sub="avg €37.50 each" />
+        <StatCard label="Top seller" value="Pasta Carbonara" sub="312 sold" />
+        <StatCard label="Staff active" value="14" sub="All shifts covered" />
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card>
+          <h2 className="font-medium text-gray-900 dark:text-white mb-4">Daily sales — April</h2>
+          <div className="flex items-end gap-1 h-28">
+            {bars.map((h, i) => (
+              <div key={i} className="flex-1 bg-blue-500 dark:bg-blue-600 rounded-t opacity-70 hover:opacity-100 transition-opacity cursor-pointer min-w-0"
+                style={{ height: `${(h / maxBar) * 100}%` }} title={`Apr ${i+1}: €${(h*40).toFixed(0)}`} />
+            ))}
+          </div>
+          <div className="flex justify-between mt-1">
+            <span className="text-xs text-gray-400">Apr 1</span>
+            <span className="text-xs text-gray-400">Apr 14</span>
+          </div>
+        </Card>
+        <Card>
+          <h2 className="font-medium text-gray-900 dark:text-white mb-3">Top items this month</h2>
+          {[['Pasta Carbonara',312,'€4,524'],['Grilled Sea Bass',198,'€4,356'],['Margherita Pizza',245,'€2,940'],['Tiramisu',289,'€2,023'],['House Wine',401,'€2,406']].map(([name,count,rev]) => (
+            <div key={name} className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700 last:border-0">
+              <span className="text-sm text-gray-700 dark:text-gray-300">{name}</span>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-gray-400">{count}x</span>
+                <span className="text-sm font-medium text-blue-600">{rev}</span>
+              </div>
+            </div>
+          ))}
+        </Card>
+      </div>
+    </div>
+  )
+}
+
+// ─── Settings ─────────────────────────────────────────────────────────────────
+export function Settings() {
+  const { company, setCompany, lang } = useApp()
+  const [form, setForm] = useState({ ...company })
+  function save() { setCompany(form); alert(t('settingsSaved', lang)) }
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <Card>
+        <h2 className="font-medium text-gray-900 dark:text-white mb-4">Company details</h2>
+        <Input label="Company name" value={form.name} onChange={e => setForm(p=>({...p,name:e.target.value}))} />
+        <Input label="Address" value={form.address} onChange={e => setForm(p=>({...p,address:e.target.value}))} />
+        <Select label="Currency" value={form.currency} onChange={e => setForm(p=>({...p,currency:e.target.value}))}>
+          <option value="EUR">EUR — Euro</option>
+          <option value="USD">USD — US Dollar</option>
+          <option value="GBP">GBP — British Pound</option>
+        </Select>
+        <Input label="VAT rate (%)" type="number" value={form.vat_rate} onChange={e => setForm(p=>({...p,vat_rate:Number(e.target.value)}))} />
+        <Textarea label="Receipt footer" value={form.receipt_footer} onChange={e => setForm(p=>({...p,receipt_footer:e.target.value}))} />
+        <Btn variant="success" onClick={save}>Save Changes</Btn>
+      </Card>
+      <Card>
+        <h2 className="font-medium text-gray-900 dark:text-white mb-4">System info</h2>
+        <div className="space-y-2 text-sm">
+          {[['System','Malta POS v1.0'],['Languages','English, Maltese, Italian'],['Database','Supabase (PostgreSQL)'],['VAT Region','Malta — 18%'],['Currency','EUR — Euro']].map(([k,v]) => (
+            <div key={k} className="flex justify-between py-2 border-b border-gray-100 dark:border-gray-700">
+              <span className="text-gray-500 dark:text-gray-400">{k}</span>
+              <span className="text-gray-800 dark:text-gray-200 font-medium">{v}</span>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  )
+}
+
+// ─── Company (Super Admin) ────────────────────────────────────────────────────
+export function Company() {
+  return (
+    <Card>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-medium text-gray-900 dark:text-white">All restaurants</h2>
+        <Btn variant="primary" size="sm">+ Add Restaurant</Btn>
+      </div>
+      <Table headers={['Name','Location','Admin','Status','Action']}>
+        {[['Bella Vista Malta','Valletta','admin@bellavista.mt','active'],['Sea View Bistro','Sliema','admin@seaview.mt','active'],['Gozo Kitchen','Victoria','admin@gozo.mt','pending']].map(([name,loc,admin,status]) => (
+          <TR key={name}>
+            <TD className="font-medium">{name}</TD>
+            <TD>{loc}</TD>
+            <TD className="text-blue-600">{admin}</TD>
+            <TD><Badge color={statusColor(status)}>{status}</Badge></TD>
+            <TD><Btn size="sm">Manage</Btn></TD>
+          </TR>
+        ))}
+      </Table>
+    </Card>
+  )
+}
+
+// ─── Audit ────────────────────────────────────────────────────────────────────
+export function Audit() {
+  const logs = [
+    {time:'14:32',user:'Maria G.',role:'waiter',action:'Created order #047',module:'Orders'},
+    {time:'14:28',user:'John C.',role:'cashier',action:'Printed invoice #312',module:'Billing'},
+    {time:'14:15',user:'Anna B.',role:'manager',action:'Created user account',module:'Users'},
+    {time:'13:55',user:'Tony S.',role:'supplier',action:'Updated stock levels',module:'Inventory'},
+    {time:'13:40',user:'Owner',role:'owner',action:'Approved 2 users',module:'Users'},
+    {time:'13:20',user:'Sam V.',role:'supervisor',action:'Generated shift report',module:'Reports'},
+  ]
+  return (
+    <Card>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-medium text-gray-900 dark:text-white">Audit log</h2>
+        <input placeholder="Search logs..." className="px-3 py-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white w-40" />
+      </div>
+      <Table headers={['Time','User','Role','Action','Module']}>
+        {logs.map((log,i) => (
+          <TR key={i}>
+            <TD>{log.time}</TD>
+            <TD>{log.user}</TD>
+            <TD><Badge color="gray">{log.role}</Badge></TD>
+            <TD>{log.action}</TD>
+            <TD>{log.module}</TD>
+          </TR>
+        ))}
+      </Table>
+    </Card>
+  )
+}
+
+// ─── Notifications ────────────────────────────────────────────────────────────
+export function Notifications() {
+  const { notifications, markAllRead } = useApp()
+  const typeColor = { warning:'yellow', error:'red', info:'blue', success:'green' }
+  return (
+    <Card>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-medium text-gray-900 dark:text-white">Notifications</h2>
+        <Btn size="sm" onClick={markAllRead}>Mark all read</Btn>
+      </div>
+      {notifications.map(n => (
+        <div key={n.id} className={`flex items-start gap-3 py-3 border-b border-gray-100 dark:border-gray-700 last:border-0 ${!n.is_read ? '' : 'opacity-60'}`}>
+          <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${n.is_read ? 'bg-gray-300' : typeColor[n.type]==='yellow'?'bg-amber-400':typeColor[n.type]==='red'?'bg-red-500':'bg-blue-500'}`} />
+          <div className="flex-1">
+            <div className="text-sm text-gray-800 dark:text-gray-200">{n.message_en}</div>
+            <div className="text-xs text-gray-400 mt-1">{n.module}</div>
+          </div>
+        </div>
+      ))}
+    </Card>
+  )
+}
+
+// ─── Supervisor ───────────────────────────────────────────────────────────────
+export function Supervisor() {
+  return (
+    <div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        <StatCard label="Staff on duty" value="8" sub="All present" />
+        <StatCard label="Orders today" value="47" sub="8 active" />
+        <StatCard label="Avg order time" value="18m" sub="Target: 20m" />
+        <StatCard label="Issues flagged" value="1" sub="Late order T5" subColor="text-amber-500" />
+      </div>
+      <Card>
+        <h2 className="font-medium text-gray-900 dark:text-white mb-3">Staff performance today</h2>
+        <Table headers={['Name','Role','Orders','Avg time','Status']}>
+          {[['Maria Galea','Waiter',12,'16m','on-duty'],['John Camilleri','Cashier',18,'4m','on-duty'],['Tony Farrugia','Cook',31,'14m','on-duty'],['Sam Vella','Waiter',9,'19m','break']].map(([n,r,o,time,s]) => (
+            <TR key={n}>
+              <TD><div className="flex items-center gap-2"><Avatar name={n} />{n}</div></TD>
+              <TD>{r}</TD><TD>{o}</TD><TD>{time}</TD>
+              <TD><Badge color={statusColor(s)}>{s}</Badge></TD>
+            </TR>
+          ))}
+        </Table>
+      </Card>
+    </div>
+  )
+}
+
+// ─── Shifts ───────────────────────────────────────────────────────────────────
+export function Shifts() {
+  const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
+  return (
+    <Card>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-medium text-gray-900 dark:text-white">Shift schedule — this week</h2>
+        <Btn variant="primary" size="sm">+ Add Shift</Btn>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead><tr>
+            <th className="text-left px-3 py-2 bg-gray-50 dark:bg-gray-700 text-gray-500 font-medium">Staff</th>
+            <th className="text-left px-3 py-2 bg-gray-50 dark:bg-gray-700 text-gray-500 font-medium">Role</th>
+            {days.map(d => <th key={d} className="text-center px-2 py-2 bg-gray-50 dark:bg-gray-700 text-gray-500 font-medium">{d}</th>)}
+          </tr></thead>
+          <tbody>
+            {[['Maria G.','Waiter',['09-17','09-17','—','09-17','09-17','12-22','—']],['John C.','Cashier',['09-17','—','09-17','09-17','—','12-22','12-22']],['Tony F.','Cook',['10-18','10-18','10-18','—','10-18','12-22','12-22']],['Sam V.','Waiter',['—','12-22','12-22','12-22','12-22','—','12-22']]].map(([n,r,sched]) => (
+              <tr key={n} className="border-b border-gray-100 dark:border-gray-700">
+                <td className="px-3 py-2 text-gray-800 dark:text-gray-200">{n}</td>
+                <td className="px-3 py-2"><Badge color="gray">{r}</Badge></td>
+                {sched.map((s,i) => <td key={i} className={`px-2 py-2 text-center text-xs ${s==='—'?'text-gray-300 dark:text-gray-600':'text-gray-700 dark:text-gray-300'}`}>{s}</td>)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  )
+}
+
+// ─── Receipts ─────────────────────────────────────────────────────────────────
+export function Receipts() {
+  return (
+    <Card>
+      <h2 className="font-medium text-gray-900 dark:text-white mb-4">Receipt history</h2>
+      <Table headers={['Receipt #','Table','Type','Total','Payment','Time','Action']}>
+        {SAMPLE_INVOICES.map(inv => (
+          <TR key={inv.id}>
+            <TD className="font-medium text-blue-600">RCP-{inv.invoice_number}</TD>
+            <TD>{inv.table}</TD>
+            <TD><Badge color={inv.type==='takeaway'?'orange':'blue'}>{inv.type==='takeaway'?'Takeaway':'Dine-in'}</Badge></TD>
+            <TD className="font-medium">€{inv.total.toFixed(2)}</TD>
+            <TD>{inv.payment_method}</TD>
+            <TD>{inv.created_at}</TD>
+            <TD><Btn size="sm" onClick={() => alert('Reprinting...')}>Reprint</Btn></TD>
+          </TR>
+        ))}
+      </Table>
+    </Card>
+  )
+}
+
+// ─── Supplier Invoices ────────────────────────────────────────────────────────
+export function Invoices() {
+  return (
+    <Card>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-medium text-gray-900 dark:text-white">Supplier invoices</h2>
+        <Btn variant="primary" size="sm">+ Submit Invoice</Btn>
+      </div>
+      <Table headers={['Invoice #','Supplier','Items','Total','Status','Date']}>
+        {SUPPLIER_INVOICES.map(inv => (
+          <TR key={inv.id}>
+            <TD className="font-medium text-blue-600">{inv.invoice_ref}</TD>
+            <TD>{inv.supplier}</TD>
+            <TD className="text-gray-500 text-xs">{inv.items}</TD>
+            <TD className="font-medium">€{inv.total.toFixed(2)}</TD>
+            <TD><Badge color={statusColor(inv.status)}>{inv.status}</Badge></TD>
+            <TD>{inv.date}</TD>
+          </TR>
+        ))}
+      </Table>
+    </Card>
+  )
+}
+
+// ─── Menu Management ──────────────────────────────────────────────────────────
+export function MenuManagement() {
+  const [items, setItems] = useState(MENU_ITEMS)
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-medium text-gray-900 dark:text-white text-base">Menu management</h2>
+        <Btn variant="primary" size="sm">+ Add Item</Btn>
+      </div>
+      {MENU_CATEGORIES.map(cat => (
+        <Card key={cat.id} className="mb-4">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-base">{cat.icon}</span>
+            <h3 className="font-medium text-gray-900 dark:text-white">{cat.name_en}</h3>
+          </div>
+          <Table headers={['Name','Price','Description','Available','Action']}>
+            {items.filter(m => m.category_id === cat.id).map(item => (
+              <TR key={item.id}>
+                <TD className="font-medium">{item.name_en}</TD>
+                <TD>€{item.price.toFixed(2)}</TD>
+                <TD className="text-gray-500 text-xs">{item.description_en}</TD>
+                <TD><Badge color={item.available ? 'green' : 'red'}>{item.available ? 'Yes' : 'No'}</Badge></TD>
+                <TD>
+                  <div className="flex gap-1.5">
+                    <Btn size="sm">Edit</Btn>
+                    <Btn size="sm" variant="danger" onClick={() => setItems(p => p.map(x => x.id===item.id ? {...x, available:!x.available} : x))}>
+                      {item.available ? 'Hide' : 'Show'}
+                    </Btn>
+                  </div>
+                </TD>
+              </TR>
+            ))}
+          </Table>
+        </Card>
+      ))}
+    </div>
+  )
+}
+
+export default Dashboard
