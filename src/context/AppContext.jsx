@@ -20,10 +20,10 @@ export const ROLE_NAV = {
   admin:      ['dashboard','users','tables','billing','inventory','menu','reports','settings'],
   owner:      ['dashboard','reports','users','billing','inventory','menu','settings'],
   manager:    ['dashboard','users','shifts','inventory','menu'],
-  cashier:    ['billing','receipts'],
-  supervisor: ['dashboard','supervisor','reports'],
-  waiter:     ['tables','orders'],
-  cook:       ['kitchen'],
+  cashier:    ['billing','receipts','shifts'],
+  supervisor: ['dashboard','supervisor','reports','shifts'],
+  waiter:     ['tables','orders','shifts'],
+  cook:       ['kitchen','shifts'],
   supplier:   ['inventory','invoices'],
 }
 
@@ -57,6 +57,10 @@ export function AppProvider({ children }) {
   const [inventoryItems, setInventoryItems] = useState(INVENTORY_ITEMS)
   const [company, setCompany] = useState({ name: 'Bella Vista Malta', address: '123 Republic Street, Valletta', currency: 'EUR', vat_rate: 18, receipt_footer: 'Thank you — Grazzi — Grazie' })
   const [billQueue, setBillQueue] = useState([]) // { orderId, tableLabel, waiter, items, total }
+  const [clockRecords, setClockRecords] = useState([
+    // seed: Tony Cook clocked in today as example
+    { id:'cr1', userId:'8', userName:'Tony Cook', role:'cook', clockIn: new Date(new Date().setHours(8,30,0,0)), clockOut: null },
+  ])
   const [notifications, setNotifications] = useState([
     { id:1, message_en:'Low stock: Olive Oil below minimum', type:'warning', module:'Inventory', is_read:false, created_at: new Date() },
     { id:2, message_en:'New user request: Maria Galea', type:'info', module:'Users', is_read:false, created_at: new Date() },
@@ -102,8 +106,41 @@ export function AppProvider({ children }) {
     setBillQueue(p => p.filter(b => b.orderId !== orderId))
   }
 
+  // ── Clock In / Out ─────────────────────────────────────────────────────────
+  function clockIn() {
+    if (!user) return
+    // prevent double clock-in (open record already exists for today)
+    const todayOpen = clockRecords.find(r =>
+      r.userId === user.id && r.clockOut === null &&
+      r.clockIn.toDateString() === new Date().toDateString()
+    )
+    if (todayOpen) return
+    setClockRecords(p => [...p, {
+      id: `cr${Date.now()}`,
+      userId: user.id,
+      userName: user.full_name,
+      role: user.role,
+      clockIn: new Date(),
+      clockOut: null,
+    }])
+  }
+
+  function clockOut() {
+    if (!user) return
+    setClockRecords(p => p.map(r =>
+      r.userId === user.id && r.clockOut === null
+        ? { ...r, clockOut: new Date() }
+        : r
+    ))
+  }
+
+  // Is the current user currently clocked in?
+  const isClockedIn = user
+    ? clockRecords.some(r => r.userId === user.id && r.clockOut === null && r.clockIn.toDateString() === new Date().toDateString())
+    : false
+
   return (
-    <AppContext.Provider value={{ user, login, logout, lang, setLang, theme, setTheme, company, setCompany, notifications, markAllRead, unreadCount, liveOrders, setLiveOrders, nextOrderNum, setNextOrderNum, billQueue, requestBill, clearBillRequest, menuItems, setMenuItems, menuCategories, setMenuCategories, inventoryItems, setInventoryItems }}>
+    <AppContext.Provider value={{ user, login, logout, lang, setLang, theme, setTheme, company, setCompany, notifications, markAllRead, unreadCount, liveOrders, setLiveOrders, nextOrderNum, setNextOrderNum, billQueue, requestBill, clearBillRequest, menuItems, setMenuItems, menuCategories, setMenuCategories, inventoryItems, setInventoryItems, clockRecords, clockIn, clockOut, isClockedIn }}>
       {children}
     </AppContext.Provider>
   )

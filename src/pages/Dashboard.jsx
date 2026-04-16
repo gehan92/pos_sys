@@ -78,57 +78,118 @@ export function Dashboard({ navTo }) {
 
 // ─── Users ────────────────────────────────────────────────────────────────────
 export function Users() {
-  const { lang } = useApp()
+  const { lang, user: currentUser } = useApp()
   const [users, setUsers] = useState(SAMPLE_USERS)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ full_name:'', username:'', role:'waiter', password:'' })
+  const [confirmDelete, setConfirmDelete] = useState(null)
+
+  // Which roles the current user is allowed to create
+  const CREATABLE_ROLES = {
+    superadmin: ['superadmin','admin','owner','manager','cashier','supervisor','waiter','cook','supplier'],
+    admin:      ['admin','owner','manager','cashier','supervisor','waiter','cook','supplier'],
+    owner:      ['manager','cashier','supervisor','waiter','cook'],
+    manager:    ['cashier','waiter','cook'],
+  }
+  const allowedRoles = CREATABLE_ROLES[currentUser?.role] || []
 
   function createUser() {
-    setUsers(p => [...p, { id: Date.now().toString(), ...form, status:'pending', created_by:'Manager' }])
+    if (!form.full_name.trim() || !form.username.trim() || !form.password.trim()) return
+    if (!allowedRoles.includes(form.role)) return
+    setUsers(p => [...p, {
+      id: Date.now().toString(),
+      ...form,
+      status: currentUser?.role === 'superadmin' || currentUser?.role === 'admin' ? 'active' : 'pending',
+      created_by: currentUser?.full_name || 'Unknown',
+    }])
     setShowForm(false)
-    setForm({ full_name:'', username:'', role:'waiter', password:'' })
-    alert(t('userCreated', lang))
+    setForm({ full_name:'', username:'', role: allowedRoles[0] || 'waiter', password:'' })
+  }
+
+  function approveUser(id) {
+    setUsers(p => p.map(u => u.id === id ? { ...u, status:'active' } : u))
+  }
+
+  function deactivateUser(id) {
+    setUsers(p => p.map(u => u.id === id ? { ...u, status:'inactive' } : u))
+    setConfirmDelete(null)
   }
 
   return (
-    <Card>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="font-medium text-gray-900 dark:text-white">Staff accounts</h2>
-        <Btn variant="primary" size="sm" onClick={() => setShowForm(!showForm)}>+ Add User</Btn>
-      </div>
-      {showForm && (
-        <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 mb-4">
-          <div className="grid grid-cols-2 gap-3">
-            <Input label="Full Name" value={form.full_name} onChange={e => setForm(p=>({...p,full_name:e.target.value}))} placeholder="e.g. Maria Galea" />
-            <Input label="Username" value={form.username} onChange={e => setForm(p=>({...p,username:e.target.value}))} placeholder="mgalea" />
-            <Select label="Role" value={form.role} onChange={e => setForm(p=>({...p,role:e.target.value}))}>
-              {Object.entries(ROLES).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
-            </Select>
-            <Input label="Temp Password" type="password" value={form.password} onChange={e => setForm(p=>({...p,password:e.target.value}))} placeholder="Temp@1234" />
-          </div>
-          <div className="flex gap-2">
-            <Btn variant="success" onClick={createUser}>Create (send for approval)</Btn>
-            <Btn onClick={() => setShowForm(false)}>Cancel</Btn>
+    <div>
+      {/* Confirm deactivate */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl max-w-sm w-full mx-4">
+            <h3 className="font-bold text-gray-900 dark:text-white mb-2">Deactivate account?</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">"{confirmDelete.full_name}" will no longer be able to log in.</p>
+            <div className="flex gap-2">
+              <Btn fullWidth onClick={() => setConfirmDelete(null)}>Cancel</Btn>
+              <Btn variant="danger" fullWidth onClick={() => deactivateUser(confirmDelete.id)}>Deactivate</Btn>
+            </div>
           </div>
         </div>
       )}
-      <Table headers={['Name','Role','Created by','Status','Action']}>
-        {users.map(u => (
-          <TR key={u.id}>
-            <TD><div className="flex items-center gap-2"><Avatar name={u.full_name} />{u.full_name}</div></TD>
-            <TD><Badge color={statusColor(u.role)}>{ROLES[u.role]?.label || u.role}</Badge></TD>
-            <TD><span className="text-gray-500 dark:text-gray-400">{u.created_by}</span></TD>
-            <TD><Badge color={statusColor(u.status)}>{u.status}</Badge></TD>
-            <TD>
-              <div className="flex gap-1.5">
-                {u.status === 'pending' && <Btn size="sm" variant="success" onClick={() => setUsers(p => p.map(x => x.id===u.id?{...x,status:'active'}:x))}>Approve</Btn>}
-                <Btn size="sm">Edit</Btn>
+
+      <Card>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="font-medium text-gray-900 dark:text-white">Staff accounts</h2>
+            <p className="text-xs text-gray-400 mt-0.5">
+              You can create: <span className="font-semibold text-indigo-500">{allowedRoles.map(r => ROLES[r]?.label).join(', ') || 'none'}</span>
+            </p>
+          </div>
+          {allowedRoles.length > 0 && (
+            <Btn variant="primary" size="sm" onClick={() => setShowForm(!showForm)}>+ Add User</Btn>
+          )}
+        </div>
+
+        {showForm && (
+          <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 mb-4 border border-gray-200 dark:border-gray-600">
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <Input label="Full Name" value={form.full_name} onChange={e => setForm(p=>({...p,full_name:e.target.value}))} placeholder="e.g. Maria Galea" />
+              <Input label="Username" value={form.username} onChange={e => setForm(p=>({...p,username:e.target.value}))} placeholder="mgalea" />
+              <Select label="Role" value={form.role} onChange={e => setForm(p=>({...p,role:e.target.value}))}>
+                {allowedRoles.map(k => <option key={k} value={k}>{ROLES[k]?.label}</option>)}
+              </Select>
+              <Input label="Temporary Password" type="password" value={form.password} onChange={e => setForm(p=>({...p,password:e.target.value}))} placeholder="Temp@1234" />
+            </div>
+            {(currentUser?.role === 'manager' || currentUser?.role === 'owner') && (
+              <div className="flex items-center gap-2 mb-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+                ⚠ Account will be <strong>pending approval</strong> until an admin or superadmin activates it.
               </div>
-            </TD>
-          </TR>
-        ))}
-      </Table>
-    </Card>
+            )}
+            <div className="flex gap-2">
+              <Btn variant="success" onClick={createUser} disabled={!form.full_name.trim() || !form.username.trim() || !form.password.trim()}>
+                Create Account
+              </Btn>
+              <Btn onClick={() => setShowForm(false)}>Cancel</Btn>
+            </div>
+          </div>
+        )}
+
+        <Table headers={['Name','Role','Created by','Status','Action']}>
+          {users.map(u => (
+            <TR key={u.id}>
+              <TD><div className="flex items-center gap-2"><Avatar name={u.full_name} />{u.full_name}</div></TD>
+              <TD><Badge color={statusColor(u.role)}>{ROLES[u.role]?.label || u.role}</Badge></TD>
+              <TD><span className="text-gray-500 dark:text-gray-400 text-xs">{u.created_by || '—'}</span></TD>
+              <TD><Badge color={u.status==='active'?'green':u.status==='pending'?'yellow':'red'}>{u.status}</Badge></TD>
+              <TD>
+                <div className="flex gap-1.5">
+                  {u.status === 'pending' && (currentUser?.role === 'superadmin' || currentUser?.role === 'admin') && (
+                    <Btn size="sm" variant="success" onClick={() => approveUser(u.id)}>Approve</Btn>
+                  )}
+                  {u.status === 'active' && u.id !== currentUser?.id && (
+                    <Btn size="sm" variant="danger" onClick={() => setConfirmDelete(u)}>Deactivate</Btn>
+                  )}
+                </div>
+              </TD>
+            </TR>
+          ))}
+        </Table>
+      </Card>
+    </div>
   )
 }
 
@@ -1427,32 +1488,187 @@ export function Supervisor() {
 
 // ─── Shifts ───────────────────────────────────────────────────────────────────
 export function Shifts() {
-  const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
+  const { clockRecords, user, clockIn, clockOut, isClockedIn } = useApp()
+  const [tab, setTab] = useState('today') // 'today' | 'history'
+  const [now, setNow] = useState(new Date())
+
+  // Live clock update every minute
+  useState(() => {
+    const timer = setInterval(() => setNow(new Date()), 60000)
+    return () => clearInterval(timer)
+  })
+
+  const todayStr = now.toDateString()
+
+  // Today's records
+  const todayRecords = clockRecords.filter(r => r.clockIn.toDateString() === todayStr)
+  // All past records (clocked out)
+  const historyRecords = [...clockRecords].sort((a, b) => b.clockIn - a.clockIn)
+
+  function fmtTime(date) {
+    if (!date) return '—'
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  }
+
+  function fmtDuration(clockIn, clockOut) {
+    const end = clockOut || now
+    const mins = Math.round((end - clockIn) / 60000)
+    const h = Math.floor(mins / 60)
+    const m = mins % 60
+    return `${h}h ${m}m`
+  }
+
+  function fmtDate(date) {
+    return date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })
+  }
+
+  const activeNow = todayRecords.filter(r => r.clockOut === null)
+  const doneToday = todayRecords.filter(r => r.clockOut !== null)
+
   return (
-    <Card>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="font-medium text-gray-900 dark:text-white">Shift schedule — this week</h2>
-        <Btn variant="primary" size="sm">+ Add Shift</Btn>
+    <div>
+      {/* My status card */}
+      <div className={`flex items-center justify-between rounded-2xl px-5 py-4 mb-4 border-2 ${isClockedIn ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-300 dark:border-emerald-700' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'}`}>
+        <div className="flex items-center gap-3">
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg ${isClockedIn ? 'bg-emerald-500 text-white' : 'bg-gray-300 dark:bg-gray-600 text-gray-600 dark:text-gray-300'}`}>
+            {isClockedIn ? '🟢' : '⚫'}
+          </div>
+          <div>
+            <div className="font-bold text-gray-900 dark:text-white">{user?.full_name}</div>
+            {isClockedIn ? (
+              <div className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">
+                Clocked in · {fmtTime(clockRecords.find(r => r.userId === user?.id && r.clockOut === null)?.clockIn)} ·&nbsp;
+                <span className="font-semibold">
+                  {fmtDuration(clockRecords.find(r => r.userId === user?.id && r.clockOut === null)?.clockIn, null)}
+                </span>
+              </div>
+            ) : (
+              <div className="text-sm text-gray-400">Not clocked in today</div>
+            )}
+          </div>
+        </div>
+        <button
+          onClick={isClockedIn ? clockOut : clockIn}
+          className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all ${
+            isClockedIn
+              ? 'bg-rose-500 hover:bg-rose-600 text-white shadow-sm'
+              : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm'
+          }`}
+        >
+          {isClockedIn ? '⏹ Clock Out' : '▶ Clock In'}
+        </button>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead><tr>
-            <th className="text-left px-3 py-2 bg-gray-50 dark:bg-gray-700 text-gray-500 font-medium">Staff</th>
-            <th className="text-left px-3 py-2 bg-gray-50 dark:bg-gray-700 text-gray-500 font-medium">Role</th>
-            {days.map(d => <th key={d} className="text-center px-2 py-2 bg-gray-50 dark:bg-gray-700 text-gray-500 font-medium">{d}</th>)}
-          </tr></thead>
-          <tbody>
-            {[['Maria G.','Waiter',['09-17','09-17','—','09-17','09-17','12-22','—']],['John C.','Cashier',['09-17','—','09-17','09-17','—','12-22','12-22']],['Tony F.','Cook',['10-18','10-18','10-18','—','10-18','12-22','12-22']],['Sam V.','Waiter',['—','12-22','12-22','12-22','12-22','—','12-22']]].map(([n,r,sched]) => (
-              <tr key={n} className="border-b border-gray-100 dark:border-gray-700">
-                <td className="px-3 py-2 text-gray-800 dark:text-gray-200">{n}</td>
-                <td className="px-3 py-2"><Badge color="gray">{r}</Badge></td>
-                {sched.map((s,i) => <td key={i} className={`px-2 py-2 text-center text-xs ${s==='—'?'text-gray-300 dark:text-gray-600':'text-gray-700 dark:text-gray-300'}`}>{s}</td>)}
+
+      {/* Tabs */}
+      <div className="flex gap-2 mb-4">
+        {[['today', `Today (${todayRecords.length})`], ['history', 'Full History']].map(([key, label]) => (
+          <button key={key} onClick={() => setTab(key)}
+            className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${tab === key ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'today' && (
+        <div className="space-y-4">
+          {/* Currently clocked in */}
+          {activeNow.length > 0 && (
+            <Card padding={false}>
+              <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse inline-block" />
+                <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Currently On Shift</span>
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 dark:border-gray-700/60">
+                    {['Staff','Role','Clocked In','Duration'].map(h => (
+                      <th key={h} className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {activeNow.map(r => (
+                    <tr key={r.id} className="border-b border-gray-100 dark:border-gray-700/40 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                      <td className="px-4 py-3 font-semibold text-gray-800 dark:text-gray-200">{r.userName}</td>
+                      <td className="px-4 py-3"><Badge color="indigo">{r.role}</Badge></td>
+                      <td className="px-4 py-3 text-emerald-600 dark:text-emerald-400 font-semibold">{fmtTime(r.clockIn)}</td>
+                      <td className="px-4 py-3 text-gray-600 dark:text-gray-300 font-medium">{fmtDuration(r.clockIn, null)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Card>
+          )}
+
+          {/* Finished today */}
+          {doneToday.length > 0 && (
+            <Card padding={false}>
+              <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
+                <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Completed Today</span>
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 dark:border-gray-700/60">
+                    {['Staff','Role','In','Out','Total Hours'].map(h => (
+                      <th key={h} className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {doneToday.map(r => (
+                    <tr key={r.id} className="border-b border-gray-100 dark:border-gray-700/40 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                      <td className="px-4 py-3 font-semibold text-gray-800 dark:text-gray-200">{r.userName}</td>
+                      <td className="px-4 py-3"><Badge color="gray">{r.role}</Badge></td>
+                      <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{fmtTime(r.clockIn)}</td>
+                      <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{fmtTime(r.clockOut)}</td>
+                      <td className="px-4 py-3 font-bold text-indigo-600 dark:text-indigo-400">{fmtDuration(r.clockIn, r.clockOut)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Card>
+          )}
+
+          {todayRecords.length === 0 && (
+            <Card><div className="text-center py-8 text-gray-400">No clock-in records for today yet.</div></Card>
+          )}
+        </div>
+      )}
+
+      {tab === 'history' && (
+        <Card padding={false}>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 dark:border-gray-700/60">
+                {['Date','Staff','Role','Clock In','Clock Out','Total Hours','Status'].map(h => (
+                  <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </Card>
+            </thead>
+            <tbody>
+              {historyRecords.map(r => (
+                <tr key={r.id} className="border-b border-gray-100 dark:border-gray-700/40 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                  <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">{fmtDate(r.clockIn)}</td>
+                  <td className="px-4 py-3 font-semibold text-gray-800 dark:text-gray-200">{r.userName}</td>
+                  <td className="px-4 py-3"><Badge color="gray">{r.role}</Badge></td>
+                  <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{fmtTime(r.clockIn)}</td>
+                  <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{r.clockOut ? fmtTime(r.clockOut) : <span className="text-emerald-500 font-semibold">Active</span>}</td>
+                  <td className="px-4 py-3 font-bold text-indigo-600 dark:text-indigo-400">{fmtDuration(r.clockIn, r.clockOut)}</td>
+                  <td className="px-4 py-3">
+                    {r.clockOut
+                      ? <Badge color="green">Completed</Badge>
+                      : <Badge color="emerald" dot>On Shift</Badge>}
+                  </td>
+                </tr>
+              ))}
+              {historyRecords.length === 0 && (
+                <tr><td colSpan={7} className="text-center py-8 text-gray-400 text-sm">No shift history yet</td></tr>
+              )}
+            </tbody>
+          </table>
+        </Card>
+      )}
+    </div>
   )
 }
 

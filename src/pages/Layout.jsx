@@ -6,6 +6,7 @@ import {
   LayoutDashboard, Building2, Users as UsersIcon, BarChart3, Settings as SettingsIcon, ShieldCheck,
   Grid3x3, ClipboardList, CreditCard, Package, BookOpen, Receipt, Eye,
   Calendar, ChefHat, FileText, Bell, LogOut, Globe, Sun, Moon, ChevronRight,
+  Clock, LogIn, LogOut as LogOutIcon,
 } from 'lucide-react'
 
 // Pages
@@ -56,7 +57,7 @@ const NAV_ICONS_LUCIDE = {
 }
 
 export default function Layout() {
-  const { user, logout, lang, setLang, theme, setTheme, company, unreadCount } = useApp()
+  const { user, logout, lang, setLang, theme, setTheme, company, unreadCount, clockIn, clockOut, isClockedIn } = useApp()
   const [page, setPage] = useState(() => {
     const nav = ROLE_NAV[user?.role] || ['dashboard']
     return nav[0]
@@ -181,6 +182,19 @@ export default function Layout() {
             </div>
           </div>
           <div className="flex items-center gap-1.5">
+            {/* Clock In / Out button — visible to all staff */}
+            <button
+              onClick={isClockedIn ? clockOut : clockIn}
+              title={isClockedIn ? 'Clock Out' : 'Clock In'}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-all ${
+                isClockedIn
+                  ? 'bg-rose-50 dark:bg-rose-900/20 border-rose-200 dark:border-rose-700 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/30'
+                  : 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-700 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/30'
+              }`}
+            >
+              <Clock size={13} />
+              {isClockedIn ? 'Clock Out' : 'Clock In'}
+            </button>
             <button
               onClick={() => navTo('notifications')}
               className="relative flex items-center justify-center w-9 h-9 rounded-xl border border-gray-100 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
