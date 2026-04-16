@@ -1,30 +1,216 @@
 export const MENU_CATEGORIES = [
-  { id: 'cat1', name_en: 'Starters', name_mt: 'Antipasti', name_it: 'Antipasti', icon: '🥗' },
-  { id: 'cat2', name_en: 'Mains',    name_mt: 'Platti Ewlenin', name_it: 'Secondi', icon: '🍽️' },
-  { id: 'cat3', name_en: 'Drinks',   name_mt: 'Xorb',     name_it: 'Bevande', icon: '🍷' },
-  { id: 'cat4', name_en: 'Desserts', name_mt: 'Ħelu',     name_it: 'Dolci',   icon: '🍮' },
+  { id: 'cat1', name_en: 'Starters',  name_mt: 'Antipasti',        name_it: 'Antipasti', icon: '🥗' },
+  { id: 'cat2', name_en: 'Mains',     name_mt: 'Platti Ewlenin',   name_it: 'Secondi',   icon: '🍽️' },
+  { id: 'cat3', name_en: 'Specials',  name_mt: 'Speċjali tal-Ġurnata', name_it: 'Speciali', icon: '⭐' },
+  { id: 'cat4', name_en: 'Drinks',    name_mt: 'Xorb',             name_it: 'Bevande',   icon: '🍷' },
+  { id: 'cat5', name_en: 'Desserts',  name_mt: 'Ħelu',             name_it: 'Dolci',     icon: '🍮' },
 ]
 
-const _UX = (id, w=400) => `https://images.unsplash.com/photo-${id}?w=${w}&h=${w}&fit=crop&auto=format&q=85`
-
 export const MENU_ITEMS = [
-  { id:'m1',  code:'S001', barcode:'5990000001', category_id:'cat1', name_en:'Bruschetta',        price:7.50,  description_en:'Tomato & basil on grilled bread', available:true, emoji:'🥖', image_url: _UX('1572695157366-5e585ab2b69f') },
-  { id:'m2',  code:'S002', barcode:'5990000002', category_id:'cat1', name_en:'Calamari',          price:9.00,  description_en:'Crispy fried squid rings',         available:true, emoji:'🦑', image_url: _UX('1599487488170-d11ec9c172f0') },
-  { id:'m3',  code:'S003', barcode:'5990000003', category_id:'cat1', name_en:"Chef's Soup",       price:6.00,  description_en:'Daily special soup',               available:true, emoji:'🍲', image_url: _UX('1547592180-85f173990554') },
-  { id:'m4',  code:'S004', barcode:'5990000004', category_id:'cat1', name_en:'Mixed Salad',       price:8.50,  description_en:'Fresh garden greens',              available:true, emoji:'🥗', image_url: _UX('1512621776951-a57141f2eefd') },
-  { id:'m5',  code:'M001', barcode:'5990000005', category_id:'cat2', name_en:'Pasta Carbonara',   price:14.50, description_en:'Creamy pancetta & egg sauce',      available:true, emoji:'🍝', image_url: _UX('1473093295043-cdd812d0e601') },
-  { id:'m6',  code:'M002', barcode:'5990000006', category_id:'cat2', name_en:'Grilled Sea Bass',  price:22.00, description_en:'With lemon butter & herbs',        available:true, emoji:'🐟', image_url: _UX('1467003909585-2f8a72700288') },
-  { id:'m7',  code:'M003', barcode:'5990000007', category_id:'cat2', name_en:'Beef Burger',       price:13.50, description_en:'Brioche bun, lettuce, tomato',     available:true, emoji:'🍔', image_url: _UX('1568901346375-23c9450c58cd') },
-  { id:'m8',  code:'M004', barcode:'5990000008', category_id:'cat2', name_en:'Margherita Pizza',  price:12.00, description_en:'Classic tomato & mozzarella',      available:true, emoji:'🍕', image_url: _UX('1565299624946-b28f40a0ae38') },
-  { id:'m9',  code:'M005', barcode:'5990000009', category_id:'cat2', name_en:'Lamb Chops',        price:24.00, description_en:'Maltese herbs & rosemary',         available:true, emoji:'🍖', image_url: _UX('1544025162-d76538147789') },
-  { id:'m10', code:'M006', barcode:'5990000010', category_id:'cat2', name_en:'Seasonal Risotto',  price:15.00, description_en:'Creamy vegetable risotto',         available:true, emoji:'🍚', image_url: _UX('1476124369491-e7addf5db371') },
-  { id:'m11', code:'D001', barcode:'5990000011', category_id:'cat3', name_en:'House Wine',        price:6.00,  description_en:'Red or white, 175ml',              available:true, emoji:'🍷', image_url: _UX('1510812431401-41d2bd2722f3') },
-  { id:'m12', code:'D002', barcode:'5990000012', category_id:'cat3', name_en:'Local Beer (Cisk)', price:4.50,  description_en:'Maltese Cisk Lager',               available:true, emoji:'🍺', image_url: _UX('1535958636474-b021ee887b13') },
-  { id:'m13', code:'D003', barcode:'5990000013', category_id:'cat3', name_en:'Soft Drink',        price:3.00,  description_en:'Cola, Fanta, Water',               available:true, emoji:'🥤', image_url: _UX('1554866585-cd94860890b7') },
-  { id:'m14', code:'D004', barcode:'5990000014', category_id:'cat3', name_en:'Coffee',            price:2.50,  description_en:'Espresso, Flat White, Latte',      available:true, emoji:'☕', image_url: _UX('1509042239860-f55ce3369de5') },
-  { id:'m15', code:'W001', barcode:'5990000015', category_id:'cat4', name_en:'Tiramisu',          price:7.00,  description_en:'Classic Italian dessert',          available:true, emoji:'🍮', image_url: _UX('1571877227200-a0d98ea607e9') },
-  { id:'m16', code:'W002', barcode:'5990000016', category_id:'cat4', name_en:'Cheesecake',        price:6.50,  description_en:'With berry compote',               available:true, emoji:'🍰', image_url: _UX('1533134242443-d4fd215305ad') },
-  { id:'m17', code:'W003', barcode:'5990000017', category_id:'cat4', name_en:'Ice Cream',         price:5.00,  description_en:'3 scoops, choice of flavour',      available:true, emoji:'🍦', image_url: _UX('1497034825429-c343d7c6a68f') },
+  // ── Starters ─────────────────────────────────────────────────────────────────
+  {
+    id:'s1', code:'S001', barcode:'5990000001', category_id:'cat1',
+    name_en:'Oysters Gilardeau', price:4.50, description_en:'Premium oysters, priced per piece',
+    available:true, emoji:'🦪',
+    modifierGroups:[
+      { label:'Pieces', multi:false, choices:['×1','×2','×3','×4','×6','×12'] },
+      { label:'Dressing', multi:true, choices:['Lemon','Shallot vinegar','Tobasco','Plain'] },
+    ],
+  },
+  {
+    id:'s2', code:'S002', barcode:'5990000002', category_id:'cat1',
+    name_en:'Maltese Sausage', price:8.50, description_en:'Traditional Maltese sausage, grilled',
+    available:true, emoji:'🌭',
+    modifierGroups:[
+      { label:'Cooking', multi:false, choices:['Grilled','Pan-fried'] },
+      { label:'Extras', multi:true, choices:['Caramelised onions','Side bread','Extra mustard'] },
+    ],
+  },
+  {
+    id:'s3', code:'S003', barcode:'5990000003', category_id:'cat1',
+    name_en:'Tuna & Gambas', price:12.00, description_en:'Fresh tuna with king prawns',
+    available:true, emoji:'🐟',
+    modifierGroups:[
+      { label:'Extras', multi:true, choices:['Extra gambas','Sauce on side','No lemon','Gluten free'] },
+    ],
+  },
+  {
+    id:'s4', code:'S004', barcode:'5990000004', category_id:'cat1',
+    name_en:'Fried Calamari', price:9.50, description_en:'Crispy fried squid rings with aioli',
+    available:true, emoji:'🦑',
+    modifierGroups:[
+      { label:'Sauce', multi:false, choices:['Aioli','Tartare','Lemon butter'] },
+      { label:'Extras', multi:true, choices:['Extra lemon','Extra sauce','No aioli'] },
+    ],
+  },
+  {
+    id:'s5', code:'S005', barcode:'5990000005', category_id:'cat1',
+    name_en:'Mussels', price:11.00, description_en:'Fresh mussels in white wine & garlic',
+    available:true, emoji:'🐚',
+    modifierGroups:[
+      { label:'Sauce', multi:false, choices:['White wine & garlic','Tomato & chili','Cream sauce'] },
+      { label:'Extras', multi:true, choices:['Extra bread','No garlic','Extra sauce'] },
+    ],
+  },
+  {
+    id:'s6', code:'S006', barcode:'5990000006', category_id:'cat1',
+    name_en:'Homemade Soup', price:7.00, description_en:"Chef's daily homemade soup",
+    available:true, emoji:'🍲',
+    modifierGroups:[
+      { label:'Extras', multi:true, choices:['Side bread','Gluten free','No cream','Extra portion'] },
+    ],
+  },
+  {
+    id:'s7', code:'S007', barcode:'5990000007', category_id:'cat1',
+    name_en:'Fried Flying Fish', price:10.50, description_en:'Lightly battered Maltese flying fish',
+    available:true, emoji:'🐠',
+    modifierGroups:[
+      { label:'Sauce', multi:false, choices:['Tartare','Aioli','Lemon','No sauce'] },
+      { label:'Extras', multi:true, choices:['Side salad','Extra lemon'] },
+    ],
+  },
+  {
+    id:'s8', code:'S008', barcode:'5990000008', category_id:'cat1',
+    name_en:'Bruschetta', price:6.50, description_en:'Toasted bread with tomato, basil & olive oil',
+    available:true, emoji:'🥖',
+    modifierGroups:[
+      { label:'Topping', multi:true, choices:['Add mozzarella','Add prosciutto','Extra tomato','No garlic'] },
+    ],
+  },
+
+  // ── Mains ──────────────────────────────────────────────────────────────────
+  {
+    id:'m1', code:'M001', barcode:'5990000009', category_id:'cat2',
+    name_en:'Spaghetti with Mussels', price:16.50, description_en:'Crab & prawn bisque with fresh mussels',
+    available:true, emoji:'🍝',
+    modifierGroups:[
+      { label:'Spice level', multi:false, choices:['Mild','Medium','Spicy'] },
+      { label:'Extras', multi:true, choices:['Extra mussels','Sauce on side','Gluten free pasta','No chili'] },
+    ],
+  },
+  {
+    id:'m2', code:'M002', barcode:'5990000010', category_id:'cat2',
+    name_en:'Tagliatelle', price:15.50, description_en:'Artichokes, chili & tomato sauce',
+    available:true, emoji:'🍝',
+    modifierGroups:[
+      { label:'Spice level', multi:false, choices:['Mild','Medium','Spicy'] },
+      { label:'Extras', multi:true, choices:['Extra parmesan','No chili','Gluten free pasta','Add chicken'] },
+    ],
+  },
+  {
+    id:'m3', code:'M003', barcode:'5990000011', category_id:'cat2',
+    name_en:'Black Angus Ribeye', price:32.00, description_en:'Premium Black Angus ribeye 300g',
+    available:true, emoji:'🥩',
+    modifierGroups:[
+      { label:'Cooking level', multi:false, choices:['Rare','Medium Rare','Medium','Medium Well','Well Done'] },
+      { label:'Sauce', multi:false, choices:['Peppercorn','Béarnaise','Garlic butter','No sauce'] },
+      { label:'Side', multi:true, choices:['Extra fries','Side salad','Grilled vegetables','No side'] },
+    ],
+  },
+  {
+    id:'m4', code:'M004', barcode:'5990000012', category_id:'cat2',
+    name_en:'Fried Rabbit', price:18.00, description_en:'Traditional Maltese fried rabbit with herbs',
+    available:true, emoji:'🍗',
+    modifierGroups:[
+      { label:'Style', multi:false, choices:['Traditional','Extra crispy'] },
+      { label:'Side', multi:true, choices:['Roasted potatoes','Side salad','Grilled vegetables','Extra herbs'] },
+    ],
+  },
+  {
+    id:'m5', code:'M005', barcode:'5990000013', category_id:'cat2',
+    name_en:'Tagliata', price:26.00, description_en:'Sliced beef with rocket & parmesan',
+    available:true, emoji:'🥩',
+    modifierGroups:[
+      { label:'Cooking level', multi:false, choices:['Rare','Medium Rare','Medium'] },
+      { label:'Extras', multi:true, choices:['Extra parmesan','No rocket','Balsamic glaze','Side bread'] },
+    ],
+  },
+  {
+    id:'m6', code:'M006', barcode:'5990000014', category_id:'cat2',
+    name_en:'Baked Salmon', price:22.00, description_en:'Salmon fillet baked with king prawns',
+    available:true, emoji:'🐟',
+    modifierGroups:[
+      { label:'Sauce', multi:false, choices:['Lemon butter','Cream & dill','No sauce'] },
+      { label:'Extras', multi:true, choices:['Extra prawns','Side salad','No capers','Gluten free'] },
+    ],
+  },
+
+  // ── Specials of the Day ───────────────────────────────────────────────────
+  {
+    id:'sp1', code:'SP001', barcode:'5990000015', category_id:'cat3',
+    name_en:'Ricotta Polpette', price:9.00, description_en:'Special starter: ricotta balls with herb crust',
+    available:true, emoji:'⭐',
+    modifierGroups:[
+      { label:'Sauce', multi:false, choices:['Tomato basil','Cream','No sauce'] },
+    ],
+  },
+  {
+    id:'sp2', code:'SP002', barcode:'5990000016', category_id:'cat3',
+    name_en:'Lamb Chops', price:28.00, description_en:'Special main: lamb chops in butter & garlic',
+    available:true, emoji:'🍖',
+    modifierGroups:[
+      { label:'Cooking level', multi:false, choices:['Rare','Medium Rare','Medium','Well Done'] },
+      { label:'Extras', multi:true, choices:['Extra garlic butter','Mint sauce','Roasted potatoes','Grilled vegetables'] },
+    ],
+  },
+
+  // ── Drinks ────────────────────────────────────────────────────────────────
+  {
+    id:'d1', code:'D001', barcode:'5990000017', category_id:'cat4',
+    name_en:'House Wine', price:6.00, description_en:'Red, white or rosé — 175ml',
+    available:true, emoji:'🍷',
+    modifierGroups:[
+      { label:'Type', multi:false, choices:['Red','White','Rosé'] },
+    ],
+  },
+  {
+    id:'d2', code:'D002', barcode:'5990000018', category_id:'cat4',
+    name_en:'Local Beer (Cisk)', price:4.50, description_en:'Maltese Cisk Lager, draught or bottle',
+    available:true, emoji:'🍺',
+    modifierGroups:[
+      { label:'Type', multi:false, choices:['Draught','Bottle'] },
+    ],
+  },
+  {
+    id:'d3', code:'D003', barcode:'5990000019', category_id:'cat4',
+    name_en:'Soft Drink', price:3.00, description_en:'Cola, Fanta, Water',
+    available:true, emoji:'🥤',
+    modifierGroups:[
+      { label:'Choice', multi:false, choices:['Cola','Diet Cola','Fanta','Sparkling Water','Still Water','Orange Juice'] },
+    ],
+  },
+  {
+    id:'d4', code:'D004', barcode:'5990000020', category_id:'cat4',
+    name_en:'Coffee', price:2.50, description_en:'Espresso, Flat White, Latte, Cappuccino',
+    available:true, emoji:'☕',
+    modifierGroups:[
+      { label:'Type', multi:false, choices:['Espresso','Double Espresso','Flat White','Latte','Cappuccino','Americano'] },
+      { label:'Extras', multi:true, choices:['Oat milk','Extra shot','Decaf','No sugar'] },
+    ],
+  },
+
+  // ── Desserts ──────────────────────────────────────────────────────────────
+  {
+    id:'w1', code:'W001', barcode:'5990000021', category_id:'cat5',
+    name_en:'Tiramisu', price:7.00, description_en:'Classic Italian tiramisu',
+    available:true, emoji:'🍮', modifierGroups:[],
+  },
+  {
+    id:'w2', code:'W002', barcode:'5990000022', category_id:'cat5',
+    name_en:'Cheesecake', price:6.50, description_en:'With berry compote',
+    available:true, emoji:'🍰',
+    modifierGroups:[
+      { label:'Extras', multi:true, choices:['Extra berries','Whipped cream','Ice cream side'] },
+    ],
+  },
+  {
+    id:'w3', code:'W003', barcode:'5990000023', category_id:'cat5',
+    name_en:'Ice Cream', price:5.00, description_en:'3 scoops, choice of flavour',
+    available:true, emoji:'🍦',
+    modifierGroups:[
+      { label:'Flavour', multi:true, choices:['Vanilla','Chocolate','Strawberry','Pistachio','Lemon sorbet'] },
+    ],
+  },
 ]
 
 export const TABLES = Array.from({ length: 12 }, (_, i) => ({

@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react'
-import { SAMPLE_ORDERS } from '../lib/mockData'
+import { SAMPLE_ORDERS, MENU_ITEMS, MENU_CATEGORIES, INVENTORY_ITEMS } from '../lib/mockData'
 
 const AppContext = createContext(null)
 
@@ -16,12 +16,12 @@ export const ROLES = {
 }
 
 export const ROLE_NAV = {
-  superadmin: ['dashboard','company','users','reports','settings','audit'],
-  admin:      ['dashboard','users','tables','orders','billing','inventory','menu','reports','settings'],
-  owner:      ['dashboard','reports','users','billing','settings'],
-  manager:    ['dashboard','users','shifts','inventory','orders'],
-  cashier:    ['billing','orders','receipts'],
-  supervisor: ['dashboard','supervisor','orders','reports'],
+  superadmin: ['dashboard','company','users','inventory','menu','reports','settings','audit'],
+  admin:      ['dashboard','users','tables','billing','inventory','menu','reports','settings'],
+  owner:      ['dashboard','reports','users','billing','inventory','menu','settings'],
+  manager:    ['dashboard','users','shifts','inventory','menu'],
+  cashier:    ['billing','receipts'],
+  supervisor: ['dashboard','supervisor','reports'],
   waiter:     ['tables','orders'],
   cook:       ['kitchen'],
   supplier:   ['inventory','invoices'],
@@ -52,7 +52,11 @@ export function AppProvider({ children }) {
   const [theme, setTheme]         = useState('light')
   const [liveOrders, setLiveOrders] = useState(SAMPLE_ORDERS)
   const [nextOrderNum, setNextOrderNum] = useState(50)
+  const [menuItems, setMenuItems] = useState(MENU_ITEMS)
+  const [menuCategories, setMenuCategories] = useState(MENU_CATEGORIES)
+  const [inventoryItems, setInventoryItems] = useState(INVENTORY_ITEMS)
   const [company, setCompany] = useState({ name: 'Bella Vista Malta', address: '123 Republic Street, Valletta', currency: 'EUR', vat_rate: 18, receipt_footer: 'Thank you — Grazzi — Grazie' })
+  const [billQueue, setBillQueue] = useState([]) // { orderId, tableLabel, waiter, items, total }
   const [notifications, setNotifications] = useState([
     { id:1, message_en:'Low stock: Olive Oil below minimum', type:'warning', module:'Inventory', is_read:false, created_at: new Date() },
     { id:2, message_en:'New user request: Maria Galea', type:'info', module:'Users', is_read:false, created_at: new Date() },
@@ -79,8 +83,27 @@ export function AppProvider({ children }) {
     setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
   }
 
+  function requestBill(order) {
+    setBillQueue(p => {
+      if (p.find(b => b.orderId === order.id)) return p
+      const total = order.items.reduce((s, i) => s + i.price * i.qty, 0)
+      return [...p, {
+        orderId: order.id,
+        tableLabel: order.order_type === 'takeaway' ? 'Takeaway' : `Table ${order.table_number}`,
+        waiter: order.waiter,
+        items: order.items,
+        total,
+      }]
+    })
+    setLiveOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: 'bill_requested' } : o))
+  }
+
+  function clearBillRequest(orderId) {
+    setBillQueue(p => p.filter(b => b.orderId !== orderId))
+  }
+
   return (
-    <AppContext.Provider value={{ user, login, logout, lang, setLang, theme, setTheme, company, setCompany, notifications, markAllRead, unreadCount, liveOrders, setLiveOrders, nextOrderNum, setNextOrderNum }}>
+    <AppContext.Provider value={{ user, login, logout, lang, setLang, theme, setTheme, company, setCompany, notifications, markAllRead, unreadCount, liveOrders, setLiveOrders, nextOrderNum, setNextOrderNum, billQueue, requestBill, clearBillRequest, menuItems, setMenuItems, menuCategories, setMenuCategories, inventoryItems, setInventoryItems }}>
       {children}
     </AppContext.Provider>
   )
