@@ -1120,7 +1120,23 @@ export function Billing() {
         </div>
       )}
 
-    {/* Mobile tab bar - hidden on desktop */}
+    {/* Customer badge — always visible above tabs */}
+    {!linkedCustomer ? (
+      <button onClick={() => { setCustModalTab('search'); setCustSearch(''); setShowCustModal(true) }}
+        className="w-full text-xs text-indigo-500 dark:text-indigo-400 border border-dashed border-indigo-300 dark:border-indigo-700 rounded-xl py-2 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors font-semibold">
+        + Link a customer
+      </button>
+    ) : (
+      <div className="flex items-center gap-3 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-xl px-3 py-2.5">
+        <div className="flex-1 min-w-0">
+          <div className="text-xs font-bold text-gray-800 dark:text-gray-200">{linkedCustomer.name}</div>
+          <div className="text-xs text-indigo-600 dark:text-indigo-400">{linkedCustomer.phone || 'No phone'} · {linkedCustomer.loyalty_points || 0} pts</div>
+        </div>
+        <button onClick={() => { setLinkedCustomer(null); setShowCustModal(true); setCustModalTab('search') }} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-sm">✕</button>
+      </div>
+    )}
+
+    {/* Mobile tab bar - hidden on desktop */}}
     <div className="flex gap-2 mb-3 lg:hidden">
       <button onClick={() => setMobileBillTab('menu')}
         className={`flex-1 py-2.5 rounded-xl text-sm font-bold border-2 transition-all ${mobileBillTab==='menu' ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800'}`}>
@@ -1136,6 +1152,24 @@ export function Billing() {
 
       {/* ── LEFT: Product browser ── */}
       <div className={`flex-1 flex flex-col min-w-0 gap-3 min-h-0 ${mobileBillTab !== 'menu' ? 'hidden lg:flex' : ''}`}>
+
+        {/* Customer badge — desktop only (mobile shows above tab bar) */}
+        <div className="hidden lg:block">
+          {!linkedCustomer ? (
+            <button onClick={() => { setCustModalTab('search'); setCustSearch(''); setShowCustModal(true) }}
+              className="w-full text-xs text-indigo-500 dark:text-indigo-400 border border-dashed border-indigo-300 dark:border-indigo-700 rounded-xl py-2 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors font-semibold">
+              + Link a customer
+            </button>
+          ) : (
+            <div className="flex items-center gap-3 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-xl px-3 py-2.5">
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-bold text-gray-800 dark:text-gray-200">{linkedCustomer.name}</div>
+                <div className="text-xs text-indigo-600 dark:text-indigo-400">{linkedCustomer.phone || 'No phone'} · {linkedCustomer.loyalty_points || 0} pts</div>
+              </div>
+              <button onClick={() => { setLinkedCustomer(null); setShowCustModal(true); setCustModalTab('search') }} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-sm">✕</button>
+            </div>
+          )}
+        </div>
 
         {/* Search + Barcode row */}
         <div className="flex gap-2">
@@ -1220,22 +1254,6 @@ export function Billing() {
 
       {/* ── RIGHT: Cart + Payment ── */}
       <div className={`w-full lg:w-80 flex-shrink-0 flex flex-col gap-3 ${mobileBillTab !== 'cart' ? 'hidden lg:flex lg:flex-col' : ''}`}>
-
-        {/* Customer badge / re-open */}
-        {!linkedCustomer ? (
-          <button onClick={() => { setCustModalTab('search'); setCustSearch(''); setShowCustModal(true) }}
-            className="w-full text-xs text-indigo-500 dark:text-indigo-400 border border-dashed border-indigo-300 dark:border-indigo-700 rounded-xl py-2 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors font-semibold">
-            + Link a customer
-          </button>
-        ) : (
-          <div className="flex items-center gap-3 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-xl px-3 py-2.5">
-            <div className="flex-1 min-w-0">
-              <div className="text-xs font-bold text-gray-800 dark:text-gray-200">{linkedCustomer.name}</div>
-              <div className="text-xs text-indigo-600 dark:text-indigo-400">{linkedCustomer.phone || 'No phone'} · {linkedCustomer.loyalty_points || 0} pts</div>
-            </div>
-            <button onClick={() => { setLinkedCustomer(null); setShowCustModal(true); setCustModalTab('search') }} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-sm">✕</button>
-          </div>
-        )}
 
         {/* Cart */}
         <Card className="lg:flex-1 lg:flex lg:flex-col lg:min-h-0 !p-4">
