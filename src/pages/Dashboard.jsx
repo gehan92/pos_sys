@@ -6,9 +6,10 @@ import { Card, StatCard, Badge, Table, TR, TD, Btn, Avatar, Divider, SectionLabe
 import { SAMPLE_USERS, SAMPLE_ORDERS, INVENTORY_ITEMS, TABLES, MENU_CATEGORIES, MENU_ITEMS, SAMPLE_INVOICES, SUPPLIER_INVOICES } from '../lib/mockData'
 
 export function Dashboard({ navTo }) {
-  const { user, lang } = useApp()
+  const { user, lang, users, approveUser } = useApp()
   const isManagement = ['superadmin','admin','owner','manager','supervisor'].includes(user?.role)
-  const [users, setUsers] = useState(SAMPLE_USERS)
+  const canApprove = ['superadmin','admin'].includes(user?.role)
+  const pendingUsers = users.filter(u => u.status === 'pending')
 
   return (
     <div>
@@ -36,28 +37,30 @@ export function Dashboard({ navTo }) {
           </Table>
         </Card>
         <div className="space-y-4">
-          {isManagement && (
+          {isManagement && canApprove && (
             <Card>
               <div className="flex items-center justify-between mb-3">
                 <h2 className="font-medium text-gray-900 dark:text-white text-sm">Pending approvals</h2>
-                <Badge color="red">{users.filter(u => u.status === 'pending').length}</Badge>
+                <Badge color={pendingUsers.length > 0 ? 'red' : 'green'}>{pendingUsers.length}</Badge>
               </div>
-              {users.filter(u => u.status === 'pending').map(u => (
+              {pendingUsers.length === 0
+                ? <p className="text-sm text-gray-400 text-center py-3">All users approved</p>
+                : pendingUsers.map(u => (
                 <div key={u.id} className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700 last:border-0">
                   <div className="flex items-center gap-2">
                     <Avatar name={u.full_name} />
                     <div>
                       <div className="text-sm text-gray-800 dark:text-gray-200">{u.full_name}</div>
-                      <div className="text-xs text-gray-400">{ROLES[u.role]?.label}</div>
+                      <div className="text-xs text-gray-400">{ROLES[u.role]?.label} · by {u.created_by}</div>
                     </div>
                   </div>
                   <div className="flex gap-1.5">
-                    <Btn size="sm" variant="success" onClick={() => setUsers(p => p.map(x => x.id === u.id ? {...x, status:'active'} : x))}>Approve</Btn>
-                    <Btn size="sm" variant="danger" onClick={() => setUsers(p => p.filter(x => x.id !== u.id))}>Reject</Btn>
+                    <Btn size="sm" variant="success" onClick={() => approveUser(u.id)}>Approve</Btn>
+                    <Btn size="sm" onClick={() => navTo('users')}>View all</Btn>
                   </div>
                 </div>
-              ))}
-              {users.filter(u => u.status === 'pending').length === 0 && <p className="text-sm text-gray-400 text-center py-3">All users approved</p>}
+                ))
+              }
             </Card>
           )}
           <Card>
@@ -78,11 +81,11 @@ export function Dashboard({ navTo }) {
 
 // ─── Users ────────────────────────────────────────────────────────────────────
 export function Users() {
-  const { lang, user: currentUser } = useApp()
-  const [users, setUsers] = useState(SAMPLE_USERS)
+  const { lang, user: currentUser, users, createUser, approveUser, deactivateUser } = useApp()
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ full_name:'', username:'', role:'waiter', password:'' })
-  const [confirmDelete, setConfirmDelete] = useState(null)
+  const [confirmDeactivate, setConfirmDeactivate] = useState(null)
+  const [usernameError, setUsernameError] = useState('')
 
   // Which roles the current user is allowed to create
   const CREATABLE_ROLES = {
@@ -93,41 +96,47 @@ export function Users() {
   }
   const allowedRoles = CREATABLE_ROLES[currentUser?.role] || []
 
-  function createUser() {
+  // Only superadmin & admin can approve
+  const canApprove = ['superadmin','admin'].includes(currentUser?.role)
+
+  function handleCreate() {
     if (!form.full_name.trim() || !form.username.trim() || !form.password.trim()) return
     if (!allowedRoles.includes(form.role)) return
-    setUsers(p => [...p, {
-      id: Date.now().toString(),
-      ...form,
-      status: currentUser?.role === 'superadmin' || currentUser?.role === 'admin' ? 'active' : 'pending',
-      created_by: currentUser?.full_name || 'Unknown',
-    }])
+    // Check username uniqueness
+    if (users.find(u => u.username === form.username.trim())) {
+      setUsernameError('Username already taken')
+      return
+    }
+    setUsernameError('')
+    createUser({ ...form, username: form.username.trim().toLowerCase() }, currentUser)
     setShowForm(false)
     setForm({ full_name:'', username:'', role: allowedRoles[0] || 'waiter', password:'' })
   }
 
-  function approveUser(id) {
-    setUsers(p => p.map(u => u.id === id ? { ...u, status:'active' } : u))
-  }
-
-  function deactivateUser(id) {
-    setUsers(p => p.map(u => u.id === id ? { ...u, status:'inactive' } : u))
-    setConfirmDelete(null)
-  }
+  const pendingCount = users.filter(u => u.status === 'pending').length
 
   return (
     <div>
-      {/* Confirm deactivate */}
-      {confirmDelete && (
+      {/* Confirm deactivate dialog */}
+      {confirmDeactivate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl max-w-sm w-full mx-4">
             <h3 className="font-bold text-gray-900 dark:text-white mb-2">Deactivate account?</h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">"{confirmDelete.full_name}" will no longer be able to log in.</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              <strong>{confirmDeactivate.full_name}</strong> will no longer be able to log in.
+            </p>
             <div className="flex gap-2">
-              <Btn fullWidth onClick={() => setConfirmDelete(null)}>Cancel</Btn>
-              <Btn variant="danger" fullWidth onClick={() => deactivateUser(confirmDelete.id)}>Deactivate</Btn>
+              <Btn fullWidth onClick={() => setConfirmDeactivate(null)}>Cancel</Btn>
+              <Btn variant="danger" fullWidth onClick={() => { deactivateUser(confirmDeactivate.id); setConfirmDeactivate(null) }}>Deactivate</Btn>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Pending approvals banner */}
+      {pendingCount > 0 && canApprove && (
+        <div className="mb-4 flex items-center gap-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl px-4 py-3">
+          <span className="text-amber-600 dark:text-amber-400 text-sm font-bold">⏳ {pendingCount} account{pendingCount > 1 ? 's' : ''} awaiting your approval</span>
         </div>
       )}
 
@@ -136,58 +145,104 @@ export function Users() {
           <div>
             <h2 className="font-medium text-gray-900 dark:text-white">Staff accounts</h2>
             <p className="text-xs text-gray-400 mt-0.5">
-              You can create: <span className="font-semibold text-indigo-500">{allowedRoles.map(r => ROLES[r]?.label).join(', ') || 'none'}</span>
+              {allowedRoles.length > 0
+                ? <>You can create: <span className="font-semibold text-indigo-500">{allowedRoles.map(r => ROLES[r]?.label).join(', ')}</span></>
+                : 'You do not have permission to create accounts'}
             </p>
           </div>
           {allowedRoles.length > 0 && (
-            <Btn variant="primary" size="sm" onClick={() => setShowForm(!showForm)}>+ Add User</Btn>
+            <Btn variant="primary" size="sm" onClick={() => { setShowForm(!showForm); setUsernameError('') }}>
+              {showForm ? 'Cancel' : '+ Add User'}
+            </Btn>
           )}
         </div>
 
+        {/* Create account form */}
         {showForm && (
           <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 mb-4 border border-gray-200 dark:border-gray-600">
-            <div className="grid grid-cols-2 gap-3 mb-3">
+            <h3 className="text-sm font-bold text-gray-800 dark:text-white mb-3">New staff account</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
               <Input label="Full Name" value={form.full_name} onChange={e => setForm(p=>({...p,full_name:e.target.value}))} placeholder="e.g. Maria Galea" />
-              <Input label="Username" value={form.username} onChange={e => setForm(p=>({...p,username:e.target.value}))} placeholder="mgalea" />
+              <div>
+                <Input label="Username" value={form.username} onChange={e => { setForm(p=>({...p,username:e.target.value})); setUsernameError('') }} placeholder="mgalea" />
+                {usernameError && <p className="text-xs text-rose-500 mt-1">{usernameError}</p>}
+              </div>
               <Select label="Role" value={form.role} onChange={e => setForm(p=>({...p,role:e.target.value}))}>
                 {allowedRoles.map(k => <option key={k} value={k}>{ROLES[k]?.label}</option>)}
               </Select>
               <Input label="Temporary Password" type="password" value={form.password} onChange={e => setForm(p=>({...p,password:e.target.value}))} placeholder="Temp@1234" />
             </div>
-            {(currentUser?.role === 'manager' || currentUser?.role === 'owner') && (
-              <div className="flex items-center gap-2 mb-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
-                ⚠ Account will be <strong>pending approval</strong> until an admin or superadmin activates it.
+            {/* Status notice */}
+            {['manager','owner'].includes(currentUser?.role) ? (
+              <div className="flex items-start gap-2 mb-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+                ⚠ This account will be <strong className="mx-1">pending approval</strong> — an Admin or Super Admin must activate it before the user can log in.
+              </div>
+            ) : (
+              <div className="flex items-start gap-2 mb-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded-xl px-3 py-2 text-xs text-emerald-700 dark:text-emerald-400">
+                ✅ Account will be <strong className="mx-1">immediately active</strong> — the user can log in right away.
               </div>
             )}
             <div className="flex gap-2">
-              <Btn variant="success" onClick={createUser} disabled={!form.full_name.trim() || !form.username.trim() || !form.password.trim()}>
+              <Btn variant="success" onClick={handleCreate} disabled={!form.full_name.trim() || !form.username.trim() || !form.password.trim()}>
                 Create Account
               </Btn>
-              <Btn onClick={() => setShowForm(false)}>Cancel</Btn>
+              <Btn onClick={() => { setShowForm(false); setUsernameError('') }}>Cancel</Btn>
             </div>
           </div>
         )}
 
-        <Table headers={['Name','Role','Created by','Status','Action']}>
-          {users.map(u => (
-            <TR key={u.id}>
-              <TD><div className="flex items-center gap-2"><Avatar name={u.full_name} />{u.full_name}</div></TD>
-              <TD><Badge color={statusColor(u.role)}>{ROLES[u.role]?.label || u.role}</Badge></TD>
-              <TD><span className="text-gray-500 dark:text-gray-400 text-xs">{u.created_by || '—'}</span></TD>
-              <TD><Badge color={u.status==='active'?'green':u.status==='pending'?'yellow':'red'}>{u.status}</Badge></TD>
-              <TD>
-                <div className="flex gap-1.5">
-                  {u.status === 'pending' && (currentUser?.role === 'superadmin' || currentUser?.role === 'admin') && (
-                    <Btn size="sm" variant="success" onClick={() => approveUser(u.id)}>Approve</Btn>
-                  )}
-                  {u.status === 'active' && u.id !== currentUser?.id && (
-                    <Btn size="sm" variant="danger" onClick={() => setConfirmDelete(u)}>Deactivate</Btn>
-                  )}
-                </div>
-              </TD>
-            </TR>
-          ))}
-        </Table>
+        {/* Users table */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 dark:border-gray-700/60">
+                {['Staff member','Role','Created by','Status','Actions'].map(h => (
+                  <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {users.map(u => (
+                <tr key={u.id} className="border-b border-gray-100 dark:border-gray-700/40 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2.5">
+                      <Avatar name={u.full_name} />
+                      <div>
+                        <div className="font-semibold text-gray-800 dark:text-gray-200 text-sm">{u.full_name}</div>
+                        <div className="text-xs text-gray-400 font-mono">@{u.username}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <Badge color={statusColor(u.role)}>{ROLES[u.role]?.label || u.role}</Badge>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">{u.created_by || '—'}</td>
+                  <td className="px-4 py-3">
+                    <Badge color={u.status==='active'?'green':u.status==='pending'?'yellow':'red'}>
+                      {u.status === 'active' ? '✓ Active' : u.status === 'pending' ? '⏳ Pending' : '✗ Inactive'}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex gap-1.5">
+                      {u.status === 'pending' && canApprove && (
+                        <Btn size="sm" variant="success" onClick={() => approveUser(u.id)}>Approve</Btn>
+                      )}
+                      {u.status === 'active' && u.id !== currentUser?.id && (
+                        <Btn size="sm" variant="danger" onClick={() => setConfirmDeactivate(u)}>Deactivate</Btn>
+                      )}
+                      {u.status === 'inactive' && canApprove && (
+                        <Btn size="sm" variant="primary" onClick={() => approveUser(u.id)}>Reactivate</Btn>
+                      )}
+                      {u.id === currentUser?.id && (
+                        <span className="text-xs text-gray-400 italic px-2">You</span>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </Card>
     </div>
   )

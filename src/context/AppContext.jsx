@@ -34,22 +34,23 @@ export const NAV_ICONS = {
   invoices:'📄', notifications:'🔔',
 }
 
-const DEMO_USERS = [
-  { id:'1', full_name:'Super Admin', username:'superadmin', password:'Admin@1234', role:'superadmin', status:'active' },
-  { id:'2', full_name:'Admin User',  username:'admin',      password:'Admin@1234', role:'admin',      status:'active' },
-  { id:'3', full_name:'Anna Owner',  username:'owner',      password:'Admin@1234', role:'owner',      status:'active' },
-  { id:'4', full_name:'Marco Manager',username:'manager',   password:'Admin@1234', role:'manager',    status:'active' },
-  { id:'5', full_name:'John Cashier',username:'cashier',    password:'Admin@1234', role:'cashier',    status:'active' },
-  { id:'6', full_name:'Sam Supervisor',username:'supervisor',password:'Admin@1234',role:'supervisor', status:'active' },
-  { id:'7', full_name:'Maria Waiter', username:'waiter',    password:'Admin@1234', role:'waiter',     status:'active' },
-  { id:'8', full_name:'Tony Cook',   username:'cook',       password:'Admin@1234', role:'cook',       status:'active' },
-  { id:'9', full_name:'Rita Supplier',username:'supplier',  password:'Admin@1234', role:'supplier',   status:'active' },
+const INITIAL_USERS = [
+  { id:'1', full_name:'Super Admin',   username:'superadmin', password:'Admin@1234', role:'superadmin', status:'active',   created_by:'System' },
+  { id:'2', full_name:'Admin User',    username:'admin',      password:'Admin@1234', role:'admin',      status:'active',   created_by:'System' },
+  { id:'3', full_name:'Anna Owner',    username:'owner',      password:'Admin@1234', role:'owner',      status:'active',   created_by:'System' },
+  { id:'4', full_name:'Marco Manager', username:'manager',    password:'Admin@1234', role:'manager',    status:'active',   created_by:'System' },
+  { id:'5', full_name:'John Cashier',  username:'cashier',    password:'Admin@1234', role:'cashier',    status:'active',   created_by:'System' },
+  { id:'6', full_name:'Sam Supervisor',username:'supervisor', password:'Admin@1234', role:'supervisor', status:'active',   created_by:'System' },
+  { id:'7', full_name:'Maria Waiter',  username:'waiter',     password:'Admin@1234', role:'waiter',     status:'active',   created_by:'System' },
+  { id:'8', full_name:'Tony Cook',     username:'cook',       password:'Admin@1234', role:'cook',       status:'active',   created_by:'System' },
+  { id:'9', full_name:'Rita Supplier', username:'supplier',   password:'Admin@1234', role:'supplier',   status:'active',   created_by:'System' },
 ]
 
 export function AppProvider({ children }) {
   const [user, setUser]           = useState(null)
   const [lang, setLang]           = useState('en')
   const [theme, setTheme]         = useState('light')
+  const [users, setUsers]         = useState(INITIAL_USERS)
   const [liveOrders, setLiveOrders] = useState(SAMPLE_ORDERS)
   const [nextOrderNum, setNextOrderNum] = useState(50)
   const [menuItems, setMenuItems] = useState(MENU_ITEMS)
@@ -73,13 +74,51 @@ export function AppProvider({ children }) {
     else root.classList.remove('dark')
   }, [theme])
 
-  function login(username, password, role) {
-    const found = DEMO_USERS.find(u => u.username === username || u.role === role)
+  function login(username, password) {
+    const found = users.find(u =>
+      u.username === username &&
+      u.password === password &&
+      u.status === 'active'
+    )
     if (found) { setUser(found); return { success: true } }
-    return { success: false, error: 'Invalid credentials' }
+    const exists = users.find(u => u.username === username)
+    if (exists && exists.status === 'pending') return { success: false, error: 'Account pending approval' }
+    if (exists && exists.status === 'inactive') return { success: false, error: 'Account deactivated' }
+    return { success: false, error: 'Invalid username or password' }
   }
 
   function logout() { setUser(null) }
+
+  // ── User management ────────────────────────────────────────────────────────
+  function createUser(newUser, createdByUser) {
+    const isImmediate = ['superadmin','admin'].includes(createdByUser?.role)
+    const record = {
+      ...newUser,
+      id: `u${Date.now()}`,
+      status: isImmediate ? 'active' : 'pending',
+      created_by: createdByUser?.full_name || 'Unknown',
+    }
+    setUsers(p => [...p, record])
+    if (!isImmediate) {
+      setNotifications(prev => [...prev, {
+        id: Date.now(),
+        message_en: `New account pending approval: ${newUser.full_name} (${ROLES[newUser.role]?.label})`,
+        type: 'info',
+        module: 'Users',
+        is_read: false,
+        created_at: new Date(),
+      }])
+    }
+    return record
+  }
+
+  function approveUser(id) {
+    setUsers(p => p.map(u => u.id === id ? { ...u, status: 'active' } : u))
+  }
+
+  function deactivateUser(id) {
+    setUsers(p => p.map(u => u.id === id ? { ...u, status: 'inactive' } : u))
+  }
 
   const unreadCount = notifications.filter(n => !n.is_read).length
 
@@ -140,7 +179,7 @@ export function AppProvider({ children }) {
     : false
 
   return (
-    <AppContext.Provider value={{ user, login, logout, lang, setLang, theme, setTheme, company, setCompany, notifications, markAllRead, unreadCount, liveOrders, setLiveOrders, nextOrderNum, setNextOrderNum, billQueue, requestBill, clearBillRequest, menuItems, setMenuItems, menuCategories, setMenuCategories, inventoryItems, setInventoryItems, clockRecords, clockIn, clockOut, isClockedIn }}>
+    <AppContext.Provider value={{ user, login, logout, lang, setLang, theme, setTheme, company, setCompany, users, createUser, approveUser, deactivateUser, notifications, markAllRead, unreadCount, liveOrders, setLiveOrders, nextOrderNum, setNextOrderNum, billQueue, requestBill, clearBillRequest, menuItems, setMenuItems, menuCategories, setMenuCategories, inventoryItems, setInventoryItems, clockRecords, clockIn, clockOut, isClockedIn }}>
       {children}
     </AppContext.Provider>
   )

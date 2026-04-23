@@ -1,20 +1,26 @@
 import { useState } from 'react'
-import { useApp, ROLES } from '../context/AppContext'
+import { useApp } from '../context/AppContext'
 import { t } from '../i18n/translations'
-import { Btn, Input, Select } from '../components/UI'
+import { Btn, Input } from '../components/UI'
 import { ShieldCheck, UtensilsCrossed } from 'lucide-react'
 
 export default function Login() {
   const { login, lang, setLang, company } = useApp()
-  const [username, setUsername] = useState('superadmin')
-  const [password, setPassword] = useState('Admin@1234')
-  const [role, setRole] = useState('superadmin')
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
-  function handleLogin() {
-    const result = login(username, password, role)
-    if (!result.success) setError('Invalid credentials. Try default: Admin@1234')
-    else setError('')
+  function handleLogin(e) {
+    if (e) e.preventDefault()
+    if (!username.trim() || !password.trim()) { setError('Please enter username and password'); return }
+    setLoading(true)
+    setTimeout(() => {
+      const result = login(username.trim(), password)
+      if (!result.success) setError(result.error || 'Invalid credentials')
+      else setError('')
+      setLoading(false)
+    }, 300)
   }
 
   const initials = company.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
@@ -66,11 +72,11 @@ export default function Login() {
           </div>
 
           {/* Form */}
-          <div className="space-y-0">
+          <form onSubmit={handleLogin} className="space-y-0">
             <Input
               label={t('username', lang)}
               value={username}
-              onChange={e => setUsername(e.target.value)}
+              onChange={e => { setUsername(e.target.value); setError('') }}
               placeholder="Enter your username"
               autoComplete="username"
             />
@@ -78,20 +84,11 @@ export default function Login() {
               label={t('password', lang)}
               type="password"
               value={password}
-              onChange={e => setPassword(e.target.value)}
+              onChange={e => { setPassword(e.target.value); setError('') }}
               placeholder="Enter your password"
               autoComplete="current-password"
             />
-            <Select
-              label={t('loginAs', lang)}
-              value={role}
-              onChange={e => setRole(e.target.value)}
-            >
-              {Object.entries(ROLES).map(([k, v]) => (
-                <option key={k} value={k}>{v.label}</option>
-              ))}
-            </Select>
-          </div>
+          </form>
 
           {error && (
             <div className="mb-4 p-3 bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 text-xs rounded-xl border border-rose-100 dark:border-rose-800 font-medium">
@@ -99,18 +96,27 @@ export default function Login() {
             </div>
           )}
 
-          <Btn variant="primary" fullWidth size="lg" onClick={handleLogin} className="mt-1">
+          <Btn variant="primary" fullWidth size="lg" onClick={handleLogin} className="mt-1" disabled={loading}>
             <ShieldCheck size={15} />
-            {t('signIn', lang)}
+            {loading ? 'Signing in…' : t('signIn', lang)}
           </Btn>
 
           {/* Demo hint */}
           <div className="mt-5 p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">
-            <div className="text-xs font-bold text-gray-600 dark:text-gray-300 mb-1.5 uppercase tracking-wide">Demo credentials</div>
-            <div className="text-xs text-gray-500 dark:text-gray-400">
-              Any username · Password:{' '}
-              <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">Admin@1234</span>
+            <div className="text-xs font-bold text-gray-600 dark:text-gray-300 mb-2 uppercase tracking-wide">Demo credentials</div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
+              {[['superadmin','Super Admin'],['admin','Admin'],['cashier','Cashier'],['waiter','Waiter'],['cook','Cook'],['manager','Manager']].map(([u,label]) => (
+                <button
+                  key={u}
+                  onClick={() => { setUsername(u); setPassword('Admin@1234'); setError('') }}
+                  className="text-left hover:text-indigo-500 transition-colors"
+                >
+                  <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">{u}</span>
+                  <span className="text-gray-400 ml-1">· {label}</span>
+                </button>
+              ))}
             </div>
+            <div className="mt-2 text-xs text-gray-400">Password for all: <span className="font-mono font-bold text-indigo-500">Admin@1234</span></div>
           </div>
         </div>
 
