@@ -307,7 +307,7 @@ export function Tables({ navTo, setOrderContext }) {
             </button>
           ))}
         </div>
-        <Btn variant="warning" fullWidth size="lg" onClick={takeaway}>🛍 Takeaway Order</Btn>
+        <Btn variant="warning" fullWidth size="lg" onClick={takeaway}>Takeaway Order</Btn>
       </Card>
       <Card>
         <h2 className="font-medium text-gray-900 dark:text-white mb-3">Active orders</h2>
@@ -519,7 +519,7 @@ export function Orders({ navTo, orderContext }) {
             <div key={o.id} className={`rounded-xl border p-2.5 space-y-1.5 transition-all ${isCurrentOrder ? 'border-indigo-400 bg-indigo-50 dark:bg-indigo-900/20' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'}`}>
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-gray-800 dark:text-gray-200">
-                  {o.order_type === 'takeaway' ? '🛍 Takeaway' : `🍽 T${o.table_number}`}
+                  {o.order_type === 'takeaway' ? 'Takeaway' : `Table ${o.table_number}`}
                 </span>
                 <Badge color={statusBadge[o.status] || 'gray'}>{statusLabel[o.status] || o.status}</Badge>
               </div>
@@ -527,10 +527,10 @@ export function Orders({ navTo, orderContext }) {
               <div className="text-xs text-gray-500 dark:text-gray-400 truncate">Waiter: {o.waiter}</div>
               <div className="flex flex-col gap-1 pt-1">
                 {o.status === 'ready' && (
-                  <Btn size="sm" variant="warning" onClick={() => requestBill(o)}>🧾 Request Bill</Btn>
+                  <Btn size="sm" variant="warning" onClick={() => requestBill(o)}>Request Bill</Btn>
                 )}
                 {o.status === 'bill_requested' && (
-                  <div className="text-xs text-center text-amber-600 dark:text-amber-400 font-semibold py-1">⏳ Waiting cashier…</div>
+                  <div className="text-xs text-center text-amber-600 dark:text-amber-400 font-semibold py-1">Waiting for cashier…</div>
                 )}
                 {!['ready', 'bill_requested'].includes(o.status) && (
                   <Btn size="sm" onClick={() => navTo('orders', { tableId: o.table_id, tableNumber: o.table_number, isTakeaway: o.order_type === 'takeaway', existingOrder: o })}>+ Add Items</Btn>
@@ -558,7 +558,7 @@ export function Orders({ navTo, orderContext }) {
             {menuCategories.map(c => (
               <button key={c.id} onClick={() => setCat(c.id)}
                 className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${cat === c.id ? 'bg-indigo-600 text-white border-indigo-600' : 'border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-indigo-300'}`}>
-                {c.icon} {c.name_en}
+                {c.name_en}
               </button>
             ))}
           </div>
@@ -567,7 +567,6 @@ export function Orders({ navTo, orderContext }) {
               <button key={item.id} onClick={() => openItemModal(item)}
                 className="border border-gray-200 dark:border-gray-600 rounded-xl p-3 text-left hover:border-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 active:scale-95 transition-all">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-lg">{item.emoji}</span>
                   {item.modifierGroups?.length > 0 && (
                     <span className="text-xs bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 px-1.5 py-0.5 rounded-full">+ options</span>
                   )}
@@ -766,7 +765,7 @@ export function Kitchen() {
                   <div className="text-xs text-indigo-400 dark:text-indigo-400 mt-0.5">+ {item.mods.join(' · ')}</div>
                 )}
                 {item.note && (
-                  <div className="text-xs text-amber-600 dark:text-amber-400 mt-0.5 bg-amber-50 dark:bg-amber-900/20 rounded px-2 py-0.5 inline-block">📝 {item.note}</div>
+                  <div className="text-xs text-amber-600 dark:text-amber-400 mt-0.5 bg-amber-50 dark:bg-amber-900/20 rounded px-2 py-0.5 inline-block">Note: {item.note}</div>
                 )}
               </div>
             ))}
@@ -774,7 +773,7 @@ export function Kitchen() {
           {/* Allergy note on order level */}
           {o.notes && (
             <div className="mt-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-2 py-1.5">
-              ⚠ {o.notes}
+              Allergy / Note: {o.notes}
             </div>
           )}
           <Btn variant={btnVariant[o.status]} fullWidth size="lg" className="mt-4" onClick={() => advance(o.id)}>
@@ -919,7 +918,7 @@ export function Billing() {
             return (
             <div key={i} className="flex justify-between text-sm py-1.5 border-b border-gray-100 dark:border-gray-700">
               <div>
-                <div className="text-gray-700 dark:text-gray-300">{item.emoji} {item.name_en} ×{item.qty}</div>
+                <div className="text-gray-700 dark:text-gray-300">{item.name_en} ×{item.qty}</div>
                 {disc > 0 && <div className="text-xs text-rose-400">-{disc}% discount</div>}
               </div>
               <span className="font-medium text-gray-800 dark:text-gray-200">€{lineTotal.toFixed(2)}</span>
@@ -989,7 +988,7 @@ export function Billing() {
         <div className="flex gap-2">
           {/* Text / code search */}
           <div className="flex-1 relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-base">🔍</span>
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-base">🔍</span>
             <input
               ref={searchRef}
               value={search}
@@ -1017,8 +1016,7 @@ export function Billing() {
           <button
             onClick={() => setActiveCat('all')}
             className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${activeCat === 'all' ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-indigo-300'}`}
-          >
-            🍴 All Items ({menuItems.filter(m => m.available).length})
+          >All Items ({menuItems.filter(m => m.available).length})
           </button>
           {menuCategories.map(cat => (
             <button
@@ -1026,7 +1024,7 @@ export function Billing() {
               onClick={() => setActiveCat(cat.id)}
               className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${activeCat === cat.id ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-indigo-300'}`}
             >
-              {cat.icon} {cat.name_en} ({menuItems.filter(m => m.category_id === cat.id && m.available).length})
+              {cat.name_en} ({menuItems.filter(m => m.category_id === cat.id && m.available).length})
             </button>
           ))}
         </div>
@@ -1035,7 +1033,6 @@ export function Billing() {
         <div className="flex-1 overflow-y-auto">
           {visibleItems.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-40 text-gray-400">
-              <div className="text-4xl mb-2">🔍</div>
               <div className="text-sm font-medium">No items found</div>
               <div className="text-xs mt-1">Try a different search or category</div>
             </div>
@@ -1052,7 +1049,6 @@ export function Billing() {
                     }`}
                 >
                   <div className="flex items-start justify-between mb-1.5">
-                    <span className="text-2xl leading-none">{item.emoji}</span>
                     <span className="text-sm font-extrabold text-indigo-600 dark:text-indigo-400">€{item.price.toFixed(2)}</span>
                   </div>
                   <div className="text-xs font-bold text-gray-800 dark:text-gray-100 leading-tight">{item.name_en}</div>
@@ -1083,14 +1079,12 @@ export function Billing() {
           <div className="flex-1 overflow-y-auto space-y-1 min-h-0">
             {cart.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-gray-300 dark:text-gray-600 py-8">
-                <div className="text-4xl mb-2">🛒</div>
                 <div className="text-sm">Cart is empty</div>
                 <div className="text-xs mt-1 text-center">Tap a product or scan a barcode</div>
               </div>
             ) : cart.map(item => (
               <div key={item.id} className="py-2 px-1 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700/50">
                 <div className="flex items-center gap-2">
-                  <span className="text-xl flex-shrink-0">{item.emoji}</span>
                   <div className="flex-1 min-w-0">
                     <div className="text-xs font-semibold text-gray-800 dark:text-gray-200 truncate">{item.name_en}</div>
                     <div className="text-xs text-indigo-600 font-bold">€{item.price.toFixed(2)}</div>
@@ -2212,7 +2206,6 @@ export function MenuManagement() {
               <tr key={item.id} className="border-b border-gray-100 dark:border-gray-700/40 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-700/30">
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
-                    <span className="text-xl">{item.emoji}</span>
                     <div>
                       <div className="font-semibold text-gray-800 dark:text-gray-200">{item.name_en}</div>
                       <div className="text-xs text-gray-400 truncate max-w-[180px]">{item.description_en}</div>
