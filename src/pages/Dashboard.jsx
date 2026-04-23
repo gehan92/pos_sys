@@ -1080,7 +1080,8 @@ export function Billing() {
                 <button
                   disabled={!newCust.name.trim()}
                   onClick={() => {
-                    const record = { name: newCust.name.trim(), phone: newCust.phone.trim(), email: newCust.email.trim(), notes:'', loyalty_points:0, tags:[], orders:[] }
+                    const newId = `cust${Date.now()}`
+                    const record = { id: newId, name: newCust.name.trim(), phone: newCust.phone.trim(), email: newCust.email.trim(), notes:'', loyalty_points:0, tags:[], orders:[], created_at: new Date().toLocaleDateString() }
                     createCustomer(record)
                     // find new customer by name+phone to link:
                     const linked = { ...record, id: `cust${Date.now()}`, created_at: new Date().toLocaleDateString() }
@@ -1136,7 +1137,7 @@ export function Billing() {
       </div>
     )}
 
-    {/* Mobile tab bar - hidden on desktop */}}
+    {/* Mobile tab bar - hidden on desktop */}
     <div className="flex gap-2 mb-3 lg:hidden">
       <button onClick={() => setMobileBillTab('menu')}
         className={`flex-1 py-2.5 rounded-xl text-sm font-bold border-2 transition-all ${mobileBillTab==='menu' ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800'}`}>

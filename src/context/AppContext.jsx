@@ -131,7 +131,8 @@ export function AppProvider({ children }) {
 
   // ── Customer management ─────────────────────────────────────────────────────
   function createCustomer(record) {
-    setCustomers(p => [...p, { ...record, id: `cust${Date.now()}`, created_at: new Date().toLocaleDateString() }])
+    const id = record.id || `cust${Date.now()}`
+    setCustomers(p => [...p, { ...record, id, created_at: new Date().toLocaleDateString() }])
   }
 
   function updateCustomer(record) {
