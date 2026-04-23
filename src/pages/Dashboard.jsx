@@ -196,9 +196,11 @@ export function Users() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 dark:border-gray-700/60">
-                {['Staff member','Role','Created by','Status','Actions'].map(h => (
-                  <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
-                ))}
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Staff member</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Role</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden sm:table-cell">Created by</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -216,7 +218,7 @@ export function Users() {
                   <td className="px-4 py-3">
                     <Badge color={statusColor(u.role)}>{ROLES[u.role]?.label || u.role}</Badge>
                   </td>
-                  <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">{u.created_by || '—'}</td>
+                  <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 hidden sm:table-cell">{u.created_by || '—'}</td>
                   <td className="px-4 py-3">
                     <Badge color={u.status==='active'?'green':u.status==='pending'?'yellow':'red'}>
                       {u.status === 'active' ? '✓ Active' : u.status === 'pending' ? '⏳ Pending' : '✗ Inactive'}
@@ -1289,12 +1291,18 @@ export function Inventory() {
 
       {/* Table */}
       <Card padding={false}>
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-100 dark:border-gray-700/60">
-              {['Item','Category','Qty','Unit','Min','Level','Status','Actions'].map(h => (
-                <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
-              ))}
+              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Item</th>
+              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden sm:table-cell">Category</th>
+              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Qty</th>
+              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden sm:table-cell">Unit</th>
+              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden sm:table-cell">Min Stock</th>
+              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden sm:table-cell">Level</th>
+              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -1305,7 +1313,7 @@ export function Inventory() {
               return (
                 <tr key={item.id} className="border-b border-gray-100 dark:border-gray-700/40 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-700/30">
                   <td className="px-4 py-3 font-semibold text-gray-800 dark:text-gray-200">{item.item_name}</td>
-                  <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">{item.category || '—'}</td>
+                  <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 hidden sm:table-cell">{item.category || '—'}</td>
                   <td className="px-4 py-3">
                     {adjustId === item.id ? (
                       <div className="flex items-center gap-1">
@@ -1330,9 +1338,9 @@ export function Inventory() {
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">{item.unit}</td>
-                  <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">{item.min_stock}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 hidden sm:table-cell">{item.unit}</td>
+                  <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 hidden sm:table-cell">{item.min_stock}</td>
+                  <td className="px-4 py-3 hidden sm:table-cell">
                     <div className="w-20 h-2 bg-gray-200 dark:bg-gray-600 rounded-full">
                       <div className={`h-full rounded-full ${barColor}`} style={{width:`${pct}%`}} />
                     </div>
@@ -1355,6 +1363,7 @@ export function Inventory() {
             )}
           </tbody>
         </table>
+        </div>
       </Card>
     </div>
   )
@@ -1968,12 +1977,17 @@ export function MenuManagement() {
 
       {/* ── Table ── */}
       <Card padding={false}>
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-100 dark:border-gray-700/60">
-              {['Item','Category','Price / Margin','Code','Tags & Mods','Available','Actions'].map(h => (
-                <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
-              ))}
+              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Item</th>
+              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden sm:table-cell">Category</th>
+              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Price</th>
+              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden sm:table-cell">Code</th>
+              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden sm:table-cell">Tags &amp; Mods</th>
+              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Available</th>
+              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -1988,7 +2002,7 @@ export function MenuManagement() {
                     </div>
                   </div>
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 hidden sm:table-cell">
                   <span className="text-xs text-gray-500 dark:text-gray-400">{menuCategories.find(c=>c.id===item.category_id)?.name_en || '—'}</span>
                 </td>
                 <td className="px-4 py-3">
@@ -1998,10 +2012,10 @@ export function MenuManagement() {
                     {item.cost_price && <div className="text-xs text-emerald-500 font-medium">{Math.round(((Number(item.price)-Number(item.cost_price))/Number(item.price))*100)}% margin</div>}
                   </div>
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 hidden sm:table-cell">
                   <span className="font-mono text-xs text-gray-500 dark:text-gray-400">{item.code}</span>
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 hidden sm:table-cell">
                   <div className="flex flex-wrap gap-1">
                     {(item.dietary_tags||[]).map(t => <span key={t} className="px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-xs font-medium">{t}</span>)}
                     {(item.modifierGroups||[]).length > 0 && <span className="px-1.5 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 text-xs">{item.modifierGroups.length} mod(s)</span>}
@@ -2026,6 +2040,7 @@ export function MenuManagement() {
             )}
           </tbody>
         </table>
+        </div>
       </Card>
     </div>
   )
