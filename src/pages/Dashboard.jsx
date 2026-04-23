@@ -1238,14 +1238,14 @@ export function Billing() {
         )}
 
         {/* Cart */}
-        <Card className="flex-1 flex flex-col min-h-0 !p-4">
+        <Card className="lg:flex-1 flex flex-col min-h-0 !p-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-bold text-gray-900 dark:text-white">Cart</h2>
             {cart.length > 0 && (
               <button onClick={() => setCart([])} className="text-xs text-rose-500 hover:text-rose-600 font-semibold">Clear all</button>
             )}
           </div>
-          <div className="flex-1 overflow-y-auto space-y-1 min-h-0">
+          <div className="min-h-0 overflow-y-auto space-y-1 max-h-[45vh] lg:max-h-none lg:flex-1">
             {cart.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-gray-300 dark:text-gray-600 py-8">
                 <div className="text-sm">Cart is empty</div>
