@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Building2, Users as UsersIcon, BarChart3, Settings as SettingsIcon, ShieldCheck,
   Grid3x3, ClipboardList, CreditCard, Package, BookOpen, Receipt, Eye,
   Calendar, ChefHat, FileText, Bell, LogOut, Globe, Sun, Moon, ChevronRight,
-  Clock, LogIn, LogOut as LogOutIcon,
+  Clock, LogIn, LogOut as LogOutIcon, Menu, X,
 } from 'lucide-react'
 
 // Pages
@@ -63,6 +63,7 @@ export default function Layout() {
     return nav[0]
   })
   const [orderContext, setOrderContext] = useState({ tableId: null, tableNumber: null, isTakeaway: false })
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const nav = ROLE_NAV[user?.role] || []
   const PageComponent = PAGE_MAP[page] || Dashboard
@@ -72,13 +73,27 @@ export default function Layout() {
   function navTo(p, ctx = null) {
     if (ctx) setOrderContext(ctx)
     setPage(p)
+    setSidebarOpen(false) // close sidebar on mobile after navigation
   }
 
   return (
     <div className="flex h-screen bg-slate-50 dark:bg-gray-950 overflow-hidden">
 
-      {/* SIDEBAR — dark professional */}
-      <aside className="w-60 bg-slate-900 dark:bg-slate-950 flex flex-col flex-shrink-0 shadow-xl">
+      {/* Mobile overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* SIDEBAR */}
+      <aside className={`
+        fixed lg:static inset-y-0 left-0 z-50
+        w-60 bg-slate-900 dark:bg-slate-950 flex flex-col flex-shrink-0 shadow-xl
+        transform transition-transform duration-200 ease-in-out
+        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+      `}>
 
         {/* Brand */}
         <div className="px-5 py-4 border-b border-white/10">
@@ -86,10 +101,14 @@ export default function Layout() {
             <div className="w-9 h-9 bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-xl flex items-center justify-center text-white font-bold text-sm flex-shrink-0 shadow-lg shadow-indigo-900/40">
               {companyInitials}
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <div className="text-sm font-bold text-white truncate leading-tight">{company.name}</div>
               <div className="text-xs text-slate-500 mt-0.5">Point of Sale</div>
             </div>
+            {/* Close button mobile */}
+            <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-slate-400 hover:text-white">
+              <X size={18} />
+            </button>
           </div>
         </div>
 
@@ -171,29 +190,36 @@ export default function Layout() {
       </aside>
 
       {/* MAIN CONTENT */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 lg:ml-0">
 
         {/* Topbar */}
-        <header className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-6 py-3 flex items-center justify-between shadow-sm">
+        <header className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-4 lg:px-6 py-3 flex items-center justify-between shadow-sm">
           <div className="flex items-center gap-3">
+            {/* Hamburger — mobile only */}
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="lg:hidden flex items-center justify-center w-9 h-9 rounded-xl border border-gray-100 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            >
+              <Menu size={18} />
+            </button>
             <div>
-              <h1 className="text-base font-bold text-gray-900 dark:text-white capitalize">{t(page, lang) || page}</h1>
-              <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{company.name}</p>
+              <h1 className="text-sm lg:text-base font-bold text-gray-900 dark:text-white capitalize">{t(page, lang) || page}</h1>
+              <p className="text-xs text-gray-400 dark:text-gray-500 hidden sm:block mt-0.5">{company.name}</p>
             </div>
           </div>
           <div className="flex items-center gap-1.5">
-            {/* Clock In / Out button — visible to all staff */}
+            {/* Clock In / Out button */}
             <button
               onClick={isClockedIn ? clockOut : clockIn}
               title={isClockedIn ? 'Clock Out' : 'Clock In'}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-all ${
+              className={`flex items-center gap-1.5 px-2 lg:px-3 py-2 rounded-xl text-xs font-bold border transition-all ${
                 isClockedIn
                   ? 'bg-rose-50 dark:bg-rose-900/20 border-rose-200 dark:border-rose-700 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/30'
                   : 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-700 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/30'
               }`}
             >
               <Clock size={13} />
-              {isClockedIn ? 'Clock Out' : 'Clock In'}
+              <span className="hidden sm:inline">{isClockedIn ? 'Clock Out' : 'Clock In'}</span>
             </button>
             <button
               onClick={() => navTo('notifications')}
@@ -206,17 +232,17 @@ export default function Layout() {
             </button>
             <button
               onClick={() => navTo('settings')}
-              className="flex items-center justify-center w-9 h-9 rounded-xl border border-gray-100 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              className="hidden sm:flex items-center justify-center w-9 h-9 rounded-xl border border-gray-100 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               <SettingsIcon size={16} />
             </button>
-            <div className="w-px h-6 bg-gray-100 dark:bg-gray-700 mx-1" />
+            <div className="w-px h-6 bg-gray-100 dark:bg-gray-700 mx-1 hidden sm:block" />
             <Avatar name={user?.full_name} size="sm" />
           </div>
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-auto p-6 animate-fadeIn">
+        <main className="flex-1 overflow-auto p-3 lg:p-6 animate-fadeIn">
           <PageComponent navTo={navTo} orderContext={orderContext} setOrderContext={setOrderContext} />
         </main>
       </div>
