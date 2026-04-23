@@ -1260,7 +1260,7 @@ export function Inventory() {
             </div>
             <div className="px-6 py-5 space-y-4">
               <Input label="Item Name" value={form.item_name} onChange={e => setForm(f=>({...f,item_name:e.target.value}))} placeholder="e.g. Olive Oil" />
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Input label="Current Quantity" type="number" min="0" step="0.01" value={form.quantity} onChange={e => setForm(f=>({...f,quantity:e.target.value}))} placeholder="0" />
                 <Input label="Unit" value={form.unit} onChange={e => setForm(f=>({...f,unit:e.target.value}))} placeholder="kg / L / pcs" />
                 <Input label="Min Stock Level" type="number" min="0" step="0.01" value={form.min_stock} onChange={e => setForm(f=>({...f,min_stock:e.target.value}))} placeholder="Reorder at this level" />
@@ -1592,7 +1592,7 @@ export function Shifts() {
   return (
     <div>
       {/* My status card */}
-      <div className={`flex items-center justify-between rounded-2xl px-5 py-4 mb-4 border-2 ${isClockedIn ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-300 dark:border-emerald-700' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'}`}>
+      <div className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl px-5 py-4 mb-4 border-2 ${isClockedIn ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-300 dark:border-emerald-700' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'}`}>
         <div className="flex items-center gap-3">
           <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg ${isClockedIn ? 'bg-emerald-500 text-white' : 'bg-gray-300 dark:bg-gray-600 text-gray-600 dark:text-gray-300'}`}>
             {isClockedIn ? '🟢' : '⚫'}
@@ -1642,6 +1642,7 @@ export function Shifts() {
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse inline-block" />
                 <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Currently On Shift</span>
               </div>
+              <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-100 dark:border-gray-700/60">
@@ -1661,6 +1662,7 @@ export function Shifts() {
                   ))}
                 </tbody>
               </table>
+              </div>
             </Card>
           )}
 
@@ -1670,6 +1672,7 @@ export function Shifts() {
               <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
                 <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Completed Today</span>
               </div>
+              <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-100 dark:border-gray-700/60">
@@ -1690,6 +1693,7 @@ export function Shifts() {
                   ))}
                 </tbody>
               </table>
+              </div>
             </Card>
           )}
 
@@ -1701,6 +1705,7 @@ export function Shifts() {
 
       {tab === 'history' && (
         <Card padding={false}>
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 dark:border-gray-700/60">
@@ -1730,6 +1735,7 @@ export function Shifts() {
               )}
             </tbody>
           </table>
+          </div>
         </Card>
       )}
     </div>
@@ -1870,7 +1876,7 @@ export function MenuManagement() {
             </div>
             <div className="px-6 py-5 space-y-4">
               {/* Basic fields */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Input label="Item Name" value={form.name_en} onChange={e => setForm(f=>({...f,name_en:e.target.value}))} placeholder="e.g. Grilled Sea Bass" />
                 <Input label="Selling Price (€)" type="number" step="0.01" min="0" value={form.price} onChange={e => setForm(f=>({...f,price:e.target.value}))} placeholder="0.00" />
                 <Input label="Cost Price (€)" type="number" step="0.01" min="0" value={form.cost_price||''} onChange={e => setForm(f=>({...f,cost_price:e.target.value}))} placeholder="Your cost" />
@@ -1887,7 +1893,7 @@ export function MenuManagement() {
                 <Input label="Item Code" value={form.code} onChange={e => setForm(f=>({...f,code:e.target.value}))} placeholder="M001" />
                 <Input label="Barcode" value={form.barcode} onChange={e => setForm(f=>({...f,barcode:e.target.value}))} placeholder="5990000001" />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Select label="Category" value={form.category_id} onChange={e => setForm(f=>({...f,category_id:e.target.value}))}>
                   {menuCategories.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name_en}</option>)}
                 </Select>
@@ -1935,7 +1941,7 @@ export function MenuManagement() {
                   </div>
                 ))}
                 <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl p-3 space-y-2">
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <input value={modInput.label} onChange={e => setModInput(p=>({...p,label:e.target.value}))} placeholder="Group name (e.g. Cooking level)" className="px-3 py-2 text-xs rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-500" />
                     <input value={modInput.choices} onChange={e => setModInput(p=>({...p,choices:e.target.value}))} placeholder="Choices comma-separated (Rare, Medium...)" className="px-3 py-2 text-xs rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-500" />
                   </div>
