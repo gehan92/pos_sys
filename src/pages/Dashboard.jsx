@@ -805,6 +805,7 @@ export function Billing() {
   const [linkedCustomer, setLinkedCustomer] = useState(null)
   const [custSearch, setCustSearch] = useState('')
   const [showCustPanel, setShowCustPanel] = useState(true)
+  const [mobileBillTab, setMobileBillTab] = useState('menu')
   const searchRef = useRef(null)
   const barcodeRef = useRef(null)
 
@@ -842,6 +843,7 @@ export function Billing() {
       if (ex) return p.map(i => i.id === item.id ? { ...i, qty: i.qty + 1 } : i)
       return [...p, { ...item, qty: 1 }]
     })
+    setMobileBillTab('cart')
   }
 
   function changeQty(id, delta) {
@@ -971,7 +973,7 @@ export function Billing() {
           </div>
           <Btn variant="success" fullWidth className="mt-2" onClick={() => {
             setReceipt(null); setCart([]); setPayMethod(null); setCashGiven(0); setLoadedOrderId(null)
-            setLinkedCustomer(null); setCustSearch(''); setShowCustPanel(true)
+            setLinkedCustomer(null); setCustSearch(''); setShowCustPanel(true); setMobileBillTab('menu')
           }}>
             New Sale
           </Btn>
@@ -988,7 +990,7 @@ export function Billing() {
       {billQueue.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {billQueue.map(b => (
-            <div key={b.orderId} className="flex items-center gap-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-xl px-4 py-2.5">
+            <div key={b.orderId} className="flex flex-wrap items-center gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-xl px-3 py-2">
               <span className="text-amber-600 dark:text-amber-400 font-bold text-sm">🧾 {b.tableLabel}</span>
               <span className="text-xs text-amber-700 dark:text-amber-300">Waiter: {b.waiter}</span>
               <span className="text-xs text-amber-600 dark:text-amber-400 font-semibold">€{b.total.toFixed(2)}</span>
@@ -999,10 +1001,22 @@ export function Billing() {
         </div>
       )}
 
+    {/* Mobile tab bar - hidden on desktop */}
+    <div className="flex gap-2 mb-3 lg:hidden">
+      <button onClick={() => setMobileBillTab('menu')}
+        className={`flex-1 py-2.5 rounded-xl text-sm font-bold border-2 transition-all ${mobileBillTab==='menu' ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800'}`}>
+        Menu
+      </button>
+      <button onClick={() => setMobileBillTab('cart')}
+        className={`flex-1 py-2.5 rounded-xl text-sm font-bold border-2 transition-all relative ${mobileBillTab==='cart' ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800'}`}>
+        Cart{cart.length > 0 ? ` (${cart.reduce((s,i)=>s+i.qty,0)})` : ''}
+      </button>
+    </div>
+
     <div className="flex flex-col lg:flex-row gap-4 lg:h-[calc(100vh-160px)] min-h-0">
 
       {/* ── LEFT: Product browser ── */}
-      <div className="flex-1 flex flex-col min-w-0 gap-3 min-h-0">
+      <div className={`flex-1 flex flex-col min-w-0 gap-3 min-h-0 ${mobileBillTab !== 'menu' ? 'hidden lg:flex' : ''}`}>
 
         {/* Search + Barcode row */}
         <div className="flex gap-2">
@@ -1018,7 +1032,7 @@ export function Billing() {
             />
           </div>
           {/* Barcode scanner input */}
-          <div className="relative w-40 sm:w-52">
+          <div className="relative hidden sm:block sm:w-52">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-base">📷</span>
             <input
               ref={barcodeRef}
@@ -1086,7 +1100,7 @@ export function Billing() {
       </div>
 
       {/* ── RIGHT: Cart + Payment ── */}
-      <div className="w-full lg:w-80 flex-shrink-0 flex flex-col gap-3">
+      <div className={`w-full lg:w-80 flex-shrink-0 flex flex-col gap-3 ${mobileBillTab !== 'cart' ? 'hidden lg:flex lg:flex-col' : ''}`}>
 
         {/* Customer link */}
         {!linkedCustomer ? (
@@ -1806,19 +1820,34 @@ export function Receipts() {
   return (
     <Card>
       <h2 className="font-medium text-gray-900 dark:text-white mb-4">Receipt history</h2>
-      <Table headers={['Receipt #','Table','Type','Total','Payment','Time','Action']}>
-        {SAMPLE_INVOICES.map(inv => (
-          <TR key={inv.id}>
-            <TD className="font-medium text-blue-600">RCP-{inv.invoice_number}</TD>
-            <TD>{inv.table}</TD>
-            <TD><Badge color={inv.type==='takeaway'?'orange':'blue'}>{inv.type==='takeaway'?'Takeaway':'Dine-in'}</Badge></TD>
-            <TD className="font-medium">€{inv.total.toFixed(2)}</TD>
-            <TD>{inv.payment_method}</TD>
-            <TD>{inv.created_at}</TD>
-            <TD><Btn size="sm" onClick={() => alert('Reprinting...')}>Reprint</Btn></TD>
-          </TR>
-        ))}
-      </Table>
+      <div className="overflow-x-auto -mx-1">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b-2 border-gray-100 dark:border-gray-700">
+              <th className="text-left px-4 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Receipt #</th>
+              <th className="text-left px-4 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider hidden sm:table-cell">Table</th>
+              <th className="text-left px-4 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider hidden sm:table-cell">Type</th>
+              <th className="text-left px-4 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Total</th>
+              <th className="text-left px-4 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider hidden md:table-cell">Payment</th>
+              <th className="text-left px-4 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider hidden md:table-cell">Time</th>
+              <th className="text-left px-4 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {SAMPLE_INVOICES.map(inv => (
+              <tr key={inv.id} className="border-b border-gray-100 dark:border-gray-700/40 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                <td className="px-4 py-3 font-medium text-blue-600">RCP-{inv.invoice_number}</td>
+                <td className="px-4 py-3 hidden sm:table-cell">{inv.table}</td>
+                <td className="px-4 py-3 hidden sm:table-cell"><Badge color={inv.type==='takeaway'?'orange':'blue'}>{inv.type==='takeaway'?'Takeaway':'Dine-in'}</Badge></td>
+                <td className="px-4 py-3 font-medium">€{inv.total.toFixed(2)}</td>
+                <td className="px-4 py-3 hidden md:table-cell">{inv.payment_method}</td>
+                <td className="px-4 py-3 hidden md:table-cell">{inv.created_at}</td>
+                <td className="px-4 py-3"><Btn size="sm" onClick={() => alert('Reprinting...')}>Reprint</Btn></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </Card>
   )
 }
