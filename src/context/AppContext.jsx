@@ -16,13 +16,13 @@ export const ROLES = {
 }
 
 export const ROLE_NAV = {
-  superadmin: ['dashboard','company','users','inventory','menu','reports','settings','audit','notifications'],
-  admin:      ['dashboard','users','tables','billing','inventory','menu','reports','settings','notifications'],
-  owner:      ['dashboard','reports','users','billing','inventory','menu','settings','notifications'],
-  manager:    ['dashboard','users','shifts','inventory','menu','notifications'],
-  cashier:    ['billing','receipts','shifts','notifications'],
+  superadmin: ['dashboard','company','users','customers','inventory','menu','reports','settings','audit','notifications'],
+  admin:      ['dashboard','users','customers','tables','billing','inventory','menu','reports','settings','notifications'],
+  owner:      ['dashboard','reports','users','customers','billing','inventory','menu','settings','notifications'],
+  manager:    ['dashboard','users','customers','shifts','inventory','menu','notifications'],
+  cashier:    ['billing','receipts','customers','shifts','notifications'],
   supervisor: ['dashboard','supervisor','reports','shifts','notifications'],
-  waiter:     ['tables','orders','shifts','notifications'],
+  waiter:     ['tables','orders','customers','shifts','notifications'],
   cook:       ['kitchen','shifts','notifications'],
   supplier:   ['inventory','invoices','notifications'],
 }
@@ -31,7 +31,7 @@ export const NAV_ICONS = {
   dashboard:'🏠', company:'🏢', users:'👥', reports:'📊', settings:'⚙️', audit:'🔒',
   tables:'🍽️', orders:'📋', billing:'💰', inventory:'📦', menu:'🗂️',
   cashier:'💰', receipts:'🖨️', supervisor:'👁️', shifts:'🗓️', kitchen:'👨‍🍳',
-  invoices:'📄', notifications:'🔔',
+  invoices:'📄', notifications:'🔔', customers:'👤',
 }
 
 const INITIAL_USERS = [
@@ -46,6 +46,14 @@ const INITIAL_USERS = [
   { id:'9', full_name:'Rita Supplier', username:'supplier',   password:'Admin@1234', role:'supplier',   status:'active',   created_by:'System' },
 ]
 
+const INITIAL_CUSTOMERS = [
+  { id:'cust1', name:'Anna Borg',       phone:'+356 9912 3456', email:'anna.borg@gmail.com', notes:'Prefers window seat. Nut allergy.',    loyalty_points:120, tags:['VIP','Allergy'],  created_at:'15/03/2026' },
+  { id:'cust2', name:'Mark Camilleri',  phone:'+356 9934 5678', email:'mark.c@hotmail.com',  notes:'Regular Thursday lunch customer.',    loyalty_points:45,  tags:['Regular'],        created_at:'02/01/2026' },
+  { id:'cust3', name:'Sophie Farrugia', phone:'+356 7756 7890', email:'',                    notes:'Vegan — no dairy or meat.',           loyalty_points:88,  tags:['Vegan'],          created_at:'20/02/2026' },
+  { id:'cust4', name:'Joseph Vella',    phone:'+356 9978 1234', email:'j.vella@business.mt', notes:'Corporate client. Prefers booth.',    loyalty_points:210, tags:['VIP'],            created_at:'10/11/2025' },
+  { id:'cust5', name:'Claire Zammit',   phone:'+356 7712 3456', email:'claire.z@gmail.com',  notes:'Gluten intolerance.',                loyalty_points:33,  tags:['Gluten-Free'],    created_at:'08/04/2026' },
+]
+
 export function AppProvider({ children }) {
   const [user, setUser]           = useState(null)
   const [lang, setLang]           = useState('en')
@@ -56,6 +64,7 @@ export function AppProvider({ children }) {
   const [menuItems, setMenuItems] = useState(MENU_ITEMS)
   const [menuCategories, setMenuCategories] = useState(MENU_CATEGORIES)
   const [inventoryItems, setInventoryItems] = useState(INVENTORY_ITEMS)
+  const [customers, setCustomers] = useState(INITIAL_CUSTOMERS)
   const [company, setCompany] = useState({ name: 'Bella Vista Malta', address: '123 Republic Street, Valletta', currency: 'EUR', vat_rate: 18, receipt_footer: 'Thank you — Grazzi — Grazie' })
   const [billQueue, setBillQueue] = useState([]) // { orderId, tableLabel, waiter, items, total }
   const [clockRecords, setClockRecords] = useState([
@@ -120,6 +129,19 @@ export function AppProvider({ children }) {
     setUsers(p => p.map(u => u.id === id ? { ...u, status: 'inactive' } : u))
   }
 
+  // ── Customer management ─────────────────────────────────────────────────────
+  function createCustomer(record) {
+    setCustomers(p => [...p, { ...record, id: `cust${Date.now()}`, created_at: new Date().toLocaleDateString() }])
+  }
+
+  function updateCustomer(record) {
+    setCustomers(p => p.map(c => c.id === record.id ? record : c))
+  }
+
+  function deleteCustomer(id) {
+    setCustomers(p => p.filter(c => c.id !== id))
+  }
+
   const unreadCount = notifications.filter(n => !n.is_read).length
 
   function markAllRead() {
@@ -179,7 +201,7 @@ export function AppProvider({ children }) {
     : false
 
   return (
-    <AppContext.Provider value={{ user, login, logout, lang, setLang, theme, setTheme, company, setCompany, users, createUser, approveUser, deactivateUser, notifications, markAllRead, unreadCount, liveOrders, setLiveOrders, nextOrderNum, setNextOrderNum, billQueue, requestBill, clearBillRequest, menuItems, setMenuItems, menuCategories, setMenuCategories, inventoryItems, setInventoryItems, clockRecords, clockIn, clockOut, isClockedIn }}>
+    <AppContext.Provider value={{ user, login, logout, lang, setLang, theme, setTheme, company, setCompany, users, createUser, approveUser, deactivateUser, notifications, markAllRead, unreadCount, liveOrders, setLiveOrders, nextOrderNum, setNextOrderNum, billQueue, requestBill, clearBillRequest, menuItems, setMenuItems, menuCategories, setMenuCategories, inventoryItems, setInventoryItems, customers, createCustomer, updateCustomer, deleteCustomer, clockRecords, clockIn, clockOut, isClockedIn }}>
       {children}
     </AppContext.Provider>
   )

@@ -1788,6 +1788,217 @@ export function Invoices() {
   )
 }
 
+// ─── Customers ────────────────────────────────────────────────────────────────
+export function Customers() {
+  const { customers, createCustomer, updateCustomer, deleteCustomer, user } = useApp()
+  const canManage = ['superadmin','admin','owner','manager'].includes(user?.role)
+
+  const BLANK = { name:'', phone:'', email:'', notes:'', loyalty_points:0, tags:[] }
+  const [modal, setModal] = useState(null)  // null | { mode:'add'|'edit'|'view' }
+  const [form, setForm] = useState(BLANK)
+  const [confirmDelete, setConfirmDelete] = useState(null)
+  const [search, setSearch] = useState('')
+
+  const visible = customers.filter(c => {
+    const q = search.toLowerCase()
+    return !q || c.name.toLowerCase().includes(q) || (c.phone||'').includes(q) || (c.email||'').toLowerCase().includes(q)
+  })
+
+  function openAdd() { setForm({ ...BLANK }); setModal({ mode:'add' }) }
+  function openEdit(c) { setForm({ ...c }); setModal({ mode:'edit' }) }
+  function openView(c) { setForm({ ...c }); setModal({ mode:'view' }) }
+  function closeModal() { setModal(null) }
+
+  function save() {
+    if (!form.name.trim()) return
+    const record = { ...form, loyalty_points: parseInt(form.loyalty_points) || 0 }
+    if (modal.mode === 'add') createCustomer(record)
+    else updateCustomer(record)
+    closeModal()
+  }
+
+  const isReadOnly = modal?.mode === 'view'
+
+  const TAG_OPTIONS = ['VIP','Regular','Allergy','Gluten-Free','Vegan','Lactose-Free','Staff Discount']
+
+  return (
+    <div>
+      {/* Confirm delete */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl max-w-sm w-full mx-4">
+            <h3 className="font-bold text-gray-900 dark:text-white mb-2">Remove customer?</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">"{confirmDelete.name}"'s data will be permanently deleted.</p>
+            <div className="flex gap-2">
+              <Btn fullWidth onClick={() => setConfirmDelete(null)}>Cancel</Btn>
+              <Btn variant="danger" fullWidth onClick={() => { deleteCustomer(confirmDelete.id); setConfirmDelete(null) }}>Delete</Btn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add / Edit / View Modal */}
+      {modal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={closeModal}>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+              <h2 className="font-bold text-gray-900 dark:text-white">
+                {modal.mode === 'add' ? 'Add Customer' : modal.mode === 'view' ? 'Customer Details' : 'Edit Customer'}
+              </h2>
+              <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl">✕</button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              {/* Name */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">Full Name {!isReadOnly && <span className="text-rose-400">*</span>}</label>
+                <input
+                  value={form.name}
+                  onChange={e => !isReadOnly && setForm(f => ({ ...f, name: e.target.value }))}
+                  readOnly={isReadOnly}
+                  placeholder="e.g. Anna Borg"
+                  className={`w-full px-3.5 py-2.5 border rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${isReadOnly ? 'bg-gray-50 dark:bg-gray-700/30 border-gray-200 dark:border-gray-600' : 'bg-white dark:bg-gray-700/50 border-gray-200 dark:border-gray-600'}`}
+                />
+              </div>
+              {/* Phone + Email */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">Phone</label>
+                  <input type="tel" value={form.phone||''} onChange={e => !isReadOnly && setForm(f=>({...f,phone:e.target.value}))} readOnly={isReadOnly} placeholder="+356 ..." className={`w-full px-3.5 py-2.5 border rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${isReadOnly ? 'bg-gray-50 dark:bg-gray-700/30 border-gray-200 dark:border-gray-600' : 'bg-white dark:bg-gray-700/50 border-gray-200 dark:border-gray-600'}`} />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">Email</label>
+                  <input type="email" value={form.email||''} onChange={e => !isReadOnly && setForm(f=>({...f,email:e.target.value}))} readOnly={isReadOnly} placeholder="email@example.com" className={`w-full px-3.5 py-2.5 border rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${isReadOnly ? 'bg-gray-50 dark:bg-gray-700/30 border-gray-200 dark:border-gray-600' : 'bg-white dark:bg-gray-700/50 border-gray-200 dark:border-gray-600'}`} />
+                </div>
+              </div>
+              {/* Loyalty points */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">Loyalty Points</label>
+                <input type="number" min="0" value={form.loyalty_points||0} onChange={e => !isReadOnly && setForm(f=>({...f,loyalty_points:e.target.value}))} readOnly={isReadOnly} className={`w-full px-3.5 py-2.5 border rounded-xl text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 ${isReadOnly ? 'bg-gray-50 dark:bg-gray-700/30 border-gray-200 dark:border-gray-600' : 'bg-white dark:bg-gray-700/50 border-gray-200 dark:border-gray-600'}`} />
+              </div>
+              {/* Tags */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">Tags</label>
+                <div className="flex flex-wrap gap-2">
+                  {TAG_OPTIONS.map(tag => {
+                    const active = (form.tags||[]).includes(tag)
+                    return (
+                      <button key={tag} type="button"
+                        onClick={() => !isReadOnly && setForm(f => ({ ...f, tags: active ? (f.tags||[]).filter(t=>t!==tag) : [...(f.tags||[]),tag] }))}
+                        className={`px-2.5 py-1 rounded-full text-xs font-semibold border transition-all ${active ? 'bg-indigo-600 text-white border-indigo-600' : 'border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400'} ${!isReadOnly ? 'hover:border-indigo-400 cursor-pointer' : 'cursor-default'}`}>
+                        {tag}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+              {/* Notes */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">Notes / Preferences</label>
+                <textarea
+                  value={form.notes||''}
+                  onChange={e => !isReadOnly && setForm(f=>({...f,notes:e.target.value}))}
+                  readOnly={isReadOnly}
+                  placeholder="e.g. Nut allergy, prefers window seat, birthday in March…"
+                  rows={3}
+                  className={`w-full text-sm px-3.5 py-2.5 border rounded-xl placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none text-gray-900 dark:text-white ${isReadOnly ? 'bg-gray-50 dark:bg-gray-700/30 border-gray-200 dark:border-gray-600' : 'bg-white dark:bg-gray-700/50 border-gray-200 dark:border-gray-600'}`}
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 px-6 pb-6">
+              {isReadOnly ? (
+                <Btn fullWidth onClick={closeModal}>Close</Btn>
+              ) : (
+                <>
+                  <Btn fullWidth onClick={closeModal}>Cancel</Btn>
+                  <Btn variant="success" fullWidth onClick={save} disabled={!form.name.trim()}>
+                    {modal.mode === 'add' ? 'Add Customer' : 'Save Changes'}
+                  </Btn>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div className="flex items-center gap-3 flex-wrap">
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name, phone, email…" className="px-3 py-2 text-xs rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 w-52" />
+          <span className="text-xs text-gray-400">{customers.length} customer{customers.length !== 1 ? 's' : ''}</span>
+        </div>
+        <Btn variant="primary" size="sm" onClick={openAdd}>+ Add Customer</Btn>
+      </div>
+
+      {/* Table */}
+      <Card padding={false}>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 dark:border-gray-700/60">
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Customer</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden sm:table-cell">Phone</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden md:table-cell">Email</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden sm:table-cell">Tags</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Points</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visible.map(c => (
+                <tr key={c.id} className="border-b border-gray-100 dark:border-gray-700/40 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <Avatar name={c.name} />
+                      <div>
+                        <div className="font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
+                          {c.name}
+                          {(c.tags||[]).includes('VIP') && <span className="text-xs bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 px-1.5 py-0.5 rounded-full font-bold">VIP</span>}
+                        </div>
+                        {c.notes && <div className="text-xs text-gray-400 truncate max-w-[150px]">{c.notes}</div>}
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-gray-600 dark:text-gray-300 hidden sm:table-cell">{c.phone || '—'}</td>
+                  <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 hidden md:table-cell">{c.email || '—'}</td>
+                  <td className="px-4 py-3 hidden sm:table-cell">
+                    <div className="flex flex-wrap gap-1">
+                      {(c.tags||[]).filter(t => t !== 'VIP').map(tag => (
+                        <span key={tag} className="px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">{tag}</span>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`font-bold text-sm ${c.loyalty_points > 0 ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-400'}`}>
+                      {c.loyalty_points || 0} pts
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex gap-1.5">
+                      {canManage ? (
+                        <>
+                          <Btn size="sm" onClick={() => openEdit(c)}>Edit</Btn>
+                          <Btn size="sm" variant="danger" onClick={() => setConfirmDelete(c)}>Delete</Btn>
+                        </>
+                      ) : (
+                        <Btn size="sm" onClick={() => openView(c)}>View</Btn>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {visible.length === 0 && (
+                <tr><td colSpan={6} className="text-center py-10 text-gray-400 text-sm">
+                  {search ? 'No customers match your search' : 'No customers yet — add your first one!'}
+                </td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
+  )
+}
+
 // ─── Menu Management ──────────────────────────────────────────────────────────
 export function MenuManagement() {
   const { menuItems, setMenuItems, menuCategories } = useApp()
