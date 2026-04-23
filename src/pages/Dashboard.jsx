@@ -1233,19 +1233,19 @@ export function Billing() {
               <div className="text-xs font-bold text-gray-800 dark:text-gray-200">{linkedCustomer.name}</div>
               <div className="text-xs text-indigo-600 dark:text-indigo-400">{linkedCustomer.phone || 'No phone'} · {linkedCustomer.loyalty_points || 0} pts</div>
             </div>
-            <button onClick={() => { setLinkedCustomer(null); setShowCustPanel(true) }} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-sm">✕</button>
+            <button onClick={() => { setLinkedCustomer(null); setShowCustModal(true); setCustModalTab('search') }} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-sm">✕</button>
           </div>
         )}
 
         {/* Cart */}
-        <Card className="lg:flex-1 flex flex-col min-h-0 !p-4">
+        <Card className="lg:flex-1 lg:flex lg:flex-col lg:min-h-0 !p-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-bold text-gray-900 dark:text-white">Cart</h2>
             {cart.length > 0 && (
               <button onClick={() => setCart([])} className="text-xs text-rose-500 hover:text-rose-600 font-semibold">Clear all</button>
             )}
           </div>
-          <div className="min-h-0 overflow-y-auto space-y-1 max-h-[45vh] lg:max-h-none lg:flex-1">
+          <div className="space-y-1 lg:flex-1 lg:min-h-0 lg:overflow-y-auto">
             {cart.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-gray-300 dark:text-gray-600 py-8">
                 <div className="text-sm">Cart is empty</div>
