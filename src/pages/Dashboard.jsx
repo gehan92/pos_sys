@@ -787,7 +787,7 @@ export function Kitchen() {
 
 // ─── Billing ──────────────────────────────────────────────────────────────────
 export function Billing() {
-  const { lang, company, liveOrders, billQueue, clearBillRequest, menuItems, menuCategories, customers, recordCustomerSale } = useApp()
+  const { lang, company, liveOrders, billQueue, clearBillRequest, menuItems, menuCategories, customers, recordCustomerSale, createCustomer } = useApp()
   const vatRate = company.vat_rate / 100
 
   // ── Cart state ──────────────────────────────────────────────────────────────
@@ -804,7 +804,9 @@ export function Billing() {
   const [loadedOrderId, setLoadedOrderId] = useState(null)
   const [linkedCustomer, setLinkedCustomer] = useState(null)
   const [custSearch, setCustSearch] = useState('')
-  const [showCustPanel, setShowCustPanel] = useState(true)
+  const [showCustModal, setShowCustModal] = useState(true)
+  const [custModalTab, setCustModalTab] = useState('search') // 'search' | 'add'
+  const [newCust, setNewCust] = useState({ name:'', phone:'', email:'' })
   const [mobileBillTab, setMobileBillTab] = useState('menu')
   const searchRef = useRef(null)
   const barcodeRef = useRef(null)
@@ -973,7 +975,7 @@ export function Billing() {
           </div>
           <Btn variant="success" fullWidth className="mt-2" onClick={() => {
             setReceipt(null); setCart([]); setPayMethod(null); setCashGiven(0); setLoadedOrderId(null)
-            setLinkedCustomer(null); setCustSearch(''); setShowCustPanel(true); setMobileBillTab('menu')
+            setLinkedCustomer(null); setCustSearch(''); setShowCustModal(true); setCustModalTab('search'); setNewCust({ name:'', phone:'', email:'' }); setMobileBillTab('menu')
           }}>
             New Sale
           </Btn>
@@ -985,6 +987,123 @@ export function Billing() {
   // ── Main POS layout ──────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col gap-3">
+
+      {/* ── Customer lookup popup ── */}
+      {showCustModal && !linkedCustomer && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
+              <h3 className="font-bold text-gray-900 dark:text-white text-sm">Customer for this sale</h3>
+              <button onClick={() => setShowCustModal(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl leading-none">✕</button>
+            </div>
+            {/* Tabs */}
+            <div className="flex border-b border-gray-100 dark:border-gray-700 px-5">
+              {[['search','Find Customer'],['add','Add New']].map(([key, label]) => (
+                <button key={key} onClick={() => { setCustModalTab(key); setCustSearch(''); setNewCust({ name:'', phone:'', email:'' }) }}
+                  className={`px-4 py-3 text-xs font-bold border-b-2 transition-all -mb-px ${
+                    custModalTab === key ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-400 hover:text-gray-600'
+                  }`}>{label}</button>
+              ))}
+            </div>
+
+            {/* Search tab */}
+            {custModalTab === 'search' && (
+              <div className="p-5">
+                <input
+                  autoFocus
+                  value={custSearch}
+                  onChange={e => setCustSearch(e.target.value)}
+                  placeholder="Search by name or phone…"
+                  className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <div className="mt-3 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden max-h-52 overflow-y-auto">
+                  {(() => {
+                    const matches = custSearch.trim()
+                      ? customers.filter(c => {
+                          const q = custSearch.toLowerCase()
+                          return c.name.toLowerCase().includes(q) || (c.phone||'').includes(q)
+                        })
+                      : customers.slice(0, 6)
+                    if (matches.length === 0) return (
+                      <div className="px-4 py-3 text-sm text-gray-400 text-center">
+                        No customer found
+                        <button onClick={() => setCustModalTab('add')} className="block mx-auto mt-1 text-indigo-600 font-semibold hover:underline text-xs">+ Add new customer</button>
+                      </div>
+                    )
+                    return matches.map(c => (
+                      <button key={c.id}
+                        onClick={() => { setLinkedCustomer(c); setShowCustModal(false); setCustSearch('') }}
+                        className="w-full text-left px-4 py-3 text-sm hover:bg-indigo-50 dark:hover:bg-indigo-900/20 border-b border-gray-100 dark:border-gray-700 last:border-0 transition-colors">
+                        <div className="font-semibold text-gray-800 dark:text-gray-200">{c.name}</div>
+                        <div className="text-xs text-gray-400 mt-0.5">{c.phone || 'No phone'} · {c.loyalty_points || 0} pts</div>
+                      </button>
+                    ))
+                  })()}
+                </div>
+              </div>
+            )}
+
+            {/* Add new tab */}
+            {custModalTab === 'add' && (
+              <div className="p-5 space-y-3">
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Full Name <span className="text-rose-400">*</span></label>
+                  <input
+                    autoFocus
+                    value={newCust.name}
+                    onChange={e => setNewCust(p => ({...p, name: e.target.value}))}
+                    placeholder="e.g. Anna Borg"
+                    className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Phone</label>
+                  <input
+                    type="tel"
+                    value={newCust.phone}
+                    onChange={e => setNewCust(p => ({...p, phone: e.target.value}))}
+                    placeholder="+356 9999 9999"
+                    className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Email</label>
+                  <input
+                    type="email"
+                    value={newCust.email}
+                    onChange={e => setNewCust(p => ({...p, email: e.target.value}))}
+                    placeholder="email@example.com"
+                    className="w-full text-sm px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <button
+                  disabled={!newCust.name.trim()}
+                  onClick={() => {
+                    const record = { name: newCust.name.trim(), phone: newCust.phone.trim(), email: newCust.email.trim(), notes:'', loyalty_points:0, tags:[], orders:[] }
+                    createCustomer(record)
+                    // find new customer by name+phone to link:
+                    const linked = { ...record, id: `cust${Date.now()}`, created_at: new Date().toLocaleDateString() }
+                    setLinkedCustomer(linked)
+                    setShowCustModal(false)
+                    setNewCust({ name:'', phone:'', email:'' })
+                  }}
+                  className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-bold transition-all">
+                  Save &amp; Link Customer
+                </button>
+              </div>
+            )}
+
+            {/* Footer */}
+            <div className="px-5 pb-5">
+              <button onClick={() => setShowCustModal(false)}
+                className="w-full py-2.5 rounded-xl border-2 border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 text-sm font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-all">
+                Skip — No customer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Bill request notifications ── */}
       {billQueue.length > 0 && (
@@ -1102,41 +1221,12 @@ export function Billing() {
       {/* ── RIGHT: Cart + Payment ── */}
       <div className={`w-full lg:w-80 flex-shrink-0 flex flex-col gap-3 ${mobileBillTab !== 'cart' ? 'hidden lg:flex lg:flex-col' : ''}`}>
 
-        {/* Customer link */}
+        {/* Customer badge / re-open */}
         {!linkedCustomer ? (
-          showCustPanel && (
-            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-3">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wide">Link Customer</span>
-                <button onClick={() => setShowCustPanel(false)} className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">Skip</button>
-              </div>
-              <input
-                value={custSearch}
-                onChange={e => setCustSearch(e.target.value)}
-                placeholder="Search by name or phone…"
-                className="w-full text-xs px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              />
-              {custSearch.trim() && (() => {
-                const matches = customers.filter(c => {
-                  const q = custSearch.toLowerCase()
-                  return c.name.toLowerCase().includes(q) || (c.phone||'').includes(q)
-                })
-                return (
-                  <div className="mt-1 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden max-h-40 overflow-y-auto">
-                    {matches.length === 0 ? (
-                      <div className="px-3 py-2 text-xs text-gray-400">No customer found</div>
-                    ) : matches.map(c => (
-                      <button key={c.id} onClick={() => { setLinkedCustomer(c); setCustSearch('') }}
-                        className="w-full text-left px-3 py-2 text-xs hover:bg-indigo-50 dark:hover:bg-indigo-900/20 border-b border-gray-100 dark:border-gray-700 last:border-0">
-                        <div className="font-semibold text-gray-800 dark:text-gray-200">{c.name}</div>
-                        <div className="text-gray-400">{c.phone || 'No phone'} · {c.loyalty_points || 0} pts</div>
-                      </button>
-                    ))}
-                  </div>
-                )
-              })()}
-            </div>
-          )
+          <button onClick={() => { setCustModalTab('search'); setCustSearch(''); setShowCustModal(true) }}
+            className="w-full text-xs text-indigo-500 dark:text-indigo-400 border border-dashed border-indigo-300 dark:border-indigo-700 rounded-xl py-2 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors font-semibold">
+            + Link a customer
+          </button>
         ) : (
           <div className="flex items-center gap-3 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-xl px-3 py-2.5">
             <div className="flex-1 min-w-0">
