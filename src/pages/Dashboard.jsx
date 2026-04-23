@@ -787,7 +787,7 @@ export function Kitchen() {
 
 // ─── Billing ──────────────────────────────────────────────────────────────────
 export function Billing() {
-  const { lang, company, liveOrders, billQueue, clearBillRequest, menuItems, menuCategories } = useApp()
+  const { lang, company, liveOrders, billQueue, clearBillRequest, menuItems, menuCategories, customers, recordCustomerSale } = useApp()
   const vatRate = company.vat_rate / 100
 
   // ── Cart state ──────────────────────────────────────────────────────────────
@@ -802,6 +802,9 @@ export function Billing() {
   const [barcodeInput, setBarcodeInput] = useState('')
   const [barcodeFlash, setBarcodeFlash] = useState(null) // item id that was just scanned
   const [loadedOrderId, setLoadedOrderId] = useState(null)
+  const [linkedCustomer, setLinkedCustomer] = useState(null)
+  const [custSearch, setCustSearch] = useState('')
+  const [showCustPanel, setShowCustPanel] = useState(true)
   const searchRef = useRef(null)
   const barcodeRef = useRef(null)
 
@@ -887,12 +890,25 @@ export function Billing() {
   // ── Confirm payment ─────────────────────────────────────────────────────────
   function confirmPayment() {
     if (!payMethod || cart.length === 0) return
+    const orderNum = Math.floor(Math.random() * 900) + 100
+    if (linkedCustomer) {
+      recordCustomerSale(linkedCustomer.id, {
+        id: `sale_${Date.now()}`,
+        order_number: orderNum,
+        date: new Date().toLocaleDateString(),
+        items: cart.map(i => `${i.name_en} ×${i.qty}`).join(', '),
+        item_count: cart.reduce((s, i) => s + i.qty, 0),
+        total,
+        pay_method: payMethod,
+      })
+    }
     setReceipt({
       items: cart,
       subtotal, vat, total, totalSavings, payMethod, cashGiven,
       change: cashGiven > 0 ? Math.max(0, cashGiven - total) : 0,
       date: new Date(),
-      order_number: Math.floor(Math.random() * 900) + 100,
+      order_number: orderNum,
+      customer: linkedCustomer ? { name: linkedCustomer.name } : null,
     })
   }
 
@@ -911,6 +927,9 @@ export function Billing() {
               <Badge color="green" dot>Paid</Badge>
               <Badge color="indigo">#{receipt.order_number}</Badge>
             </div>
+            {receipt.customer && (
+              <div className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold mt-1.5">Customer: {receipt.customer.name}</div>
+            )}
           </div>
           {receipt.items.map((item, i) => {
             const disc = Number(item.discount_pct||0)
@@ -952,6 +971,7 @@ export function Billing() {
           </div>
           <Btn variant="success" fullWidth className="mt-2" onClick={() => {
             setReceipt(null); setCart([]); setPayMethod(null); setCashGiven(0); setLoadedOrderId(null)
+            setLinkedCustomer(null); setCustSearch(''); setShowCustPanel(true)
           }}>
             New Sale
           </Btn>
@@ -1067,6 +1087,51 @@ export function Billing() {
 
       {/* ── RIGHT: Cart + Payment ── */}
       <div className="w-full lg:w-80 flex-shrink-0 flex flex-col gap-3">
+
+        {/* Customer link */}
+        {!linkedCustomer ? (
+          showCustPanel && (
+            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wide">Link Customer</span>
+                <button onClick={() => setShowCustPanel(false)} className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">Skip</button>
+              </div>
+              <input
+                value={custSearch}
+                onChange={e => setCustSearch(e.target.value)}
+                placeholder="Search by name or phone…"
+                className="w-full text-xs px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+              {custSearch.trim() && (() => {
+                const matches = customers.filter(c => {
+                  const q = custSearch.toLowerCase()
+                  return c.name.toLowerCase().includes(q) || (c.phone||'').includes(q)
+                })
+                return (
+                  <div className="mt-1 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden max-h-40 overflow-y-auto">
+                    {matches.length === 0 ? (
+                      <div className="px-3 py-2 text-xs text-gray-400">No customer found</div>
+                    ) : matches.map(c => (
+                      <button key={c.id} onClick={() => { setLinkedCustomer(c); setCustSearch('') }}
+                        className="w-full text-left px-3 py-2 text-xs hover:bg-indigo-50 dark:hover:bg-indigo-900/20 border-b border-gray-100 dark:border-gray-700 last:border-0">
+                        <div className="font-semibold text-gray-800 dark:text-gray-200">{c.name}</div>
+                        <div className="text-gray-400">{c.phone || 'No phone'} · {c.loyalty_points || 0} pts</div>
+                      </button>
+                    ))}
+                  </div>
+                )
+              })()}
+            </div>
+          )
+        ) : (
+          <div className="flex items-center gap-3 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-xl px-3 py-2.5">
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-bold text-gray-800 dark:text-gray-200">{linkedCustomer.name}</div>
+              <div className="text-xs text-indigo-600 dark:text-indigo-400">{linkedCustomer.phone || 'No phone'} · {linkedCustomer.loyalty_points || 0} pts</div>
+            </div>
+            <button onClick={() => { setLinkedCustomer(null); setShowCustPanel(true) }} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-sm">✕</button>
+          </div>
+        )}
 
         {/* Cart */}
         <Card className="flex-1 flex flex-col min-h-0 !p-4">
@@ -1787,11 +1852,12 @@ export function Customers() {
   const { customers, createCustomer, updateCustomer, deleteCustomer, user } = useApp()
   const canManage = ['superadmin','admin','owner','manager'].includes(user?.role)
 
-  const BLANK = { name:'', phone:'', email:'', notes:'', loyalty_points:0, tags:[] }
+  const BLANK = { name:'', phone:'', email:'', notes:'', loyalty_points:0, tags:[], orders:[] }
   const [modal, setModal] = useState(null)  // null | { mode:'add'|'edit'|'view' }
   const [form, setForm] = useState(BLANK)
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [search, setSearch] = useState('')
+  const [viewTab, setViewTab] = useState('details')
 
   const visible = customers.filter(c => {
     const q = search.toLowerCase()
@@ -1800,7 +1866,7 @@ export function Customers() {
 
   function openAdd() { setForm({ ...BLANK }); setModal({ mode:'add' }) }
   function openEdit(c) { setForm({ ...c }); setModal({ mode:'edit' }) }
-  function openView(c) { setForm({ ...c }); setModal({ mode:'view' }) }
+  function openView(c) { setForm({ ...c }); setModal({ mode:'view' }); setViewTab('details') }
   function closeModal() { setModal(null) }
 
   function save() {
@@ -1841,7 +1907,17 @@ export function Customers() {
               </h2>
               <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl">✕</button>
             </div>
-            <div className="px-6 py-5 space-y-4">
+            {isReadOnly && (
+              <div className="flex border-b border-gray-100 dark:border-gray-700 px-6">
+                {[['details','Details'],['orders',`Orders (${(form.orders||[]).length})`]].map(([key,label]) => (
+                  <button key={key} onClick={() => setViewTab(key)}
+                    className={`px-4 py-3 text-xs font-bold border-b-2 transition-all -mb-px ${viewTab===key ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className={`px-6 py-5 space-y-4${isReadOnly && viewTab === 'orders' ? ' hidden' : ''}`}>
               {/* Name */}
               <div>
                 <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 uppercase tracking-wide">Full Name {!isReadOnly && <span className="text-rose-400">*</span>}</label>
@@ -1898,6 +1974,26 @@ export function Customers() {
                 />
               </div>
             </div>
+            {isReadOnly && viewTab === 'orders' && (
+              <div className="px-6 py-5">
+                {(form.orders||[]).length === 0 ? (
+                  <div className="text-center py-10 text-gray-400 text-sm">No orders recorded for this customer yet</div>
+                ) : (
+                  <div className="space-y-3 max-h-80 overflow-y-auto">
+                    {[...(form.orders||[])].reverse().map((o,i) => (
+                      <div key={i} className="border border-gray-100 dark:border-gray-700 rounded-xl p-3">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-bold text-gray-800 dark:text-gray-200">Order #{o.order_number}</span>
+                          <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400">€{Number(o.total).toFixed(2)}</span>
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">{o.date} · {o.pay_method}</div>
+                        <div className="text-xs text-gray-400 mt-1">{o.items}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             <div className="flex gap-2 px-6 pb-6">
               {isReadOnly ? (
                 <Btn fullWidth onClick={closeModal}>Close</Btn>

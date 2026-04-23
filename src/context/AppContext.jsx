@@ -47,11 +47,11 @@ const INITIAL_USERS = [
 ]
 
 const INITIAL_CUSTOMERS = [
-  { id:'cust1', name:'Anna Borg',       phone:'+356 9912 3456', email:'anna.borg@gmail.com', notes:'Prefers window seat. Nut allergy.',    loyalty_points:120, tags:['VIP','Allergy'],  created_at:'15/03/2026' },
-  { id:'cust2', name:'Mark Camilleri',  phone:'+356 9934 5678', email:'mark.c@hotmail.com',  notes:'Regular Thursday lunch customer.',    loyalty_points:45,  tags:['Regular'],        created_at:'02/01/2026' },
-  { id:'cust3', name:'Sophie Farrugia', phone:'+356 7756 7890', email:'',                    notes:'Vegan — no dairy or meat.',           loyalty_points:88,  tags:['Vegan'],          created_at:'20/02/2026' },
-  { id:'cust4', name:'Joseph Vella',    phone:'+356 9978 1234', email:'j.vella@business.mt', notes:'Corporate client. Prefers booth.',    loyalty_points:210, tags:['VIP'],            created_at:'10/11/2025' },
-  { id:'cust5', name:'Claire Zammit',   phone:'+356 7712 3456', email:'claire.z@gmail.com',  notes:'Gluten intolerance.',                loyalty_points:33,  tags:['Gluten-Free'],    created_at:'08/04/2026' },
+  { id:'cust1', name:'Anna Borg',       phone:'+356 9912 3456', email:'anna.borg@gmail.com', notes:'Prefers window seat. Nut allergy.',    loyalty_points:120, tags:['VIP','Allergy'],  created_at:'15/03/2026', orders:[] },
+  { id:'cust2', name:'Mark Camilleri',  phone:'+356 9934 5678', email:'mark.c@hotmail.com',  notes:'Regular Thursday lunch customer.',    loyalty_points:45,  tags:['Regular'],        created_at:'02/01/2026', orders:[] },
+  { id:'cust3', name:'Sophie Farrugia', phone:'+356 7756 7890', email:'',                    notes:'Vegan — no dairy or meat.',           loyalty_points:88,  tags:['Vegan'],          created_at:'20/02/2026', orders:[] },
+  { id:'cust4', name:'Joseph Vella',    phone:'+356 9978 1234', email:'j.vella@business.mt', notes:'Corporate client. Prefers booth.',    loyalty_points:210, tags:['VIP'],            created_at:'10/11/2025', orders:[] },
+  { id:'cust5', name:'Claire Zammit',   phone:'+356 7712 3456', email:'claire.z@gmail.com',  notes:'Gluten intolerance.',                loyalty_points:33,  tags:['Gluten-Free'],    created_at:'08/04/2026', orders:[] },
 ]
 
 export function AppProvider({ children }) {
@@ -142,6 +142,15 @@ export function AppProvider({ children }) {
     setCustomers(p => p.filter(c => c.id !== id))
   }
 
+  function recordCustomerSale(customerId, saleData) {
+    const points = Math.floor(saleData.total || 0)
+    setCustomers(p => p.map(c =>
+      c.id === customerId
+        ? { ...c, orders: [...(c.orders || []), saleData], loyalty_points: (c.loyalty_points || 0) + points }
+        : c
+    ))
+  }
+
   const unreadCount = notifications.filter(n => !n.is_read).length
 
   function markAllRead() {
@@ -201,7 +210,7 @@ export function AppProvider({ children }) {
     : false
 
   return (
-    <AppContext.Provider value={{ user, login, logout, lang, setLang, theme, setTheme, company, setCompany, users, createUser, approveUser, deactivateUser, notifications, markAllRead, unreadCount, liveOrders, setLiveOrders, nextOrderNum, setNextOrderNum, billQueue, requestBill, clearBillRequest, menuItems, setMenuItems, menuCategories, setMenuCategories, inventoryItems, setInventoryItems, customers, createCustomer, updateCustomer, deleteCustomer, clockRecords, clockIn, clockOut, isClockedIn }}>
+    <AppContext.Provider value={{ user, login, logout, lang, setLang, theme, setTheme, company, setCompany, users, createUser, approveUser, deactivateUser, notifications, markAllRead, unreadCount, liveOrders, setLiveOrders, nextOrderNum, setNextOrderNum, billQueue, requestBill, clearBillRequest, menuItems, setMenuItems, menuCategories, setMenuCategories, inventoryItems, setInventoryItems, customers, createCustomer, updateCustomer, deleteCustomer, recordCustomerSale, clockRecords, clockIn, clockOut, isClockedIn }}>
       {children}
     </AppContext.Provider>
   )
