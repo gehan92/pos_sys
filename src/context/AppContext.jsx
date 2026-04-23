@@ -16,15 +16,15 @@ export const ROLES = {
 }
 
 export const ROLE_NAV = {
-  superadmin: ['dashboard','company','users','inventory','menu','reports','settings','audit'],
-  admin:      ['dashboard','users','tables','billing','inventory','menu','reports','settings'],
-  owner:      ['dashboard','reports','users','billing','inventory','menu','settings'],
-  manager:    ['dashboard','users','shifts','inventory','menu'],
-  cashier:    ['billing','receipts','shifts'],
-  supervisor: ['dashboard','supervisor','reports','shifts'],
-  waiter:     ['tables','orders','shifts'],
-  cook:       ['kitchen','shifts'],
-  supplier:   ['inventory','invoices'],
+  superadmin: ['dashboard','company','users','inventory','menu','reports','settings','audit','notifications'],
+  admin:      ['dashboard','users','tables','billing','inventory','menu','reports','settings','notifications'],
+  owner:      ['dashboard','reports','users','billing','inventory','menu','settings','notifications'],
+  manager:    ['dashboard','users','shifts','inventory','menu','notifications'],
+  cashier:    ['billing','receipts','shifts','notifications'],
+  supervisor: ['dashboard','supervisor','reports','shifts','notifications'],
+  waiter:     ['tables','orders','shifts','notifications'],
+  cook:       ['kitchen','shifts','notifications'],
+  supplier:   ['inventory','invoices','notifications'],
 }
 
 export const NAV_ICONS = {

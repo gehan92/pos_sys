@@ -923,10 +923,10 @@ export function Billing() {
         </div>
       )}
 
-    <div className="flex gap-4 h-[calc(100vh-160px)] min-h-0">
+    <div className="flex flex-col lg:flex-row gap-4 lg:h-[calc(100vh-160px)] min-h-0">
 
       {/* ── LEFT: Product browser ── */}
-      <div className="flex-1 flex flex-col min-w-0 gap-3">
+      <div className="flex-1 flex flex-col min-w-0 gap-3 min-h-0">
 
         {/* Search + Barcode row */}
         <div className="flex gap-2">
@@ -942,7 +942,7 @@ export function Billing() {
             />
           </div>
           {/* Barcode scanner input */}
-          <div className="relative w-52">
+          <div className="relative w-40 sm:w-52">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-base">📷</span>
             <input
               ref={barcodeRef}
@@ -983,7 +983,7 @@ export function Billing() {
               <div className="text-xs mt-1">Try a different search or category</div>
             </div>
           ) : (
-            <div className="grid grid-cols-3 xl:grid-cols-4 gap-2 pb-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2 pb-2">
               {visibleItems.map(item => (
                 <button
                   key={item.id}
@@ -1013,7 +1013,7 @@ export function Billing() {
       </div>
 
       {/* ── RIGHT: Cart + Payment ── */}
-      <div className="w-80 flex-shrink-0 flex flex-col gap-3">
+      <div className="w-full lg:w-80 flex-shrink-0 flex flex-col gap-3">
 
         {/* Cart */}
         <Card className="flex-1 flex flex-col min-h-0 !p-4">

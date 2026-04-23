@@ -230,12 +230,14 @@ export default function Layout() {
                 <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-rose-500 text-white text-[9px] rounded-full flex items-center justify-center font-bold">{unreadCount}</span>
               )}
             </button>
-            <button
-              onClick={() => navTo('settings')}
-              className="hidden sm:flex items-center justify-center w-9 h-9 rounded-xl border border-gray-100 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-            >
-              <SettingsIcon size={16} />
-            </button>
+            {nav.includes('settings') && (
+              <button
+                onClick={() => navTo('settings')}
+                className="hidden sm:flex items-center justify-center w-9 h-9 rounded-xl border border-gray-100 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              >
+                <SettingsIcon size={16} />
+              </button>
+            )}
             <div className="w-px h-6 bg-gray-100 dark:bg-gray-700 mx-1 hidden sm:block" />
             <Avatar name={user?.full_name} size="sm" />
           </div>
