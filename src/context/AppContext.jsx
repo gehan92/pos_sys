@@ -12,25 +12,27 @@ export const ROLES = {
   supervisor: { label: 'Supervisor',  color: 'bg-sky-100 text-sky-800' },
   waiter:     { label: 'Waiter',      color: 'bg-cyan-100 text-cyan-800' },
   cook:       { label: 'Kitchen Cook',color: 'bg-orange-100 text-orange-800' },
+  bartender:  { label: 'Bartender',   color: 'bg-cyan-100 text-cyan-800' },
   supplier:   { label: 'Supplier',    color: 'bg-teal-100 text-teal-800' },
 }
 
 export const ROLE_NAV = {
   superadmin: ['dashboard','company','users','customers','inventory','menu','reports','settings','audit','notifications'],
-  admin:      ['dashboard','users','waiters','customers','tables','billing','orderlist','inventory','menu','reports','settings','notifications'],
-  owner:      ['dashboard','reports','users','waiters','customers','billing','orderlist','inventory','menu','settings','notifications'],
-  manager:    ['dashboard','users','waiters','customers','orderlist','shifts','inventory','menu','notifications'],
+  admin:      ['dashboard','users','waiters','customers','tables','billing','orderlist','inventory','menu','reports','kitchen','bar','settings','notifications'],
+  owner:      ['dashboard','reports','users','waiters','customers','billing','orderlist','inventory','menu','kitchen','bar','settings','notifications'],
+  manager:    ['dashboard','users','waiters','customers','orderlist','shifts','inventory','menu','kitchen','bar','notifications'],
   cashier:    ['billing','receipts','shifts','notifications'],
   supervisor: ['dashboard','supervisor','reports','shifts','notifications'],
   waiter:     ['tables','billing','orders','orderlist','shifts','notifications'],
-  cook:       ['kitchen','shifts','notifications'],
+  cook:       ['kitchen','bar','shifts','notifications'],
+  bartender:  ['bar','shifts','notifications'],
   supplier:   ['inventory','invoices','notifications'],
 }
 
 export const NAV_ICONS = {
   dashboard:'🏠', company:'🏢', users:'👥', waiters:'🧑‍🍽️', reports:'📊', settings:'⚙️', audit:'🔒',
   tables:'🍽️', orders:'📋', billing:'💰', orderlist:'📃', inventory:'📦', menu:'🗂️',
-  cashier:'💰', receipts:'🖨️', supervisor:'👁️', shifts:'🗓️', kitchen:'👨‍🍳',
+  cashier:'💰', receipts:'🖨️', supervisor:'👁️', shifts:'🗓️', kitchen:'👨‍🍳', bar:'🍸',
   invoices:'📄', notifications:'🔔', customers:'👤',
 }
 
@@ -43,7 +45,8 @@ const INITIAL_USERS = [
   { id:'6', full_name:'Sam Supervisor',username:'supervisor', password:'Admin@1234', role:'supervisor', status:'active',   created_by:'System' },
   { id:'7', full_name:'Maria Waiter',  username:'waiter',     password:'Admin@1234', role:'waiter',     status:'active',   created_by:'System' },
   { id:'8', full_name:'Tony Cook',     username:'cook',       password:'Admin@1234', role:'cook',       status:'active',   created_by:'System' },
-  { id:'9', full_name:'Rita Supplier', username:'supplier',   password:'Admin@1234', role:'supplier',   status:'active',   created_by:'System' },
+  { id:'9', full_name:'Lura Bartender',username:'bartender', password:'Admin@1234', role:'bartender', status:'active',   created_by:'System' },
+  { id:'10',full_name:'Rita Supplier', username:'supplier',  password:'Admin@1234', role:'supplier',  status:'active',   created_by:'System' },
 ]
 
 const INITIAL_CUSTOMERS = [

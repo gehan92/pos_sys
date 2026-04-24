@@ -9,7 +9,7 @@ export const MENU_CATEGORIES = [
 export const MENU_ITEMS = [
   // ── Starters ─────────────────────────────────────────────────────────────────
   {
-    id:'s1', code:'S001', barcode:'5990000001', category_id:'cat1',
+    id:'s1', code:'S001', barcode:'5990000001', category_id:'cat1', station:'kitchen',
     name_en:'Oysters Gilardeau', price:4.50, description_en:'Premium oysters, priced per piece',
     available:true, emoji:'🦪',
     modifierGroups:[
@@ -18,7 +18,7 @@ export const MENU_ITEMS = [
     ],
   },
   {
-    id:'s2', code:'S002', barcode:'5990000002', category_id:'cat1',
+    id:'s2', code:'S002', barcode:'5990000002', category_id:'cat1', station:'kitchen',
     name_en:'Maltese Sausage', price:8.50, description_en:'Traditional Maltese sausage, grilled',
     available:true, emoji:'🌭',
     modifierGroups:[
@@ -27,7 +27,7 @@ export const MENU_ITEMS = [
     ],
   },
   {
-    id:'s3', code:'S003', barcode:'5990000003', category_id:'cat1',
+    id:'s3', code:'S003', barcode:'5990000003', category_id:'cat1', station:'kitchen',
     name_en:'Tuna & Gambas', price:12.00, description_en:'Fresh tuna with king prawns',
     available:true, emoji:'🐟',
     modifierGroups:[
@@ -35,7 +35,7 @@ export const MENU_ITEMS = [
     ],
   },
   {
-    id:'s4', code:'S004', barcode:'5990000004', category_id:'cat1',
+    id:'s4', code:'S004', barcode:'5990000004', category_id:'cat1', station:'kitchen',
     name_en:'Fried Calamari', price:9.50, description_en:'Crispy fried squid rings with aioli',
     available:true, emoji:'🦑',
     modifierGroups:[
@@ -44,7 +44,7 @@ export const MENU_ITEMS = [
     ],
   },
   {
-    id:'s5', code:'S005', barcode:'5990000005', category_id:'cat1',
+    id:'s5', code:'S005', barcode:'5990000005', category_id:'cat1', station:'kitchen',
     name_en:'Mussels', price:11.00, description_en:'Fresh mussels in white wine & garlic',
     available:true, emoji:'🐚',
     modifierGroups:[
@@ -53,7 +53,7 @@ export const MENU_ITEMS = [
     ],
   },
   {
-    id:'s6', code:'S006', barcode:'5990000006', category_id:'cat1',
+    id:'s6', code:'S006', barcode:'5990000006', category_id:'cat1', station:'kitchen',
     name_en:'Homemade Soup', price:7.00, description_en:"Chef's daily homemade soup",
     available:true, emoji:'🍲',
     modifierGroups:[
@@ -61,7 +61,7 @@ export const MENU_ITEMS = [
     ],
   },
   {
-    id:'s7', code:'S007', barcode:'5990000007', category_id:'cat1',
+    id:'s7', code:'S007', barcode:'5990000007', category_id:'cat1', station:'kitchen',
     name_en:'Fried Flying Fish', price:10.50, description_en:'Lightly battered Maltese flying fish',
     available:true, emoji:'🐠',
     modifierGroups:[
@@ -70,7 +70,7 @@ export const MENU_ITEMS = [
     ],
   },
   {
-    id:'s8', code:'S008', barcode:'5990000008', category_id:'cat1',
+    id:'s8', code:'S008', barcode:'5990000008', category_id:'cat1', station:'kitchen',
     name_en:'Bruschetta', price:6.50, description_en:'Toasted bread with tomato, basil & olive oil',
     available:true, emoji:'🥖',
     modifierGroups:[
@@ -80,7 +80,7 @@ export const MENU_ITEMS = [
 
   // ── Mains ──────────────────────────────────────────────────────────────────
   {
-    id:'m1', code:'M001', barcode:'5990000009', category_id:'cat2',
+    id:'m1', code:'M001', barcode:'5990000009', category_id:'cat2', station:'kitchen',
     name_en:'Spaghetti with Mussels', price:16.50, description_en:'Crab & prawn bisque with fresh mussels',
     available:true, emoji:'🍝',
     modifierGroups:[
@@ -89,7 +89,7 @@ export const MENU_ITEMS = [
     ],
   },
   {
-    id:'m2', code:'M002', barcode:'5990000010', category_id:'cat2',
+    id:'m2', code:'M002', barcode:'5990000010', category_id:'cat2', station:'kitchen',
     name_en:'Tagliatelle', price:15.50, description_en:'Artichokes, chili & tomato sauce',
     available:true, emoji:'🍝',
     modifierGroups:[
@@ -98,7 +98,7 @@ export const MENU_ITEMS = [
     ],
   },
   {
-    id:'m3', code:'M003', barcode:'5990000011', category_id:'cat2',
+    id:'m3', code:'M003', barcode:'5990000011', category_id:'cat2', station:'kitchen',
     name_en:'Black Angus Ribeye', price:32.00, description_en:'Premium Black Angus ribeye 300g',
     available:true, emoji:'🥩',
     modifierGroups:[
@@ -108,7 +108,7 @@ export const MENU_ITEMS = [
     ],
   },
   {
-    id:'m4', code:'M004', barcode:'5990000012', category_id:'cat2',
+    id:'m4', code:'M004', barcode:'5990000012', category_id:'cat2', station:'kitchen',
     name_en:'Fried Rabbit', price:18.00, description_en:'Traditional Maltese fried rabbit with herbs',
     available:true, emoji:'🍗',
     modifierGroups:[
@@ -117,7 +117,7 @@ export const MENU_ITEMS = [
     ],
   },
   {
-    id:'m5', code:'M005', barcode:'5990000013', category_id:'cat2',
+    id:'m5', code:'M005', barcode:'5990000013', category_id:'cat2', station:'kitchen',
     name_en:'Tagliata', price:26.00, description_en:'Sliced beef with rocket & parmesan',
     available:true, emoji:'🥩',
     modifierGroups:[
@@ -126,7 +126,7 @@ export const MENU_ITEMS = [
     ],
   },
   {
-    id:'m6', code:'M006', barcode:'5990000014', category_id:'cat2',
+    id:'m6', code:'M006', barcode:'5990000014', category_id:'cat2', station:'kitchen',
     name_en:'Baked Salmon', price:22.00, description_en:'Salmon fillet baked with king prawns',
     available:true, emoji:'🐟',
     modifierGroups:[
@@ -137,7 +137,7 @@ export const MENU_ITEMS = [
 
   // ── Specials of the Day ───────────────────────────────────────────────────
   {
-    id:'sp1', code:'SP001', barcode:'5990000015', category_id:'cat3',
+    id:'sp1', code:'SP001', barcode:'5990000015', category_id:'cat3', station:'kitchen',
     name_en:'Ricotta Polpette', price:9.00, description_en:'Special starter: ricotta balls with herb crust',
     available:true, emoji:'⭐',
     modifierGroups:[
@@ -145,7 +145,7 @@ export const MENU_ITEMS = [
     ],
   },
   {
-    id:'sp2', code:'SP002', barcode:'5990000016', category_id:'cat3',
+    id:'sp2', code:'SP002', barcode:'5990000016', category_id:'cat3', station:'kitchen',
     name_en:'Lamb Chops', price:28.00, description_en:'Special main: lamb chops in butter & garlic',
     available:true, emoji:'🍖',
     modifierGroups:[
@@ -156,7 +156,7 @@ export const MENU_ITEMS = [
 
   // ── Drinks ────────────────────────────────────────────────────────────────
   {
-    id:'d1', code:'D001', barcode:'5990000017', category_id:'cat4',
+    id:'d1', code:'D001', barcode:'5990000017', category_id:'cat4', station:'bar',
     name_en:'House Wine', price:6.00, description_en:'Red, white or rosé — 175ml',
     available:true, emoji:'🍷',
     modifierGroups:[
@@ -164,7 +164,7 @@ export const MENU_ITEMS = [
     ],
   },
   {
-    id:'d2', code:'D002', barcode:'5990000018', category_id:'cat4',
+    id:'d2', code:'D002', barcode:'5990000018', category_id:'cat4', station:'bar',
     name_en:'Local Beer (Cisk)', price:4.50, description_en:'Maltese Cisk Lager, draught or bottle',
     available:true, emoji:'🍺',
     modifierGroups:[
@@ -172,7 +172,7 @@ export const MENU_ITEMS = [
     ],
   },
   {
-    id:'d3', code:'D003', barcode:'5990000019', category_id:'cat4',
+    id:'d3', code:'D003', barcode:'5990000019', category_id:'cat4', station:'bar',
     name_en:'Soft Drink', price:3.00, description_en:'Cola, Fanta, Water',
     available:true, emoji:'🥤',
     modifierGroups:[
@@ -180,7 +180,7 @@ export const MENU_ITEMS = [
     ],
   },
   {
-    id:'d4', code:'D004', barcode:'5990000020', category_id:'cat4',
+    id:'d4', code:'D004', barcode:'5990000020', category_id:'cat4', station:'bar',
     name_en:'Coffee', price:2.50, description_en:'Espresso, Flat White, Latte, Cappuccino',
     available:true, emoji:'☕',
     modifierGroups:[
@@ -191,12 +191,12 @@ export const MENU_ITEMS = [
 
   // ── Desserts ──────────────────────────────────────────────────────────────
   {
-    id:'w1', code:'W001', barcode:'5990000021', category_id:'cat5',
+    id:'w1', code:'W001', barcode:'5990000021', category_id:'cat5', station:'kitchen',
     name_en:'Tiramisu', price:7.00, description_en:'Classic Italian tiramisu',
     available:true, emoji:'🍮', modifierGroups:[],
   },
   {
-    id:'w2', code:'W002', barcode:'5990000022', category_id:'cat5',
+    id:'w2', code:'W002', barcode:'5990000022', category_id:'cat5', station:'kitchen',
     name_en:'Cheesecake', price:6.50, description_en:'With berry compote',
     available:true, emoji:'🍰',
     modifierGroups:[
@@ -204,7 +204,7 @@ export const MENU_ITEMS = [
     ],
   },
   {
-    id:'w3', code:'W003', barcode:'5990000023', category_id:'cat5',
+    id:'w3', code:'W003', barcode:'5990000023', category_id:'cat5', station:'kitchen',
     name_en:'Ice Cream', price:5.00, description_en:'3 scoops, choice of flavour',
     available:true, emoji:'🍦',
     modifierGroups:[
@@ -220,9 +220,9 @@ export const TABLES = Array.from({ length: 12 }, (_, i) => ({
 }))
 
 export const SAMPLE_ORDERS = [
-  { id:'o1', order_number:47, table_id:'t3', table_number:3, order_type:'dinein',  status:'cooking', waiter:'Maria G.', notes:'Nut allergy. Extra napkins.', created_at:'14:32', items:[{name:'Pasta Carbonara',qty:2,price:14.50},{name:'House Wine',qty:1,price:6.00},{name:'Tiramisu',qty:1,price:7.00}] },
-  { id:'o2', order_number:48, table_id:null, table_number:null, order_type:'takeaway', status:'ready', waiter:'John C.', notes:'',  created_at:'14:20', items:[{name:'Margherita Pizza',qty:1,price:12.00},{name:'Local Beer (Cisk)',qty:2,price:4.50}] },
-  { id:'o3', order_number:49, table_id:'t7', table_number:7, order_type:'dinein',  status:'pending', waiter:'Sam V.',  notes:'Lactose intolerant.', created_at:'14:15', items:[{name:'Grilled Sea Bass',qty:1,price:22.00},{name:'Mixed Salad',qty:1,price:8.50},{name:'Soft Drink',qty:2,price:3.00}] },
+  { id:'o1', order_number:47, table_id:'t3', table_number:3, order_type:'dinein',  status:'cooking', kitchenStatus:'cooking', barStatus:'pending', waiter:'Maria G.', notes:'Nut allergy. Extra napkins.', created_at:'14:32', items:[{name:'Pasta Carbonara',qty:2,price:14.50,station:'kitchen'},{name:'House Wine',qty:1,price:6.00,station:'bar'},{name:'Tiramisu',qty:1,price:7.00,station:'kitchen'}] },
+  { id:'o2', order_number:48, table_id:null, table_number:null, order_type:'takeaway', status:'ready', kitchenStatus:'ready', barStatus:'pending', waiter:'John C.', notes:'',  created_at:'14:20', items:[{name:'Margherita Pizza',qty:1,price:12.00,station:'kitchen'},{name:'Local Beer (Cisk)',qty:2,price:4.50,station:'bar'}] },
+  { id:'o3', order_number:49, table_id:'t7', table_number:7, order_type:'dinein',  status:'pending', kitchenStatus:'pending', barStatus:'pending', waiter:'Sam V.',  notes:'Lactose intolerant.', created_at:'14:15', items:[{name:'Grilled Sea Bass',qty:1,price:22.00,station:'kitchen'},{name:'Mixed Salad',qty:1,price:8.50,station:'kitchen'},{name:'Soft Drink',qty:2,price:3.00,station:'bar'}] },
 ]
 
 export const SAMPLE_USERS = [

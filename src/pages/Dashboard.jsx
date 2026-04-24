@@ -780,7 +780,7 @@ export function Tables({ navTo, setOrderContext }) {
       </Card>
       <Card>
         <h2 className="font-medium text-gray-900 dark:text-white mb-3">Active orders</h2>
-        <Table headers={['Table','Waiter','Status','Action']}>
+        <Table headers={['Table','Waiter','Action']}>
           {liveOrders.filter(o => !['paid'].includes(o.status)).map(o => (
             <TR key={o.id}>
               <TD className="font-medium">{o.order_type === 'takeaway' ? 'Takeaway' : `T${o.table_number}`}</TD>
@@ -796,7 +796,6 @@ export function Tables({ navTo, setOrderContext }) {
                   <span className="text-xs text-gray-400">—</span>
                 )}
               </TD>
-              <TD><Badge color={statusColor(o.status)}>{o.status}</Badge></TD>
               <TD>
                 <div className="flex gap-1.5 flex-wrap">
                   {['pending','cooking'].includes(o.status) && (
@@ -879,14 +878,27 @@ export function Orders({ navTo, orderContext }) {
   function sendKitchen() {
     if (!newItems.length) return
 
+    const mappedItems = newItems.map(i => ({ name: i.name_en, qty: i.qty, price: i.price, mods: i.selectedMods || [], note: i.note || '', station: i.station || 'kitchen' }))
+    const hasKitchenItems = mappedItems.some(i => i.station !== 'bar')
+    const hasBarItems     = mappedItems.some(i => i.station === 'bar')
+
     if (isAddingToExisting) {
       // Append new items to existing order
-      setLiveOrders(prev => prev.map(o =>
-        o.id === existingOrder.id
-          ? { ...o, items: [...o.items, ...newItems.map(i => ({ name: i.name_en, qty: i.qty, price: i.price, mods: i.selectedMods || [], note: i.note || '' }))], rounds: round, status: 'cooking' }
-          : o
-      ))
-      alert(`Round ${round} sent to kitchen!\n${newItems.length} new item(s) added to ${label}`)
+      setLiveOrders(prev => prev.map(o => {
+        if (o.id !== existingOrder.id) return o
+        const mergedItems = [...o.items, ...mappedItems]
+        const allHasKitchen = mergedItems.some(i => (i.station || 'kitchen') !== 'bar')
+        const allHasBar     = mergedItems.some(i => i.station === 'bar')
+        return {
+          ...o,
+          items: mergedItems,
+          rounds: round,
+          status: 'cooking',
+          kitchenStatus: allHasKitchen ? (o.kitchenStatus === 'served' ? 'cooking' : o.kitchenStatus || 'cooking') : null,
+          barStatus:     allHasBar     ? (o.barStatus     === 'served' ? 'pending'  : o.barStatus     || 'pending')  : null,
+        }
+      }))
+      alert(`Round ${round} sent!\n${newItems.length} new item(s) added to ${label}`)
     } else {
       // New order
       const newOrder = {
@@ -901,12 +913,14 @@ export function Orders({ navTo, orderContext }) {
         guests: orderContext?.guests || { adults: 0, children: 0 },
         created_at: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         created_timestamp: Date.now(),
-        items: newItems.map(i => ({ name: i.name_en, qty: i.qty, price: i.price, mods: i.selectedMods || [], note: i.note || '' })),
+        items: mappedItems,
         rounds: 1,
+        kitchenStatus: hasKitchenItems ? 'cooking' : null,
+        barStatus:     hasBarItems     ? 'pending'  : null,
       }
       setLiveOrders(prev => [...prev, newOrder])
       setNextOrderNum(n => n + 1)
-      alert(`Order #${nextOrderNum} sent to kitchen!\n${newItems.length} item(s) for ${label}`)
+      alert(`Order #${nextOrderNum} sent!\n${newItems.length} item(s) for ${label}`)
     }
 
     setNewItems([])
@@ -1133,7 +1147,7 @@ export function Orders({ navTo, orderContext }) {
           onClick={sendKitchen}
           disabled={newItems.length === 0}
         >
-          {isAddingToExisting ? `Send Round ${round} to Kitchen` : 'Send to Kitchen'}
+          {isAddingToExisting ? `Send Round ${round}` : 'Send Order'}
         </Btn>
         <Btn fullWidth onClick={() => navTo('tables')}>Back to Tables</Btn>
       </div>
@@ -1142,21 +1156,67 @@ export function Orders({ navTo, orderContext }) {
   )
 }
 
+// ─── Shared station helpers ───────────────────────────────────────────────────
+const STATE_ORDER = ['pending', 'cooking', 'ready', 'served']
+function computeOverallStatus(ks, bs) {
+  const active = [ks, bs].filter(s => s !== null && s !== undefined)
+  if (!active.length) return 'served'
+  return active.reduce((min, s) => STATE_ORDER.indexOf(s) < STATE_ORDER.indexOf(min) ? s : min, 'served')
+}
+function printStationTicket(o, items, stationLabel) {
+  const win = window.open('', '_blank', 'width=420,height=650')
+  if (!win) return
+  win.document.write(`<!DOCTYPE html><html><head><title>${stationLabel} Ticket #${o.order_number}</title>
+  <style>
+    *{box-sizing:border-box}body{font-family:'Courier New',monospace;padding:20px;max-width:380px;margin:0 auto}
+    h2{font-size:18px;margin:0 0 4px;letter-spacing:2px}
+    .sub{font-size:12px;color:#555;margin-bottom:12px}
+    hr{border:none;border-top:1px dashed #000;margin:12px 0}
+    .item{margin:10px 0}.item-name{font-size:14px;font-weight:bold}
+    .item-qty{font-size:18px;float:right;font-weight:bold}
+    .mods{font-size:11px;color:#444;margin-top:2px}
+    .note{font-size:11px;font-style:italic;color:#c00;margin-top:2px;padding:2px 4px;border:1px dashed #c00}
+    .allergy{font-size:11px;font-weight:bold;color:#c00;padding:6px;border:2px solid #c00;margin-top:8px}
+    @media print{body{padding:8px}}
+  </style></head><body>
+  <h2>${stationLabel.toUpperCase()}</h2>
+  <div class="sub">Order #${o.order_number} &bull; ${o.order_type === 'takeaway' ? 'TAKEAWAY' : 'Table ' + o.table_number}<br>
+  ${o.created_at} &bull; ${o.waiter}</div>
+  <hr>
+  ${items.map(i => `<div class="item">
+    <span class="item-qty">&times;${i.qty}</span>
+    <div class="item-name">${i.name || i.name_en}</div>
+    ${i.mods?.length ? `<div class="mods">+ ${i.mods.join(' &middot; ')}</div>` : ''}
+    ${i.note ? `<div class="note">&#9888; ${i.note}</div>` : ''}
+  </div>`).join('<hr style="border-top:1px dotted #ccc;margin:4px 0">')}
+  <hr>
+  ${o.notes ? `<div class="allergy">&#9888; ALLERGY/NOTE: ${o.notes}</div>` : ''}
+  </body></html>`)
+  win.document.close()
+  win.focus()
+  win.print()
+}
+
 // ─── Kitchen ──────────────────────────────────────────────────────────────────
 export function Kitchen() {
   const { liveOrders, setLiveOrders } = useApp()
 
+  // Show orders that have kitchen items (kitchenStatus not null) and aren't kitchen-done
+  // Fall back to legacy orders without kitchenStatus field
   const kitchenOrders = [...liveOrders]
-    .filter(o => ['pending', 'cooking', 'ready'].includes(o.status))
+    .filter(o => {
+      if (o.kitchenStatus === undefined) return ['pending','cooking','ready'].includes(o.status)
+      return o.kitchenStatus !== null && o.kitchenStatus !== 'served'
+    })
     .sort((a, b) => (b.priority ? 1 : 0) - (a.priority ? 1 : 0))
 
   function advance(id) {
     setLiveOrders(p => p.map(o => {
       if (o.id !== id) return o
-      if (o.status === 'pending') return { ...o, status: 'cooking' }
-      if (o.status === 'cooking') return { ...o, status: 'ready' }
-      if (o.status === 'ready')   return { ...o, status: 'served' }
-      return o
+      const ks = o.kitchenStatus ?? o.status
+      const next = ks === 'pending' ? 'cooking' : ks === 'cooking' ? 'ready' : ks === 'ready' ? 'served' : ks
+      const overall = computeOverallStatus(next, o.barStatus ?? null)
+      return { ...o, kitchenStatus: next, status: overall }
     }))
   }
 
@@ -1166,13 +1226,13 @@ export function Kitchen() {
 
   const borderColor = { pending: 'border-l-amber-400', cooking: 'border-l-blue-500', ready: 'border-l-green-500' }
   const btnVariant  = { pending: 'primary', cooking: 'success', ready: 'warning' }
-  const btnLabel    = { pending: '▶ Start Cooking', cooking: '✓ Mark Ready', ready: '🛎 Notify Waiter — Ready to Serve' }
+  const btnLabel    = { pending: '▶ Start Cooking', cooking: '✓ Mark Ready', ready: '🛎 Ready — Notify Waiter' }
 
   if (kitchenOrders.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-48 text-gray-400">
         <div className="text-4xl mb-2">👨‍🍳</div>
-        <div className="text-sm font-medium">No active orders</div>
+        <div className="text-sm font-medium">No active kitchen orders</div>
         <div className="text-xs mt-1">Waiting for new orders…</div>
       </div>
     )
@@ -1180,53 +1240,174 @@ export function Kitchen() {
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {kitchenOrders.map(o => (
-        <div key={o.id} className={`bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700/60 rounded-2xl shadow-card p-5 border-l-4 ${borderColor[o.status] || 'border-l-gray-300'} ${o.priority ? 'ring-2 ring-red-400 dark:ring-red-500' : ''}`}>
-          {/* Order header */}
-          <div className="flex items-start justify-between mb-1">
-            <div>
-              <div className="text-base font-bold text-gray-900 dark:text-white">
-                {o.order_type === 'takeaway' ? 'Takeaway' : `Table ${o.table_number}`}
-              </div>
-              <div className="text-xs text-gray-400 mt-0.5">#{o.order_number} · {o.created_at} · {o.waiter}{o.guests && (o.guests.adults + o.guests.children) > 0 ? ` · ${o.guests.adults + o.guests.children} guests` : ''}</div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => togglePriority(o.id)}
-                className={`text-xs px-2.5 py-1 rounded-lg border font-semibold transition-all ${o.priority ? 'bg-red-500 text-white border-red-500' : 'border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-red-400 hover:text-red-500'}`}
-              >
-                {o.priority ? '🚨 Priority' : 'Prioritise'}
-              </button>
-              <Badge color={statusColor(o.status)}>{o.status}</Badge>
-            </div>
-          </div>
-          {/* Items */}
-          <div className="mt-3 space-y-0">
-            {o.items.map((item, i) => (
-              <div key={i} className="py-2 border-b border-gray-100 dark:border-gray-700 last:border-0">
-                <div className="text-sm font-semibold text-gray-800 dark:text-gray-200">
-                  {item.name || item.name_en} <span className="text-indigo-500">×{item.qty}</span>
+      {kitchenOrders.map(o => {
+        const ks = o.kitchenStatus ?? o.status
+        const kitchenItems = o.items.filter(i => (i.station || 'kitchen') !== 'bar')
+        return (
+          <div key={o.id} className={`bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700/60 rounded-2xl shadow-card p-5 border-l-4 ${borderColor[ks] || 'border-l-gray-300'} ${o.priority ? 'ring-2 ring-red-400 dark:ring-red-500' : ''}`}>
+            {/* Order header */}
+            <div className="flex items-start justify-between mb-1">
+              <div>
+                <div className="text-base font-bold text-gray-900 dark:text-white">
+                  {o.order_type === 'takeaway' ? 'Takeaway' : `Table ${o.table_number}`}
                 </div>
-                {item.mods?.length > 0 && (
-                  <div className="text-xs text-indigo-400 dark:text-indigo-400 mt-0.5">+ {item.mods.join(' · ')}</div>
-                )}
-                {item.note && (
-                  <div className="text-xs text-amber-600 dark:text-amber-400 mt-0.5 bg-amber-50 dark:bg-amber-900/20 rounded px-2 py-0.5 inline-block">Note: {item.note}</div>
-                )}
+                <div className="text-xs text-gray-400 mt-0.5">#{o.order_number} · {o.created_at} · {o.waiter}{o.guests && (o.guests.adults + o.guests.children) > 0 ? ` · ${o.guests.adults + o.guests.children} guests` : ''}</div>
               </div>
-            ))}
-          </div>
-          {/* Allergy note on order level */}
-          {o.notes && (
-            <div className="mt-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-2 py-1.5">
-              Allergy / Note: {o.notes}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => togglePriority(o.id)}
+                  className={`text-xs px-2.5 py-1 rounded-lg border font-semibold transition-all ${o.priority ? 'bg-red-500 text-white border-red-500' : 'border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-red-400 hover:text-red-500'}`}
+                >
+                  {o.priority ? '🚨 Priority' : 'Prioritise'}
+                </button>
+                <Badge color={statusColor(ks)}>{ks}</Badge>
+              </div>
             </div>
-          )}
-          <Btn variant={btnVariant[o.status]} fullWidth size="lg" className="mt-4" onClick={() => advance(o.id)}>
-            {btnLabel[o.status]}
-          </Btn>
-        </div>
-      ))}
+            {/* Kitchen-only items */}
+            <div className="mt-3 space-y-0">
+              {kitchenItems.map((item, i) => (
+                <div key={i} className="py-2 border-b border-gray-100 dark:border-gray-700 last:border-0">
+                  <div className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                    {item.name || item.name_en} <span className="text-indigo-500">×{item.qty}</span>
+                  </div>
+                  {item.mods?.length > 0 && (
+                    <div className="text-xs text-indigo-400 mt-0.5">+ {item.mods.join(' · ')}</div>
+                  )}
+                  {item.note && (
+                    <div className="text-xs text-amber-600 dark:text-amber-400 mt-0.5 bg-amber-50 dark:bg-amber-900/20 rounded px-2 py-0.5 inline-block">Note: {item.note}</div>
+                  )}
+                </div>
+              ))}
+            </div>
+            {/* Bar items indicator */}
+            {o.barStatus && o.barStatus !== 'served' && (
+              <div className="mt-2 text-xs text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-900/20 rounded-lg px-2 py-1.5">
+                🍸 Drinks also sent to Bar ({o.barStatus})
+              </div>
+            )}
+            {/* Allergy note */}
+            {o.notes && (
+              <div className="mt-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-2 py-1.5">
+                ⚠ Allergy / Note: {o.notes}
+              </div>
+            )}
+            <div className="mt-4 flex gap-2">
+              <button
+                onClick={() => printStationTicket(o, kitchenItems, 'Kitchen')}
+                className="flex-none text-xs px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium"
+              >🖨 Print</button>
+              <Btn variant={btnVariant[ks]} fullWidth size="lg" onClick={() => advance(o.id)}>
+                {btnLabel[ks]}
+              </Btn>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ─── Bar ──────────────────────────────────────────────────────────────────────
+export function Bar() {
+  const { liveOrders, setLiveOrders } = useApp()
+
+  const barOrders = [...liveOrders]
+    .filter(o => o.barStatus !== null && o.barStatus !== undefined && o.barStatus !== 'served')
+    .sort((a, b) => (b.priority ? 1 : 0) - (a.priority ? 1 : 0))
+
+  function advance(id) {
+    setLiveOrders(p => p.map(o => {
+      if (o.id !== id) return o
+      const bs = o.barStatus
+      const next = bs === 'pending' ? 'preparing' : bs === 'preparing' ? 'ready' : bs === 'ready' ? 'served' : bs
+      const overall = computeOverallStatus(o.kitchenStatus ?? null, next)
+      return { ...o, barStatus: next, status: overall }
+    }))
+  }
+
+  function togglePriority(id) {
+    setLiveOrders(p => p.map(o => o.id === id ? { ...o, priority: !o.priority } : o))
+  }
+
+  const borderColor = { pending: 'border-l-cyan-400', preparing: 'border-l-blue-500', ready: 'border-l-green-500' }
+  const btnVariant  = { pending: 'primary', preparing: 'success', ready: 'warning' }
+  const btnLabel    = { pending: '▶ Start Preparing', preparing: '✓ Mark Ready', ready: '🛎 Ready — Notify Waiter' }
+
+  if (barOrders.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-48 text-gray-400">
+        <div className="text-4xl mb-2">🍸</div>
+        <div className="text-sm font-medium">No active bar orders</div>
+        <div className="text-xs mt-1">Waiting for drink orders…</div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {barOrders.map(o => {
+        const bs = o.barStatus
+        const barItems = o.items.filter(i => i.station === 'bar')
+        return (
+          <div key={o.id} className={`bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700/60 rounded-2xl shadow-card p-5 border-l-4 ${borderColor[bs] || 'border-l-gray-300'} ${o.priority ? 'ring-2 ring-red-400 dark:ring-red-500' : ''}`}>
+            {/* Order header */}
+            <div className="flex items-start justify-between mb-1">
+              <div>
+                <div className="text-base font-bold text-gray-900 dark:text-white">
+                  {o.order_type === 'takeaway' ? 'Takeaway' : `Table ${o.table_number}`}
+                </div>
+                <div className="text-xs text-gray-400 mt-0.5">#{o.order_number} · {o.created_at} · {o.waiter}{o.guests && (o.guests.adults + o.guests.children) > 0 ? ` · ${o.guests.adults + o.guests.children} guests` : ''}</div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => togglePriority(o.id)}
+                  className={`text-xs px-2.5 py-1 rounded-lg border font-semibold transition-all ${o.priority ? 'bg-red-500 text-white border-red-500' : 'border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-red-400 hover:text-red-500'}`}
+                >
+                  {o.priority ? '🚨 Priority' : 'Prioritise'}
+                </button>
+                <Badge color={statusColor(bs === 'preparing' ? 'cooking' : bs)}>{bs}</Badge>
+              </div>
+            </div>
+            {/* Bar-only drink items */}
+            <div className="mt-3 space-y-0">
+              {barItems.map((item, i) => (
+                <div key={i} className="py-2 border-b border-gray-100 dark:border-gray-700 last:border-0">
+                  <div className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                    {item.name || item.name_en} <span className="text-cyan-500">×{item.qty}</span>
+                  </div>
+                  {item.mods?.length > 0 && (
+                    <div className="text-xs text-cyan-400 mt-0.5">+ {item.mods.join(' · ')}</div>
+                  )}
+                  {item.note && (
+                    <div className="text-xs text-amber-600 dark:text-amber-400 mt-0.5 bg-amber-50 dark:bg-amber-900/20 rounded px-2 py-0.5 inline-block">Note: {item.note}</div>
+                  )}
+                </div>
+              ))}
+            </div>
+            {/* Kitchen status indicator */}
+            {o.kitchenStatus && o.kitchenStatus !== 'served' && (
+              <div className="mt-2 text-xs text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 rounded-lg px-2 py-1.5">
+                👨‍🍳 Food also sent to Kitchen ({o.kitchenStatus})
+              </div>
+            )}
+            {/* Allergy note */}
+            {o.notes && (
+              <div className="mt-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-2 py-1.5">
+                ⚠ Allergy / Note: {o.notes}
+              </div>
+            )}
+            <div className="mt-4 flex gap-2">
+              <button
+                onClick={() => printStationTicket(o, barItems, 'Bar')}
+                className="flex-none text-xs px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium"
+              >🖨 Print</button>
+              <Btn variant={btnVariant[bs]} fullWidth size="lg" onClick={() => advance(o.id)}>
+                {btnLabel[bs]}
+              </Btn>
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -1256,6 +1437,11 @@ export function Billing({ orderContext }) {
   const [showAddModal, setShowAddModal] = useState(false)
   const [modalCat, setModalCat] = useState('all')
   const [modalSearch, setModalSearch] = useState('')
+  const [showShopModal, setShowShopModal] = useState(false)
+  const [billItemModal, setBillItemModal] = useState(null)
+  const [billModalQty, setBillModalQty] = useState(1)
+  const [billModalSelections, setBillModalSelections] = useState({})
+  const [billModalNote, setBillModalNote] = useState('')
   const searchRef = useRef(null)
 
   // ── Filtered items ──────────────────────────────────────────────────────────
@@ -1308,6 +1494,31 @@ export function Billing({ orderContext }) {
     setCashGiven(0)
     setBillNote('')
     setPreloadLabel('')
+  }
+
+  function openBillItemModal(item) {
+    setBillItemModal(item)
+    setBillModalQty(1)
+    setBillModalSelections({})
+    setBillModalNote('')
+  }
+
+  function toggleBillMod(group, choice) {
+    setBillModalSelections(prev => {
+      const current = prev[group.label] || []
+      if (!group.multi) {
+        return { ...prev, [group.label]: current.includes(choice) ? [] : [choice] }
+      }
+      return { ...prev, [group.label]: current.includes(choice) ? current.filter(c => c !== choice) : [...current, choice] }
+    })
+  }
+
+  function addToCartWithMods() {
+    const flatMods = Object.values(billModalSelections).flat().filter(Boolean)
+    const cartKey = `${billItemModal.id}-${Date.now()}`
+    setCart(p => [...p, { ...billItemModal, qty: billModalQty, cartKey, selectedMods: flatMods, note: billModalNote.trim() }])
+    setMobileBillTab('cart')
+    setBillItemModal(null)
   }
 
   function addToCart(item) {
@@ -1505,7 +1716,7 @@ export function Billing({ orderContext }) {
               {visibleItems.map(item => (
                 <button
                   key={item.id}
-                  onClick={() => addToCart(item)}
+                  onClick={() => openBillItemModal(item)}
                   className={`relative rounded-xl border-2 p-3 text-left transition-all active:scale-95 cursor-pointer
                     ${'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20'}`}
                 >
@@ -1675,12 +1886,18 @@ export function Billing({ orderContext }) {
 
           {/* Confirm + Cancel buttons — only when bill has items */}
           {allCartItems.length > 0 && (
-          <div className="px-3 pb-3 pt-2 grid grid-cols-2 gap-2 flex-shrink-0">
+          <div className="px-3 pb-3 pt-2 grid grid-cols-3 gap-2 flex-shrink-0">
             <button
               onClick={() => setShowPayModal(true)}
               className="py-3 rounded-xl text-sm font-bold bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white shadow-sm transition-all"
             >
               Confirm
+            </button>
+            <button
+              onClick={() => setShowShopModal(true)}
+              className="py-3 rounded-xl text-sm font-bold bg-indigo-100 hover:bg-indigo-200 dark:bg-indigo-900/40 dark:hover:bg-indigo-900/60 active:scale-[0.98] text-indigo-700 dark:text-indigo-300 transition-all"
+            >
+              Shop
             </button>
             <button
               onClick={() => { clearLoadedBill(); setPayMethod(null); setCashGiven(0); }}
@@ -1694,6 +1911,122 @@ export function Billing({ orderContext }) {
 
       </div>
     </div>
+
+    {/* ── Shop / Owner Account Confirmation Modal ── */}
+    {showShopModal && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setShowShopModal(false)}>
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
+            <h3 className="text-base font-extrabold text-gray-900 dark:text-white">Owner's Account</h3>
+            <button onClick={() => setShowShopModal(false)} className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors font-bold">✕</button>
+          </div>
+          <div className="px-5 py-5">
+            <div className="flex items-center gap-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl px-4 py-3 mb-4">
+              <div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">Bill Total</div>
+                <div className="text-xl font-extrabold text-indigo-600 dark:text-indigo-400">€{total.toFixed(2)}</div>
+              </div>
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-300 mb-1">Charge this bill to the <span className="font-bold text-gray-900 dark:text-white">shop owner's account</span>?</p>
+            <p className="text-xs text-gray-400 mb-5">This will be recorded as an internal shop payment and finalize the bill.</p>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setShowShopModal(false)}
+                className="py-3 rounded-xl text-sm font-bold border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowShopModal(false)
+                  setPayMethod('shop')
+                  setTimeout(() => {
+                    if (loadedBillId) finalizeBill(loadedBillId)
+                    const orderNum = Math.floor(Math.random() * 900) + 100
+                    setReceipt({
+                      items: allCartItems,
+                      subtotal, vat, total, totalSavings,
+                      payMethod: 'Shop Account',
+                      cashGiven: 0,
+                      change: 0,
+                      date: new Date(),
+                      order_number: orderNum,
+                      note: billNote.trim(),
+                    })
+                  }, 0)
+                }}
+                className="py-3 rounded-xl text-sm font-extrabold bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white transition-all"
+              >
+                ✓ Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* ── Item Modifier Modal (Billing) ── */}
+    {billItemModal && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setBillItemModal(null)}>
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="flex items-start justify-between p-5 border-b border-gray-100 dark:border-gray-700">
+            <div>
+              <div className="flex items-center gap-2 mb-0.5">
+                <span className="text-2xl">{billItemModal.emoji}</span>
+                <h2 className="text-base font-bold text-gray-900 dark:text-white">{billItemModal.name_en}</h2>
+              </div>
+              <div className="text-sm text-indigo-600 font-bold">€{billItemModal.price.toFixed(2)}</div>
+            </div>
+            <button onClick={() => setBillItemModal(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl leading-none">✕</button>
+          </div>
+          <div className="p-5 space-y-5">
+            <div>
+              <div className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Quantity</div>
+              <div className="flex items-center gap-3">
+                <button onClick={() => setBillModalQty(q => Math.max(1, q - 1))} className="w-9 h-9 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 font-bold text-lg flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-600">−</button>
+                <span className="text-xl font-bold text-gray-900 dark:text-white w-8 text-center">{billModalQty}</span>
+                <button onClick={() => setBillModalQty(q => q + 1)} className="w-9 h-9 rounded-xl bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 font-bold text-lg flex items-center justify-center hover:bg-indigo-200">+</button>
+                <span className="text-sm text-gray-400 ml-2">= €{(billItemModal.price * billModalQty).toFixed(2)}</span>
+              </div>
+            </div>
+            {(billItemModal.modifierGroups || []).map(group => (
+              <div key={group.label}>
+                <div className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+                  {group.label} {group.multi ? <span className="normal-case font-normal text-gray-400">(select multiple)</span> : <span className="normal-case font-normal text-gray-400">(choose one)</span>}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {group.choices.map(choice => {
+                    const active = (billModalSelections[group.label] || []).includes(choice)
+                    return (
+                      <button key={choice} onClick={() => toggleBillMod(group, choice)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${active ? 'bg-indigo-600 text-white border-indigo-600' : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-indigo-300 bg-white dark:bg-gray-700'}`}>
+                        {active && '✓ '}{choice}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+            <div>
+              <div className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Additional note</div>
+              <textarea
+                value={billModalNote}
+                onChange={e => setBillModalNote(e.target.value)}
+                placeholder="e.g. No onion, allergen request…"
+                rows={2}
+                className="w-full text-sm px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2 px-5 pb-5">
+            <button onClick={() => setBillItemModal(null)} className="flex-1 py-2.5 rounded-xl text-sm font-bold border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all">Cancel</button>
+            <button onClick={addToCartWithMods} className="flex-1 py-2.5 rounded-xl text-sm font-extrabold bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white transition-all">
+              Add {billModalQty > 1 ? `×${billModalQty}` : ''} to Bill — €{(billItemModal.price * billModalQty).toFixed(2)}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
 
     {/* ── Add Food Modal ── */}
     {showAddModal && (
@@ -1738,7 +2071,7 @@ export function Billing({ orderContext }) {
                 return (
                   <button
                     key={item.id}
-                    onClick={() => addToCart(item)}
+                    onClick={() => { setShowAddModal(false); openBillItemModal(item) }}
                     className="relative rounded-xl border-2 p-3 text-left transition-all active:scale-95 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 hover:border-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20"
                   >
                     <div className="text-sm font-extrabold text-indigo-600 dark:text-indigo-400 mb-1">€{item.price.toFixed(2)}</div>

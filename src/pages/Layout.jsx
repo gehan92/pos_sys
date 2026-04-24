@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Building2, Users as UsersIcon, BarChart3, Settings as SettingsIcon, ShieldCheck,
   Grid3x3, ClipboardList, CreditCard, Package, BookOpen, Receipt, Eye,
   Calendar, ChefHat, FileText, Bell, LogOut, Globe, Sun, Moon, ChevronRight,
-  Clock, LogIn, LogOut as LogOutIcon, Menu, X, UserCheck,
+  Clock, LogIn, LogOut as LogOutIcon, Menu, X, UserCheck, Wine,
 } from 'lucide-react'
 
 // Pages
@@ -30,9 +30,11 @@ import MenuManagement from './MenuManagement'
 import Customers from './Customers'
 import Waiters from './Waiters'
 import OrderList from './OrderList'
+import Bar from './Bar'
 
 const PAGE_MAP = {
   dashboard: Dashboard, tables: Tables, orders: Orders, kitchen: Kitchen,
+  bar: Bar,
   billing: Billing, inventory: Inventory, users: Users, reports: Reports,
   settings: Settings, shifts: Shifts, audit: Audit, notifications: Notifications,
   supervisor: Supervisor, company: Company, receipts: Receipts,
@@ -56,6 +58,7 @@ const NAV_ICONS_LUCIDE = {
   supervisor: Eye,
   shifts: Calendar,
   kitchen: ChefHat,
+  bar: Wine,
   invoices: FileText,
   notifications: Bell,
   customers: UserCheck,
