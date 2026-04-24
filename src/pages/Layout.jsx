@@ -28,13 +28,14 @@ import Receipts from './Receipts'
 import Invoices from './Invoices'
 import MenuManagement from './MenuManagement'
 import Customers from './Customers'
+import Waiters from './Waiters'
 
 const PAGE_MAP = {
   dashboard: Dashboard, tables: Tables, orders: Orders, kitchen: Kitchen,
   billing: Billing, inventory: Inventory, users: Users, reports: Reports,
   settings: Settings, shifts: Shifts, audit: Audit, notifications: Notifications,
   supervisor: Supervisor, company: Company, receipts: Receipts,
-  invoices: Invoices, menu: MenuManagement, customers: Customers,
+  invoices: Invoices, menu: MenuManagement, customers: Customers, waiters: Waiters,
 }
 
 const NAV_ICONS_LUCIDE = {
@@ -56,6 +57,7 @@ const NAV_ICONS_LUCIDE = {
   invoices: FileText,
   notifications: Bell,
   customers: UserCheck,
+  waiters: UsersIcon,
 }
 
 export default function Layout() {

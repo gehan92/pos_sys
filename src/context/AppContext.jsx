@@ -17,18 +17,18 @@ export const ROLES = {
 
 export const ROLE_NAV = {
   superadmin: ['dashboard','company','users','customers','inventory','menu','reports','settings','audit','notifications'],
-  admin:      ['dashboard','users','customers','tables','billing','inventory','menu','reports','settings','notifications'],
-  owner:      ['dashboard','reports','users','customers','billing','inventory','menu','settings','notifications'],
-  manager:    ['dashboard','users','customers','shifts','inventory','menu','notifications'],
-  cashier:    ['billing','receipts','customers','shifts','notifications'],
+  admin:      ['dashboard','users','waiters','customers','tables','billing','inventory','menu','reports','settings','notifications'],
+  owner:      ['dashboard','reports','users','waiters','customers','billing','inventory','menu','settings','notifications'],
+  manager:    ['dashboard','users','waiters','customers','shifts','inventory','menu','notifications'],
+  cashier:    ['billing','receipts','shifts','notifications'],
   supervisor: ['dashboard','supervisor','reports','shifts','notifications'],
-  waiter:     ['tables','orders','customers','shifts','notifications'],
+  waiter:     ['tables','orders','shifts','notifications'],
   cook:       ['kitchen','shifts','notifications'],
   supplier:   ['inventory','invoices','notifications'],
 }
 
 export const NAV_ICONS = {
-  dashboard:'🏠', company:'🏢', users:'👥', reports:'📊', settings:'⚙️', audit:'🔒',
+  dashboard:'🏠', company:'🏢', users:'👥', waiters:'🧑‍🍽️', reports:'📊', settings:'⚙️', audit:'🔒',
   tables:'🍽️', orders:'📋', billing:'💰', inventory:'📦', menu:'🗂️',
   cashier:'💰', receipts:'🖨️', supervisor:'👁️', shifts:'🗓️', kitchen:'👨‍🍳',
   invoices:'📄', notifications:'🔔', customers:'👤',
@@ -127,6 +127,14 @@ export function AppProvider({ children }) {
 
   function deactivateUser(id) {
     setUsers(p => p.map(u => u.id === id ? { ...u, status: 'inactive' } : u))
+  }
+
+  function updateUser(id, changes) {
+    setUsers(p => p.map(u => u.id === id ? { ...u, ...changes } : u))
+  }
+
+  function deleteUser(id) {
+    setUsers(p => p.filter(u => u.id !== id))
   }
 
   // ── Customer management ─────────────────────────────────────────────────────
@@ -247,7 +255,7 @@ export function AppProvider({ children }) {
     : false
 
   return (
-    <AppContext.Provider value={{ user, login, logout, lang, setLang, theme, setTheme, company, setCompany, users, createUser, approveUser, deactivateUser, notifications, markAllRead, unreadCount, liveOrders, setLiveOrders, nextOrderNum, setNextOrderNum, openBills, markOrderServed, completeProcess, finalizeBill, menuItems, setMenuItems, menuCategories, setMenuCategories, inventoryItems, setInventoryItems, customers, createCustomer, updateCustomer, deleteCustomer, recordCustomerSale, clockRecords, clockIn, clockOut, isClockedIn }}>
+    <AppContext.Provider value={{ user, login, logout, lang, setLang, theme, setTheme, company, setCompany, users, createUser, approveUser, deactivateUser, updateUser, deleteUser, notifications, markAllRead, unreadCount, liveOrders, setLiveOrders, nextOrderNum, setNextOrderNum, openBills, markOrderServed, completeProcess, finalizeBill, menuItems, setMenuItems, menuCategories, setMenuCategories, inventoryItems, setInventoryItems, customers, createCustomer, updateCustomer, deleteCustomer, recordCustomerSale, clockRecords, clockIn, clockOut, isClockedIn }}>
       {children}
     </AppContext.Provider>
   )
