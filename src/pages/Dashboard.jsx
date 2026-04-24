@@ -312,18 +312,19 @@ export function Tables({ navTo, setOrderContext }) {
       <Card>
         <h2 className="font-medium text-gray-900 dark:text-white mb-3">Active orders</h2>
         <Table headers={['Table','Type','Status','Action']}>
-          {liveOrders.map(o => (
+          {liveOrders.filter(o => !['paid'].includes(o.status)).map(o => (
             <TR key={o.id}>
               <TD className="font-medium">{o.order_type === 'takeaway' ? 'Takeaway' : `T${o.table_number}`}</TD>
               <TD><Badge color={o.order_type==='takeaway'?'orange':'blue'}>{o.order_type==='takeaway'?'Takeaway':'Dine-in'}</Badge></TD>
               <TD><Badge color={statusColor(o.status)}>{o.status}</Badge></TD>
               <TD>
-                <div className="flex gap-1.5">
-                  {o.status === 'ready'
-                    ? <Btn size="sm" variant="primary" onClick={() => navTo('billing')}>Bill</Btn>
-                    : null
-                  }
-                  <Btn size="sm" variant="success" onClick={() => addToOrder(o)}>+ Add</Btn>
+                <div className="flex gap-1.5 flex-wrap">
+                  {['pending','cooking'].includes(o.status) && (
+                    <Btn size="sm" onClick={() => addToOrder(o)}>+ Add</Btn>
+                  )}
+                  {o.status === 'completed' && (
+                    <Badge color="indigo">At Cashier</Badge>
+                  )}
                 </div>
               </TD>
             </TR>
@@ -336,7 +337,7 @@ export function Tables({ navTo, setOrderContext }) {
 
 // ─── Orders ───────────────────────────────────────────────────────────────────
 export function Orders({ navTo, orderContext }) {
-  const { lang, user, liveOrders, setLiveOrders, nextOrderNum, setNextOrderNum, requestBill, menuItems, menuCategories } = useApp()
+  const { lang, user, liveOrders, setLiveOrders, nextOrderNum, setNextOrderNum, markOrderServed, completeProcess, menuItems, menuCategories } = useApp()
   const [newItems, setNewItems] = useState([])
   const [cat, setCat] = useState('cat1')
   const [notes, setNotes] = useState('')
@@ -432,9 +433,9 @@ export function Orders({ navTo, orderContext }) {
   }
 
   // Active orders sidebar data
-  const activeOrders = liveOrders.filter(o => !['served', 'paid'].includes(o.status))
-  const statusLabel = { pending: 'Pending', cooking: 'Cooking', ready: 'Ready', bill_requested: 'Bill Req.' }
-  const statusBadge = { pending: 'yellow', cooking: 'blue', ready: 'green', bill_requested: 'orange' }
+  const activeOrders = liveOrders.filter(o => !['paid'].includes(o.status))
+  const statusLabel = { pending: 'Pending', cooking: 'Cooking', ready: 'Ready', served: 'Served', completed: 'At Cashier' }
+  const statusBadge = { pending: 'yellow', cooking: 'blue', ready: 'green', served: 'orange', completed: 'indigo' }
 
   return (
     <>
@@ -527,12 +528,15 @@ export function Orders({ navTo, orderContext }) {
               <div className="text-xs text-gray-500 dark:text-gray-400 truncate">Waiter: {o.waiter}</div>
               <div className="flex flex-col gap-1 pt-1">
                 {o.status === 'ready' && (
-                  <Btn size="sm" variant="warning" onClick={() => requestBill(o)}>Request Bill</Btn>
+                  <Btn size="sm" variant="success" onClick={() => markOrderServed(o.id)}>✓ Mark Served</Btn>
                 )}
-                {o.status === 'bill_requested' && (
-                  <div className="text-xs text-center text-amber-600 dark:text-amber-400 font-semibold py-1">Waiting for cashier…</div>
+                {o.status === 'served' && (
+                  <Btn size="sm" variant="warning" onClick={() => completeProcess(o.table_id)}>✅ Complete Process</Btn>
                 )}
-                {!['ready', 'bill_requested'].includes(o.status) && (
+                {o.status === 'completed' && (
+                  <div className="text-xs text-center text-indigo-600 dark:text-indigo-400 font-semibold py-1 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">💰 At Cashier</div>
+                )}
+                {['pending','cooking'].includes(o.status) && (
                   <Btn size="sm" onClick={() => navTo('orders', { tableId: o.table_id, tableNumber: o.table_number, isTakeaway: o.order_type === 'takeaway', existingOrder: o })}>+ Add Items</Btn>
                 )}
               </div>
@@ -720,7 +724,7 @@ export function Kitchen() {
 
   const borderColor = { pending: 'border-l-amber-400', cooking: 'border-l-blue-500', ready: 'border-l-green-500' }
   const btnVariant  = { pending: 'primary', cooking: 'success', ready: 'warning' }
-  const btnLabel    = { pending: '▶ Start Cooking', cooking: '✓ Mark Ready', ready: '✓ Served — Clear' }
+  const btnLabel    = { pending: '▶ Start Cooking', cooking: '✓ Mark Ready', ready: '🛎 Notify Waiter — Ready to Serve' }
 
   if (kitchenOrders.length === 0) {
     return (
@@ -787,7 +791,7 @@ export function Kitchen() {
 
 // ─── Billing ──────────────────────────────────────────────────────────────────
 export function Billing() {
-  const { lang, company, liveOrders, billQueue, clearBillRequest, menuItems, menuCategories, customers, recordCustomerSale, createCustomer } = useApp()
+  const { lang, company, liveOrders, openBills, finalizeBill, menuItems, menuCategories, customers, recordCustomerSale, createCustomer } = useApp()
   const vatRate = company.vat_rate / 100
 
   // ── Cart state ──────────────────────────────────────────────────────────────
@@ -796,15 +800,18 @@ export function Billing() {
   const [cashGiven, setCashGiven] = useState(0)
   const [receipt, setReceipt] = useState(null)
 
+  // ── Open bill tracking ──────────────────────────────────────────────────────
+  const [loadedBillId, setLoadedBillId] = useState(null)    // which open bill is loaded
+  const [billItems, setBillItems] = useState([])             // items from the loaded bill (read-only display)
+
   // ── Product browser state ───────────────────────────────────────────────────
   const [activeCat, setActiveCat] = useState('all')
   const [search, setSearch] = useState('')
   const [barcodeInput, setBarcodeInput] = useState('')
   const [barcodeFlash, setBarcodeFlash] = useState(null) // item id that was just scanned
-  const [loadedOrderId, setLoadedOrderId] = useState(null)
   const [linkedCustomer, setLinkedCustomer] = useState(null)
   const [custSearch, setCustSearch] = useState('')
-  const [showCustModal, setShowCustModal] = useState(true)
+  const [showCustModal, setShowCustModal] = useState(false)
   const [custModalTab, setCustModalTab] = useState('search') // 'search' | 'add'
   const [newCust, setNewCust] = useState({ name:'', phone:'', email:'' })
   const [mobileBillTab, setMobileBillTab] = useState('menu')
@@ -822,19 +829,27 @@ export function Billing() {
     return matchCat && matchSearch
   })
 
-  // ── Cart helpers ────────────────────────────────────────────────────────────
-  function loadOrderIntoCart(billEntry) {
-    const items = billEntry.items.map(i => ({
-      id: i.id || `loaded-${i.name}`,
+  // ── Load an open bill into the cashier view ─────────────────────────────────
+  function loadBillIntoCart(bill) {
+    // Store original bill items separately (cannot be removed, for display)
+    setBillItems(bill.items.map(i => ({
+      id: i.id || `bill-${i.name || i.name_en}-${Math.random()}`,
       name_en: i.name || i.name_en,
-      emoji: i.emoji || '🍽️',
       price: i.price,
       qty: i.qty,
-      extraNote: '',
-    }))
-    setCart(items)
-    setLoadedOrderId(billEntry.orderId)
-    clearBillRequest(billEntry.orderId)
+      discount_pct: i.discount_pct || 0,
+      fromBill: true,
+    })))
+    setCart([])  // cashier extras start empty
+    setLoadedBillId(bill.id)
+  }
+
+  function clearLoadedBill() {
+    setBillItems([])
+    setCart([])
+    setLoadedBillId(null)
+    setPayMethod(null)
+    setCashGiven(0)
   }
 
   function addToCart(item) {
@@ -879,35 +894,39 @@ export function Billing() {
     }
   }
 
-  // ── Totals ──────────────────────────────────────────────────────────────────
-  const subtotal = cart.reduce((a, i) => {
+  // ── Totals (bill items + cashier extras) ────────────────────────────────────
+  const allCartItems = [...billItems, ...cart]
+  const subtotal = allCartItems.reduce((a, i) => {
     const disc = Number(i.discount_pct || 0) / 100
     return a + (i.price * (1 - disc)) * i.qty
   }, 0)
-  const totalSavings = cart.reduce((a, i) => {
+  const totalSavings = allCartItems.reduce((a, i) => {
     const disc = Number(i.discount_pct || 0) / 100
     return a + (i.price * disc) * i.qty
   }, 0)
   const vat = subtotal * vatRate
   const total = subtotal + vat
 
-  // ── Confirm payment ─────────────────────────────────────────────────────────
+  // ── Confirm payment & finalize ───────────────────────────────────────────────
   function confirmPayment() {
-    if (!payMethod || cart.length === 0) return
+    if (!payMethod || allCartItems.length === 0) return
     const orderNum = Math.floor(Math.random() * 900) + 100
     if (linkedCustomer) {
       recordCustomerSale(linkedCustomer.id, {
         id: `sale_${Date.now()}`,
         order_number: orderNum,
         date: new Date().toLocaleDateString(),
-        items: cart.map(i => `${i.name_en} ×${i.qty}`).join(', '),
-        item_count: cart.reduce((s, i) => s + i.qty, 0),
+        items: allCartItems.map(i => `${i.name_en} ×${i.qty}`).join(', '),
+        item_count: allCartItems.reduce((s, i) => s + i.qty, 0),
         total,
         pay_method: payMethod,
       })
     }
+    // Finalize the open bill (marks all linked orders as paid)
+    if (loadedBillId) finalizeBill(loadedBillId)
+
     setReceipt({
-      items: cart,
+      items: allCartItems,
       subtotal, vat, total, totalSavings, payMethod, cashGiven,
       change: cashGiven > 0 ? Math.max(0, cashGiven - total) : 0,
       date: new Date(),
@@ -974,8 +993,8 @@ export function Billing() {
             <Btn onClick={() => alert('Share via email/WhatsApp...')}>📤 Share</Btn>
           </div>
           <Btn variant="success" fullWidth className="mt-2" onClick={() => {
-            setReceipt(null); setCart([]); setPayMethod(null); setCashGiven(0); setLoadedOrderId(null)
-            setLinkedCustomer(null); setCustSearch(''); setShowCustModal(true); setCustModalTab('search'); setNewCust({ name:'', phone:'', email:'' }); setMobileBillTab('menu')
+            setReceipt(null); setCart([]); setBillItems([]); setPayMethod(null); setCashGiven(0); setLoadedBillId(null)
+            setLinkedCustomer(null); setCustSearch(''); setShowCustModal(false); setCustModalTab('search'); setNewCust({ name:'', phone:'', email:'' }); setMobileBillTab('menu')
           }}>
             New Sale
           </Btn>
@@ -1106,36 +1125,93 @@ export function Billing() {
         </div>
       )}
 
-      {/* ── Bill request notifications ── */}
-      {billQueue.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {billQueue.map(b => (
-            <div key={b.orderId} className="flex flex-wrap items-center gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-xl px-3 py-2">
-              <span className="text-amber-600 dark:text-amber-400 font-bold text-sm">🧾 {b.tableLabel}</span>
-              <span className="text-xs text-amber-700 dark:text-amber-300">Waiter: {b.waiter}</span>
-              <span className="text-xs text-amber-600 dark:text-amber-400 font-semibold">€{b.total.toFixed(2)}</span>
-              <Btn size="sm" variant="warning" onClick={() => loadOrderIntoCart(b)}>Load & Bill</Btn>
-              <button onClick={() => clearBillRequest(b.orderId)} className="text-amber-400 hover:text-amber-600 text-xs ml-1">✕</button>
+      {/* ── Open Bills Panel ── */}
+      <div className="mb-2">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+              <span className="text-sm">🧾</span>
             </div>
-          ))}
+            <span className="text-sm font-bold text-gray-800 dark:text-gray-200">Open Bills</span>
+            {openBills.length > 0 && (
+              <span className="text-xs font-bold bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded-full">
+                {openBills.length} ready
+              </span>
+            )}
+          </div>
+          {openBills.length > 0 && (
+            <span className="text-xs text-gray-400 hidden sm:block">Click a bill to load it at the cashier</span>
+          )}
         </div>
-      )}
 
-    {/* Customer badge — always visible above tabs */}
-    {!linkedCustomer ? (
-      <button onClick={() => { setCustModalTab('search'); setCustSearch(''); setShowCustModal(true) }}
-        className="w-full text-xs text-indigo-500 dark:text-indigo-400 border border-dashed border-indigo-300 dark:border-indigo-700 rounded-xl py-2 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors font-semibold">
-        + Link a customer
-      </button>
-    ) : (
-      <div className="flex items-center gap-3 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-xl px-3 py-2.5">
-        <div className="flex-1 min-w-0">
-          <div className="text-xs font-bold text-gray-800 dark:text-gray-200">{linkedCustomer.name}</div>
-          <div className="text-xs text-indigo-600 dark:text-indigo-400">{linkedCustomer.phone || 'No phone'} · {linkedCustomer.loyalty_points || 0} pts</div>
-        </div>
-        <button onClick={() => { setLinkedCustomer(null); setShowCustModal(true); setCustModalTab('search') }} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-sm">✕</button>
+        {openBills.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+            {openBills.map(bill => {
+              const billTotal = bill.items.reduce((s, i) => s + i.price * i.qty, 0)
+              const isLoaded = loadedBillId === bill.id
+              return (
+                <div
+                  key={bill.id}
+                  onClick={() => !isLoaded && loadBillIntoCart(bill)}
+                  className={`relative rounded-2xl border-2 p-4 transition-all ${
+                    isLoaded
+                      ? 'border-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 shadow-md'
+                      : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-emerald-400 hover:shadow-md cursor-pointer'
+                  }`}
+                >
+                  {isLoaded && (
+                    <div className="absolute top-3 right-3">
+                      <span className="text-xs font-bold bg-indigo-600 text-white px-2 py-0.5 rounded-full">✓ Loaded</span>
+                    </div>
+                  )}
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <div className="text-base font-extrabold text-gray-900 dark:text-white">{bill.tableLabel}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">👤 {bill.waiter}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-lg font-extrabold text-emerald-600 dark:text-emerald-400">€{billTotal.toFixed(2)}</div>
+                      <div className="text-xs text-gray-400">{bill.items.length} item{bill.items.length !== 1 ? 's' : ''}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 mb-3">
+                    {bill.items.slice(0, 3).map((it, idx) => (
+                      <span key={idx} className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-0.5 rounded-lg truncate max-w-[5rem]">{it.name || it.name_en}</span>
+                    ))}
+                    {bill.items.length > 3 && <span className="text-xs text-gray-400">+{bill.items.length - 3} more</span>}
+                  </div>
+                  <div className="text-xs text-gray-400 mb-3">{bill.completedAt}</div>
+                  {isLoaded ? (
+                    <button
+                      onClick={e => { e.stopPropagation(); clearLoadedBill() }}
+                      className="w-full py-1.5 rounded-xl text-xs font-bold border-2 border-rose-200 dark:border-rose-800 text-rose-500 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-all"
+                    >
+                      ✕ Unload Bill
+                    </button>
+                  ) : (
+                    <button
+                      onClick={e => { e.stopPropagation(); loadBillIntoCart(bill) }}
+                      className="w-full py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-all"
+                    >
+                      Load Bill →
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <div className="flex items-center gap-4 bg-gray-50 dark:bg-gray-800/50 border border-dashed border-gray-200 dark:border-gray-700 rounded-2xl px-5 py-4">
+            <div className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
+              <span className="text-xl">⏳</span>
+            </div>
+            <div>
+              <div className="text-sm font-semibold text-gray-500 dark:text-gray-400">No open bills yet</div>
+              <div className="text-xs text-gray-400 mt-0.5">Waiting for waiters to complete orders…</div>
+            </div>
+          </div>
+        )}
       </div>
-    )}
 
     {/* Mobile tab bar - hidden on desktop */}
     <div className="flex gap-2 mb-3 lg:hidden">
@@ -1145,7 +1221,7 @@ export function Billing() {
       </button>
       <button onClick={() => setMobileBillTab('cart')}
         className={`flex-1 py-2.5 rounded-xl text-sm font-bold border-2 transition-all relative ${mobileBillTab==='cart' ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800'}`}>
-        Cart{cart.length > 0 ? ` (${cart.reduce((s,i)=>s+i.qty,0)})` : ''}
+        Cart{allCartItems.length > 0 ? ` (${allCartItems.reduce((s,i)=>s+i.qty,0)})` : ''}
       </button>
     </div>
 
@@ -1153,24 +1229,6 @@ export function Billing() {
 
       {/* ── LEFT: Product browser ── */}
       <div className={`flex-1 flex flex-col min-w-0 gap-3 min-h-0 ${mobileBillTab !== 'menu' ? 'hidden lg:flex' : ''}`}>
-
-        {/* Customer badge — desktop only (mobile shows above tab bar) */}
-        <div className="hidden lg:block">
-          {!linkedCustomer ? (
-            <button onClick={() => { setCustModalTab('search'); setCustSearch(''); setShowCustModal(true) }}
-              className="w-full text-xs text-indigo-500 dark:text-indigo-400 border border-dashed border-indigo-300 dark:border-indigo-700 rounded-xl py-2 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors font-semibold">
-              + Link a customer
-            </button>
-          ) : (
-            <div className="flex items-center gap-3 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-xl px-3 py-2.5">
-              <div className="flex-1 min-w-0">
-                <div className="text-xs font-bold text-gray-800 dark:text-gray-200">{linkedCustomer.name}</div>
-                <div className="text-xs text-indigo-600 dark:text-indigo-400">{linkedCustomer.phone || 'No phone'} · {linkedCustomer.loyalty_points || 0} pts</div>
-              </div>
-              <button onClick={() => { setLinkedCustomer(null); setShowCustModal(true); setCustModalTab('search') }} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-sm">✕</button>
-            </div>
-          )}
-        </div>
 
         {/* Search + Barcode row */}
         <div className="flex gap-2">
@@ -1197,6 +1255,23 @@ export function Billing() {
               className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-indigo-200 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-900/20 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
             />
           </div>
+           {/* Customer badge — desktop only (mobile shows above tab bar) */}
+        <div className="hidden lg:block">
+          {!linkedCustomer ? (
+            <button onClick={() => { setCustModalTab('search'); setCustSearch(''); setShowCustModal(true) }}
+              className="w-full text-xs text-indigo-500 dark:text-indigo-400 border border-dashed border-indigo-300 dark:border-indigo-700 rounded-xl py-2 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors font-semibold">
+              + customer
+            </button>
+          ) : (
+            <div className="flex items-center gap-3 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-xl px-3 py-2.5">
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-bold text-gray-800 dark:text-gray-200">{linkedCustomer.name}</div>
+                <div className="text-xs text-indigo-600 dark:text-indigo-400">{linkedCustomer.phone || 'No phone'} · {linkedCustomer.loyalty_points || 0} pts</div>
+              </div>
+              <button onClick={() => { setLinkedCustomer(null); setShowCustModal(true); setCustModalTab('search') }} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-sm">✕</button>
+            </div>
+          )}
+        </div>
         </div>
 
         {/* Category tabs */}
@@ -1256,116 +1331,226 @@ export function Billing() {
       {/* ── RIGHT: Cart + Payment ── */}
       <div className={`w-full lg:w-80 flex-shrink-0 flex flex-col gap-3 ${mobileBillTab !== 'cart' ? 'hidden lg:flex lg:flex-col' : ''}`}>
 
-        {/* Cart */}
-        <Card className="lg:flex-1 lg:flex lg:flex-col lg:min-h-0 !p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-bold text-gray-900 dark:text-white">Cart</h2>
-            {cart.length > 0 && (
-              <button onClick={() => setCart([])} className="text-xs text-rose-500 hover:text-rose-600 font-semibold">Clear all</button>
-            )}
-          </div>
-          <div className="space-y-1 lg:flex-1 lg:min-h-0 lg:overflow-y-auto">
-            {cart.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-gray-300 dark:text-gray-600 py-8">
-                <div className="text-sm">Cart is empty</div>
-                <div className="text-xs mt-1 text-center">Tap a product or scan a barcode</div>
+        {/* Bill / Cart */}
+        <Card className="flex flex-col h-[38rem] lg:h-auto lg:flex-1 lg:min-h-0 !p-0 overflow-hidden">
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700/60 flex-shrink-0">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center">
+                <span className="text-sm">🧾</span>
               </div>
-            ) : cart.map(item => (
-              <div key={item.id} className="py-2 px-1 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs font-semibold text-gray-800 dark:text-gray-200 truncate">{item.name_en}</div>
-                    <div className="text-xs text-indigo-600 font-bold">€{item.price.toFixed(2)}</div>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button onClick={() => changeQty(item.id, -1)} className="w-6 h-6 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 font-bold text-sm flex items-center justify-center hover:bg-rose-100 hover:text-rose-600 dark:hover:bg-rose-900/30">−</button>
-                    <span className="text-xs font-bold w-4 text-center text-gray-800 dark:text-gray-200">{item.qty}</span>
-                    <button onClick={() => changeQty(item.id, 1)} className="w-6 h-6 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 font-bold text-sm flex items-center justify-center hover:bg-indigo-200">+</button>
-                  </div>
-                  <span className="text-xs font-extrabold text-gray-800 dark:text-gray-200 w-12 text-right">€{(item.price*(1-Number(item.discount_pct||0)/100)*item.qty).toFixed(2)}</span>
-                  <button onClick={() => removeFromCart(item.id)} className="text-gray-300 hover:text-rose-500 text-xs ml-0.5">✕</button>
-                </div>
-                <input
-                  value={item.extraNote || ''}
-                  onChange={e => setExtraNote(item.id, e.target.value)}
-                  placeholder="Extra request (e.g. extra cheese)"
-                  className="mt-1 w-full text-xs px-2 py-1 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
-                />
+              <div>
+                <h2 className="text-sm font-bold text-gray-900 dark:text-white leading-none">Current Bill</h2>
+                {loadedBillId
+                  ? <div className="text-xs text-indigo-500 font-semibold mt-0.5">{openBills.find(b => b.id === loadedBillId)?.tableLabel}</div>
+                  : <div className="text-xs text-gray-400 mt-0.5">Walk-in / Direct sale</div>
+                }
               </div>
-            ))}
+            </div>
+            <div className="flex items-center gap-2">
+              {allCartItems.length > 0 && (
+                <span className="text-xs font-bold bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-full">
+                  {allCartItems.reduce((s, i) => s + i.qty, 0)} items
+                </span>
+              )}
+              {cart.length > 0 && (
+                <button onClick={() => setCart([])} className="text-xs text-rose-400 hover:text-rose-600 font-semibold transition-colors">Clear extras</button>
+              )}
+            </div>
           </div>
 
-          {/* Totals */}
-          {cart.length > 0 && (
-            <>
-              <Divider />
-              <div className="space-y-1 text-sm">
-                <div className="flex justify-between text-gray-400"><span>Subtotal</span><span>€{subtotal.toFixed(2)}</span></div>
-                {totalSavings > 0 && <div className="flex justify-between text-rose-500 font-semibold"><span>Discounts</span><span>-€{totalSavings.toFixed(2)}</span></div>}
-                <div className="flex justify-between text-gray-400"><span>VAT {company.vat_rate}%</span><span>€{vat.toFixed(2)}</span></div>
-                <div className="flex justify-between font-extrabold text-lg text-gray-900 dark:text-white pt-1 border-t-2 border-indigo-100 dark:border-indigo-900/40">
-                  <span>Total</span>
-                  <span className="text-indigo-600 dark:text-indigo-400">€{total.toFixed(2)}</span>
+          {/* Items list */}
+          <div className="flex-1 overflow-y-auto min-h-0 px-3 py-2 space-y-1">
+            {allCartItems.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full gap-3 py-10">
+                <div className="w-14 h-14 rounded-2xl bg-gray-100 dark:bg-gray-700/50 flex items-center justify-center">
+                  <span className="text-2xl">🛒</span>
+                </div>
+                <div className="text-center">
+                  <div className="text-sm font-semibold text-gray-400 dark:text-gray-500">Bill is empty</div>
+                  <div className="text-xs text-gray-300 dark:text-gray-600 mt-1">Load an open bill or add items from the menu</div>
                 </div>
               </div>
-            </>
+            ) : (
+              <>
+                {/* --- From Order section (read-only) --- */}
+                {billItems.length > 0 && (
+                  <>
+                    <div className="flex items-center gap-2 pt-1 pb-1.5">
+                      <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">From Order</div>
+                      <div className="flex-1 h-px bg-gray-100 dark:bg-gray-700"></div>
+                      <span className="text-xs text-gray-400">{billItems.reduce((s,i)=>s+i.qty,0)} items</span>
+                    </div>
+                    {billItems.map((item, i) => (
+                      <div key={`bill-${i}`} className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-gray-50 dark:bg-gray-700/30 group">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-semibold text-gray-700 dark:text-gray-300 truncate">{item.name_en}</div>
+                          <div className="text-xs text-gray-400 mt-0.5">€{item.price.toFixed(2)} each</div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-gray-500 dark:text-gray-400 bg-gray-200 dark:bg-gray-600 rounded-lg px-1.5 py-0.5">×{item.qty}</span>
+                          <span className="text-xs font-bold text-gray-800 dark:text-gray-200 w-14 text-right">
+                            €{(item.price * (1 - Number(item.discount_pct || 0) / 100) * item.qty).toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+
+                {/* --- Cashier Additions section (editable) --- */}
+                {cart.length > 0 && (
+                  <>
+                    <div className="flex items-center gap-2 pt-2 pb-1.5">
+                      <div className="text-xs font-bold text-indigo-500 uppercase tracking-wider">+ Added by Cashier</div>
+                      <div className="flex-1 h-px bg-indigo-100 dark:bg-indigo-900/30"></div>
+                    </div>
+                    {cart.map(item => (
+                      <div key={item.id} className="px-3 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-900/30">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-semibold text-gray-800 dark:text-gray-200 truncate">{item.name_en}</div>
+                            <div className="text-xs text-indigo-600 dark:text-indigo-400 font-bold mt-0.5">€{item.price.toFixed(2)} each</div>
+                          </div>
+                          <div className="flex items-center bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden">
+                            <button onClick={() => changeQty(item.id, -1)} className="w-7 h-7 flex items-center justify-center text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 font-bold text-sm transition-colors">−</button>
+                            <span className="text-xs font-extrabold px-2 text-gray-800 dark:text-gray-200">{item.qty}</span>
+                            <button onClick={() => changeQty(item.id, 1)} className="w-7 h-7 flex items-center justify-center text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 font-bold text-sm transition-colors">+</button>
+                          </div>
+                          <span className="text-xs font-extrabold text-gray-800 dark:text-gray-200 w-14 text-right">
+                            €{(item.price * (1 - Number(item.discount_pct || 0) / 100) * item.qty).toFixed(2)}
+                          </span>
+                          <button onClick={() => removeFromCart(item.id)} className="w-6 h-6 flex items-center justify-center rounded-lg text-gray-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors text-xs">✕</button>
+                        </div>
+                        <input
+                          value={item.extraNote || ''}
+                          onChange={e => setExtraNote(item.id, e.target.value)}
+                          placeholder="Add a note…"
+                          className="mt-1.5 w-full text-xs px-2.5 py-1.5 rounded-lg border border-indigo-100 dark:border-indigo-900/40 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 placeholder-gray-300 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                        />
+                      </div>
+                    ))}
+                  </>
+                )}
+
+                {/* Prompt to add extras */}
+                {billItems.length > 0 && cart.length === 0 && (
+                  <div className="flex items-center justify-center gap-2 py-3 border border-dashed border-gray-200 dark:border-gray-600 rounded-xl">
+                    <span className="text-xs text-gray-400">Browse the menu to add extra items ←</span>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Totals footer */}
+          {allCartItems.length > 0 && (
+            <div className="border-t border-gray-100 dark:border-gray-700/60 px-4 py-3 flex-shrink-0 space-y-1.5 bg-gray-50 dark:bg-gray-800/60">
+              <div className="flex justify-between text-xs text-gray-400">
+                <span>Subtotal</span><span>€{subtotal.toFixed(2)}</span>
+              </div>
+              {totalSavings > 0 && (
+                <div className="flex justify-between text-xs text-rose-500 font-semibold">
+                  <span>Discounts</span><span>−€{totalSavings.toFixed(2)}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-xs text-gray-400">
+                <span>VAT {company.vat_rate}%</span><span>€{vat.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between items-center pt-1.5 border-t border-gray-200 dark:border-gray-700">
+                <span className="text-sm font-bold text-gray-700 dark:text-gray-200">Total</span>
+                <span className="text-xl font-extrabold text-indigo-600 dark:text-indigo-400">€{total.toFixed(2)}</span>
+              </div>
+            </div>
           )}
         </Card>
 
         {/* Payment */}
-        <Card className="!p-4">
-          <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Payment Method</div>
-          <div className="grid grid-cols-3 gap-2 mb-3">
-            {[['💵', 'Cash', 'cash'], ['💳', 'Card', 'card'], ['📱', 'Mobile', 'mobile']].map(([icon, label, val]) => (
+        <Card className="!p-0 overflow-hidden">
+          {/* Customer strip */}
+          <div className="px-4 pt-4 pb-3 border-b border-gray-100 dark:border-gray-700/60">
+            {!linkedCustomer ? (
               <button
-                key={val}
-                onClick={() => setPayMethod(val)}
-                className={`py-3 rounded-xl border-2 text-center transition-all ${
-                  payMethod === val
-                    ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30'
-                    : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
-                }`}
+                onClick={() => { setCustModalTab('search'); setCustSearch(''); setShowCustModal(true); }}
+                className="w-full flex items-center justify-center gap-2 text-xs text-indigo-500 border border-dashed border-indigo-300 dark:border-indigo-700 rounded-xl py-2.5 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 font-semibold transition-colors"
               >
-                <div className="text-2xl">{icon}</div>
-                <div className="text-xs font-bold text-gray-700 dark:text-gray-300 mt-1">{label}</div>
+                <span>👤</span> Link Customer (optional)
               </button>
-            ))}
+            ) : (
+              <div className="flex items-center gap-3 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-xl px-3 py-2.5">
+                <div className="w-7 h-7 rounded-full bg-indigo-200 dark:bg-indigo-800 flex items-center justify-center flex-shrink-0">
+                  <span className="text-sm">👤</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-bold text-gray-800 dark:text-gray-200">{linkedCustomer.name}</div>
+                  <div className="text-xs text-indigo-500 dark:text-indigo-400 mt-0.5">{linkedCustomer.phone || 'No phone'} · {linkedCustomer.loyalty_points || 0} pts</div>
+                </div>
+                <button onClick={() => setLinkedCustomer(null)} className="w-6 h-6 flex items-center justify-center rounded-lg text-gray-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors text-xs">✕</button>
+              </div>
+            )}
           </div>
 
-          {/* Cash denomination quick-buttons */}
+          {/* Payment method */}
+          <div className="px-4 pt-3 pb-3">
+            <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Payment Method</div>
+            <div className="grid grid-cols-3 gap-2">
+              {[['💵', 'Cash', 'cash'], ['💳', 'Card', 'card'], ['📱', 'Mobile', 'mobile']].map(([icon, label, val]) => (
+                <button
+                  key={val}
+                  onClick={() => setPayMethod(val)}
+                  className={`py-3 rounded-xl border-2 text-center transition-all ${
+                    payMethod === val
+                      ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 shadow-sm'
+                      : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-900/10'
+                  }`}
+                >
+                  <div className="text-xl">{icon}</div>
+                  <div className={`text-xs font-bold mt-1 ${ payMethod === val ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400'}`}>{label}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Cash denominations */}
           {payMethod === 'cash' && (
-            <div className="mb-3">
-              <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Cash tendered</div>
-              <div className="grid grid-cols-4 gap-1.5 mb-2">
+            <div className="px-4 pb-3 border-t border-gray-100 dark:border-gray-700/60 pt-3">
+              <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Cash tendered</div>
+              <div className="grid grid-cols-3 gap-1.5 mb-3">
                 {[5, 10, 20, 50, 100, 200].map(a => (
                   <button
                     key={a}
                     onClick={() => setCashGiven(a)}
-                    className={`py-1.5 rounded-lg text-sm font-bold border transition-all ${cashGiven === a ? 'bg-indigo-600 text-white border-indigo-600' : 'border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                    className={`py-2 rounded-xl text-sm font-bold border-2 transition-all ${
+                      cashGiven === a
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                        : 'border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:border-indigo-300'
+                    }`}
                   >
                     €{a}
                   </button>
                 ))}
               </div>
-              <div className="flex justify-between items-center bg-emerald-50 dark:bg-emerald-900/20 rounded-xl px-3 py-2">
-                <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">Change</span>
-                <span className="text-base font-extrabold text-emerald-600 dark:text-emerald-400">
+              <div className="flex items-center justify-between bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl px-4 py-2.5">
+                <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">Change due</span>
+                <span className="text-lg font-extrabold text-emerald-600 dark:text-emerald-400">
                   €{Math.max(0, cashGiven - total).toFixed(2)}
                 </span>
               </div>
             </div>
           )}
 
-          <Btn
-            variant="success"
-            fullWidth
-            size="lg"
-            disabled={!payMethod || cart.length === 0}
-            onClick={confirmPayment}
-            className="text-base"
-          >
-            ✅ Confirm & Print Receipt
-          </Btn>
+          {/* Confirm button */}
+          <div className="px-4 pb-4 pt-1">
+            <button
+              disabled={!payMethod || allCartItems.length === 0}
+              onClick={confirmPayment}
+              className="w-full py-3.5 rounded-xl text-sm font-extrabold transition-all
+                bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white shadow-md shadow-emerald-200 dark:shadow-none
+                disabled:bg-gray-200 dark:disabled:bg-gray-700 disabled:text-gray-400 dark:disabled:text-gray-500 disabled:shadow-none disabled:cursor-not-allowed"
+            >
+              {!payMethod ? 'Select a payment method' : allCartItems.length === 0 ? 'Add items to the bill' : '✅ Confirm & Print Receipt'}
+            </button>
+          </div>
         </Card>
       </div>
     </div>

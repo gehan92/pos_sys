@@ -193,8 +193,8 @@ export function statusColor(status) {
     pending: 'yellow', active: 'green', cooking: 'blue', ready: 'green',
     paid: 'green', free: 'green', occupied: 'red', billed: 'purple',
     approved: 'blue', delivered: 'green', rejected: 'red', suspended: 'red',
-    'on-duty': 'green', break: 'yellow', served: 'gray',
-    bill_requested: 'orange',
+    'on-duty': 'green', break: 'yellow', served: 'orange',
+    completed: 'indigo', bill_requested: 'orange',
   }
   return map[status] || 'gray'
 }

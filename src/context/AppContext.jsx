@@ -66,7 +66,7 @@ export function AppProvider({ children }) {
   const [inventoryItems, setInventoryItems] = useState(INVENTORY_ITEMS)
   const [customers, setCustomers] = useState(INITIAL_CUSTOMERS)
   const [company, setCompany] = useState({ name: 'Bella Vista Malta', address: '123 Republic Street, Valletta', currency: 'EUR', vat_rate: 18, receipt_footer: 'Thank you — Grazzi — Grazie' })
-  const [billQueue, setBillQueue] = useState([]) // { orderId, tableLabel, waiter, items, total }
+  const [openBills, setOpenBills] = useState([]) // { id, tableId, tableLabel, waiter, orderIds, items, extraItems, status:'open', completedAt }
   const [clockRecords, setClockRecords] = useState([
     // seed: Tony Cook clocked in today as example
     { id:'cr1', userId:'8', userName:'Tony Cook', role:'cook', clockIn: new Date(new Date().setHours(8,30,0,0)), clockOut: null },
@@ -158,23 +158,59 @@ export function AppProvider({ children }) {
     setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
   }
 
-  function requestBill(order) {
-    setBillQueue(p => {
-      if (p.find(b => b.orderId === order.id)) return p
-      const total = order.items.reduce((s, i) => s + i.price * i.qty, 0)
-      return [...p, {
-        orderId: order.id,
-        tableLabel: order.order_type === 'takeaway' ? 'Takeaway' : `Table ${order.table_number}`,
-        waiter: order.waiter,
-        items: order.items,
-        total,
-      }]
-    })
-    setLiveOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: 'bill_requested' } : o))
+  // Mark a ready order as served (waiter confirms delivery)
+  function markOrderServed(orderId) {
+    setLiveOrders(prev => prev.map(o =>
+      o.id === orderId ? { ...o, status: 'served' } : o
+    ))
   }
 
-  function clearBillRequest(orderId) {
-    setBillQueue(p => p.filter(b => b.orderId !== orderId))
+  // Waiter clicks "Complete Process" — merge all served orders for the table into one open bill
+  function completeProcess(tableId) {
+    setLiveOrders(prev => {
+      const servedOrders = prev.filter(o => o.table_id === tableId && o.status === 'served')
+      if (servedOrders.length === 0) return prev
+
+      const tableLabel = servedOrders[0].order_type === 'takeaway'
+        ? 'Takeaway'
+        : `Table ${servedOrders[0].table_number}`
+      const allItems = servedOrders.flatMap(o => o.items)
+      const orderIds = servedOrders.map(o => o.id)
+
+      setOpenBills(bills => {
+        const existing = bills.find(b => b.tableId === tableId && b.status === 'open')
+        if (existing) {
+          return bills.map(b =>
+            b.tableId === tableId && b.status === 'open'
+              ? { ...b, orderIds: [...b.orderIds, ...orderIds], items: [...b.items, ...allItems] }
+              : b
+          )
+        }
+        return [...bills, {
+          id: `bill_${Date.now()}`,
+          tableId,
+          tableLabel,
+          waiter: servedOrders[0].waiter,
+          orderIds,
+          items: allItems,
+          extraItems: [],
+          status: 'open',
+          completedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        }]
+      })
+
+      return prev.map(o => orderIds.includes(o.id) ? { ...o, status: 'completed' } : o)
+    })
+  }
+
+  // Cashier finalizes the bill — marks all linked orders as paid and removes the open bill
+  function finalizeBill(billId) {
+    const bill = openBills.find(b => b.id === billId)
+    if (!bill) return
+    setLiveOrders(prev => prev.map(o =>
+      bill.orderIds.includes(o.id) ? { ...o, status: 'paid' } : o
+    ))
+    setOpenBills(prev => prev.filter(b => b.id !== billId))
   }
 
   // ── Clock In / Out ─────────────────────────────────────────────────────────
@@ -211,7 +247,7 @@ export function AppProvider({ children }) {
     : false
 
   return (
-    <AppContext.Provider value={{ user, login, logout, lang, setLang, theme, setTheme, company, setCompany, users, createUser, approveUser, deactivateUser, notifications, markAllRead, unreadCount, liveOrders, setLiveOrders, nextOrderNum, setNextOrderNum, billQueue, requestBill, clearBillRequest, menuItems, setMenuItems, menuCategories, setMenuCategories, inventoryItems, setInventoryItems, customers, createCustomer, updateCustomer, deleteCustomer, recordCustomerSale, clockRecords, clockIn, clockOut, isClockedIn }}>
+    <AppContext.Provider value={{ user, login, logout, lang, setLang, theme, setTheme, company, setCompany, users, createUser, approveUser, deactivateUser, notifications, markAllRead, unreadCount, liveOrders, setLiveOrders, nextOrderNum, setNextOrderNum, openBills, markOrderServed, completeProcess, finalizeBill, menuItems, setMenuItems, menuCategories, setMenuCategories, inventoryItems, setInventoryItems, customers, createCustomer, updateCustomer, deleteCustomer, recordCustomerSale, clockRecords, clockIn, clockOut, isClockedIn }}>
       {children}
     </AppContext.Provider>
   )
