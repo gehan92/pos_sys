@@ -250,28 +250,234 @@ export function Users() {
   )
 }
 
+// ─── Waiters ──────────────────────────────────────────────────────────────────
+export function Waiters() {
+  const { user: currentUser, users, createUser, updateUser, deleteUser, approveUser, deactivateUser } = useApp()
+
+  const waiters = users.filter(u => u.role === 'waiter')
+
+  const [showForm, setShowForm] = useState(false)
+  const [form, setForm] = useState({ full_name: '', username: '', password: '', pin: '' })
+  const [usernameError, setUsernameError] = useState('')
+  const [editModal, setEditModal] = useState(null)   // { user } | null
+  const [editForm, setEditForm] = useState({})
+  const [confirmDelete, setConfirmDelete] = useState(null)
+
+  function handleCreate() {
+    if (!form.full_name.trim() || !form.username.trim() || !form.password.trim()) return
+    if (users.find(u => u.username === form.username.trim())) {
+      setUsernameError('Username already taken')
+      return
+    }
+    setUsernameError('')
+    createUser({ full_name: form.full_name.trim(), username: form.username.trim().toLowerCase(), password: form.password, pin: form.pin.trim(), role: 'waiter' }, currentUser)
+    setShowForm(false)
+    setForm({ full_name: '', username: '', password: '', pin: '' })
+  }
+
+  function openEdit(u) {
+    setEditForm({ full_name: u.full_name, pin: u.pin || '' })
+    setEditModal(u)
+  }
+
+  function handleSave() {
+    if (!editForm.full_name.trim()) return
+    updateUser(editModal.id, { full_name: editForm.full_name.trim(), pin: editForm.pin.trim() })
+    setEditModal(null)
+  }
+
+  function handleDelete(u) {
+    deleteUser(u.id)
+    setConfirmDelete(null)
+  }
+
+  const canManage = ['superadmin', 'admin', 'owner', 'manager'].includes(currentUser?.role)
+
+  return (
+    <div>
+      {/* Confirm delete dialog */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl max-w-sm w-full mx-4">
+            <h3 className="font-bold text-gray-900 dark:text-white mb-2">Remove waiter?</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              <strong>{confirmDelete.full_name}</strong> will be permanently deleted.
+            </p>
+            <div className="flex gap-2">
+              <Btn fullWidth onClick={() => setConfirmDelete(null)}>Cancel</Btn>
+              <Btn variant="danger" fullWidth onClick={() => handleDelete(confirmDelete)}>Delete</Btn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit modal */}
+      {editModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setEditModal(null)}>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+              <h2 className="font-bold text-gray-900 dark:text-white">Edit Waiter</h2>
+              <button onClick={() => setEditModal(null)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <Input label="Full Name" value={editForm.full_name} onChange={e => setEditForm(p => ({ ...p, full_name: e.target.value }))} placeholder="e.g. Maria Galea" />
+              <Input label="PIN (4 digits)" value={editForm.pin} onChange={e => setEditForm(p => ({ ...p, pin: e.target.value.replace(/\D/g, '').slice(0, 4) }))} placeholder="Optional 4-digit PIN" maxLength={4} />
+            </div>
+            <div className="flex gap-2 px-6 pb-6">
+              <Btn fullWidth onClick={() => setEditModal(null)}>Cancel</Btn>
+              <Btn variant="success" fullWidth onClick={handleSave} disabled={!editForm.full_name.trim()}>Save</Btn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <Card>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="font-medium text-gray-900 dark:text-white">Waiters</h2>
+            <p className="text-xs text-gray-400 mt-0.5">{waiters.length} waiter{waiters.length !== 1 ? 's' : ''} registered</p>
+          </div>
+          {canManage && (
+            <Btn variant="primary" size="sm" onClick={() => { setShowForm(!showForm); setUsernameError('') }}>
+              {showForm ? 'Cancel' : '+ Add Waiter'}
+            </Btn>
+          )}
+        </div>
+
+        {/* Add form */}
+        {showForm && (
+          <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 mb-4 border border-gray-200 dark:border-gray-600">
+            <h3 className="text-sm font-bold text-gray-800 dark:text-white mb-3">New waiter account</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+              <Input label="Full Name" value={form.full_name} onChange={e => setForm(p => ({ ...p, full_name: e.target.value }))} placeholder="e.g. Maria Galea" />
+              <div>
+                <Input label="Username" value={form.username} onChange={e => { setForm(p => ({ ...p, username: e.target.value })); setUsernameError('') }} placeholder="mgalea" />
+                {usernameError && <p className="text-xs text-rose-500 mt-1">{usernameError}</p>}
+              </div>
+              <Input label="Temporary Password" type="password" value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} placeholder="Temp@1234" />
+              <Input label="PIN (4 digits, optional)" value={form.pin} onChange={e => setForm(p => ({ ...p, pin: e.target.value.replace(/\D/g, '').slice(0, 4) }))} placeholder="e.g. 1234" maxLength={4} />
+            </div>
+            <div className="flex gap-2">
+              <Btn variant="success" onClick={handleCreate} disabled={!form.full_name.trim() || !form.username.trim() || !form.password.trim()}>
+                Create Waiter
+              </Btn>
+              <Btn onClick={() => { setShowForm(false); setUsernameError('') }}>Cancel</Btn>
+            </div>
+          </div>
+        )}
+
+        {/* Waiters table */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 dark:border-gray-700/60">
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Waiter</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden sm:table-cell">PIN</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {waiters.length === 0 && (
+                <tr><td colSpan={4} className="text-center py-8 text-gray-400 text-sm">No waiters yet — add one above</td></tr>
+              )}
+              {waiters.map(u => (
+                <tr key={u.id} className="border-b border-gray-100 dark:border-gray-700/40 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2.5">
+                      <Avatar name={u.full_name} />
+                      <div>
+                        <div className="font-semibold text-gray-800 dark:text-gray-200 text-sm">{u.full_name}</div>
+                        <div className="text-xs text-gray-400 font-mono">@{u.username}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 hidden sm:table-cell">
+                    {u.pin ? (
+                      <span className="font-mono text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-2 py-1 rounded-lg">
+                        {'•'.repeat(u.pin.length)}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-gray-400">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <Badge color={u.status === 'active' ? 'green' : u.status === 'pending' ? 'yellow' : 'red'}>
+                      {u.status === 'active' ? '✓ Active' : u.status === 'pending' ? '⏳ Pending' : '✗ Inactive'}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex gap-1.5">
+                      {canManage && (
+                        <Btn size="sm" onClick={() => openEdit(u)}>Edit</Btn>
+                      )}
+                      {u.status === 'active' && canManage && u.id !== currentUser?.id && (
+                        <Btn size="sm" variant="warning" onClick={() => deactivateUser(u.id)}>Deactivate</Btn>
+                      )}
+                      {u.status === 'inactive' && canManage && (
+                        <Btn size="sm" variant="primary" onClick={() => approveUser(u.id)}>Reactivate</Btn>
+                      )}
+                      {canManage && u.id !== currentUser?.id && (
+                        <Btn size="sm" variant="danger" onClick={() => setConfirmDelete(u)}>Delete</Btn>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
+  )
+}
+
 // ─── Tables ───────────────────────────────────────────────────────────────────
 export function Tables({ navTo, setOrderContext }) {
-  const { liveOrders } = useApp()
+  const { liveOrders, setLiveOrders, users } = useApp()
   const [tables, setTables] = useState(TABLES)
+  const [assignModal, setAssignModal] = useState(null)  // table object
+  const [guestModal, setGuestModal] = useState(null)    // { table, mode: 'open'|'edit' }
+  const [guestAdults, setGuestAdults] = useState(1)
+  const [guestChildren, setGuestChildren] = useState(0)
+  const [now, setNow] = useState(Date.now())
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30000)
+    return () => clearInterval(timer)
+  }, [])
+  function elapsed(ts) {
+    if (!ts) return null
+    const mins = Math.floor((now - ts) / 60000)
+    if (mins < 60) return `${mins}m`
+    return `${Math.floor(mins / 60)}h ${mins % 60}m`
+  }
+
+  const activeWaiters = users.filter(u => u.role === 'waiter' && u.status === 'active')
+
+  // Get the active order for a table (non-paid)
+  function tableOrder(tableId) {
+    return liveOrders.find(o => o.table_id === tableId && !['paid'].includes(o.status))
+  }
+
+  function openEditGuests(table) {
+    const order = tableOrder(table.id)
+    setGuestAdults(order?.guests?.adults ?? 1)
+    setGuestChildren(order?.guests?.children ?? 0)
+    setGuestModal({ table, mode: 'edit' })
+  }
 
   function selectTable(table) {
     if (table.status === 'free') {
-      setOrderContext({ tableId: table.id, tableNumber: table.number, isTakeaway: false, existingOrder: null })
-      navTo('orders')
+      setGuestAdults(1)
+      setGuestChildren(0)
+      setGuestModal({ table, mode: 'open' })
     } else {
-      // Occupied — open existing order to add items
       const existingOrder = liveOrders.find(o => o.table_id === table.id)
       if (existingOrder) {
         setOrderContext({ tableId: table.id, tableNumber: table.number, isTakeaway: false, existingOrder })
         navTo('orders')
       }
     }
-  }
-
-  function takeaway() {
-    setOrderContext({ tableId: null, tableNumber: null, isTakeaway: true, existingOrder: null })
-    navTo('orders')
   }
 
   function addToOrder(order) {
@@ -286,36 +492,310 @@ export function Tables({ navTo, setOrderContext }) {
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <Card>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-medium text-gray-900 dark:text-white">Table layout</h2>
-          <div className="flex gap-2">
-            <Badge color="green">Free: {tables.filter(t=>t.status==='free').length}</Badge>
-            <Badge color="red">Occ: {tables.filter(t=>t.status==='occupied').length}</Badge>
+      {/* Assign waiter modal */}
+      {assignModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setAssignModal(null)}>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-xs mx-4 p-5" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-gray-900 dark:text-white">Assign Waiter — Table {assignModal.number}</h3>
+              <button onClick={() => setAssignModal(null)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+            </div>
+            {activeWaiters.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-4">No active waiters. Add waiters in the Waiters page.</p>
+            ) : (
+              <div className="space-y-2">
+                {activeWaiters.map(w => {
+                  const order = tableOrder(assignModal.id)
+                  const isAssigned = order?.waiter === w.full_name
+                  return (
+                    <button
+                      key={w.id}
+                      onClick={() => {
+                        if (order) {
+                          // Update waiter on the live order
+                          setAssignModal(null)
+                        }
+                        setTables(p => p.map(t => t.id === assignModal.id ? { ...t, assignedWaiter: w.full_name } : t))
+                        setAssignModal(null)
+                      }}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border-2 text-left transition-all ${
+                        isAssigned
+                          ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
+                          : 'border-gray-200 dark:border-gray-700 hover:border-indigo-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                      }`}
+                    >
+                      <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center text-sm font-bold text-indigo-600 dark:text-indigo-400 flex-shrink-0">
+                        {w.full_name.charAt(0)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-semibold text-gray-800 dark:text-gray-200">{w.full_name}</div>
+                        <div className="text-xs text-gray-400 font-mono">@{w.username}</div>
+                      </div>
+                      {isAssigned && <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">✓</span>}
+                    </button>
+                  )
+                })}
+                <button
+                  onClick={() => {
+                    setTables(p => p.map(t => t.id === assignModal.id ? { ...t, assignedWaiter: null } : t))
+                    setAssignModal(null)
+                  }}
+                  className="w-full py-2 text-xs text-gray-400 hover:text-rose-500 transition-colors text-center"
+                >
+                  Clear assignment
+                </button>
+              </div>
+            )}
           </div>
         </div>
-        <div className="grid grid-cols-4 gap-2 mb-4">
-          {tables.map(table => (
-            <button key={table.id} onClick={() => selectTable(table)}
-              className={`aspect-square flex flex-col items-center justify-center rounded-xl border text-sm font-medium transition-all active:scale-95 ${
-                table.status === 'free'
-                  ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300 hover:border-emerald-500'
-                  : 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-300 dark:border-indigo-700 text-indigo-600 dark:text-indigo-300 hover:border-indigo-500 cursor-pointer'
-              }`}>
-              <span className="text-lg font-bold">{table.number}</span>
-              <span className="text-xs opacity-70">{table.status === 'free' ? 'Free' : '+ Add'}</span>
-            </button>
-          ))}
+      )}
+
+      {/* Guest count modal — open table or edit guests */}
+      {guestModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setGuestModal(null)}>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
+              <div>
+                <div className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-0.5">Table {guestModal.table.number}</div>
+                <div className="text-base font-extrabold text-gray-900 dark:text-white">{guestModal.mode === 'edit' ? 'Update Guests' : 'Guest Count'}</div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="text-right">
+                  <div className="text-2xl font-extrabold text-indigo-600 dark:text-indigo-400 tabular-nums leading-none">{guestAdults + guestChildren}</div>
+                  <div className="text-xs text-gray-400 mt-0.5">total</div>
+                </div>
+                <button onClick={() => setGuestModal(null)} className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors font-bold text-base">✕</button>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="px-5 py-5 space-y-5">
+
+              {/* Adults row */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <div className="text-sm font-bold text-gray-800 dark:text-gray-200">Adults</div>
+                    <div className="text-xs text-gray-400">Age 13+</div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => setGuestAdults(n => Math.max(0, n - 1))}
+                      className="w-9 h-9 rounded-xl border-2 border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 font-bold text-lg flex items-center justify-center hover:border-indigo-400 hover:text-indigo-600 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                      disabled={guestAdults === 0}
+                    >−</button>
+                    <span className="text-2xl font-extrabold text-gray-900 dark:text-white w-7 text-center tabular-nums">{guestAdults}</span>
+                    <button
+                      onClick={() => setGuestAdults(n => n + 1)}
+                      className="w-9 h-9 rounded-xl border-2 border-indigo-500 bg-indigo-600 text-white font-bold text-lg flex items-center justify-center hover:bg-indigo-700 transition-all"
+                    >+</button>
+                  </div>
+                </div>
+                <div className="flex gap-1.5">
+                  {[1,2,3,4,5,6,7,8].map(n => (
+                    <button key={n} onClick={() => setGuestAdults(n)}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all ${guestAdults === n ? 'bg-indigo-600 text-white border-indigo-600' : 'border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-indigo-300 bg-white dark:bg-gray-700'}`}>
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Divider */}
+              <div className="h-px bg-gray-100 dark:bg-gray-700" />
+
+              {/* Children row */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <div className="text-sm font-bold text-gray-800 dark:text-gray-200">Children</div>
+                    <div className="text-xs text-gray-400">Under 13</div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => setGuestChildren(n => Math.max(0, n - 1))}
+                      className="w-9 h-9 rounded-xl border-2 border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 font-bold text-lg flex items-center justify-center hover:border-indigo-400 hover:text-indigo-600 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                      disabled={guestChildren === 0}
+                    >−</button>
+                    <span className="text-2xl font-extrabold text-gray-900 dark:text-white w-7 text-center tabular-nums">{guestChildren}</span>
+                    <button
+                      onClick={() => setGuestChildren(n => n + 1)}
+                      className="w-9 h-9 rounded-xl border-2 border-indigo-500 bg-indigo-600 text-white font-bold text-lg flex items-center justify-center hover:bg-indigo-700 transition-all"
+                    >+</button>
+                  </div>
+                </div>
+                <div className="flex gap-1.5">
+                  {[0,1,2,3,4,5].map(n => (
+                    <button key={n} onClick={() => setGuestChildren(n)}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all ${guestChildren === n ? 'bg-indigo-600 text-white border-indigo-600' : 'border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-indigo-300 bg-white dark:bg-gray-700'}`}>
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-5 pb-5 flex gap-2.5">
+              <button
+                onClick={() => setGuestModal(null)}
+                className="flex-1 py-3 rounded-xl text-sm font-bold border-2 border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={guestAdults + guestChildren === 0}
+                onClick={() => {
+                  if (guestModal.mode === 'edit') {
+                    setLiveOrders(prev => prev.map(o =>
+                      o.table_id === guestModal.table.id && !['paid'].includes(o.status)
+                        ? { ...o, guests: { adults: guestAdults, children: guestChildren } }
+                        : o
+                    ))
+                    setGuestModal(null)
+                  } else {
+                    setOrderContext({ tableId: guestModal.table.id, tableNumber: guestModal.table.number, isTakeaway: false, existingOrder: null, guests: { adults: guestAdults, children: guestChildren } })
+                    setGuestModal(null)
+                    navTo('orders')
+                  }
+                }}
+                className="flex-1 py-3 rounded-xl text-sm font-extrabold bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white transition-all disabled:bg-gray-200 dark:disabled:bg-gray-700 disabled:text-gray-400 dark:disabled:text-gray-500 disabled:cursor-not-allowed"
+              >
+                {guestAdults + guestChildren === 0 ? 'Select guests' : guestModal.mode === 'edit' ? `Update — ${guestAdults + guestChildren} guest${(guestAdults + guestChildren) !== 1 ? 's' : ''}` : `Open Table — ${guestAdults + guestChildren} guest${(guestAdults + guestChildren) !== 1 ? 's' : ''}`}
+              </button>
+            </div>
+          </div>
         </div>
-        <Btn variant="warning" fullWidth size="lg" onClick={takeaway}>Takeaway Order</Btn>
+      )}
+
+      <Card>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="font-semibold text-gray-900 dark:text-white">Table Layout</h2>
+            <p className="text-xs text-gray-400 mt-0.5">Tap a table to open or add to an order</p>
+          </div>
+          <div className="flex gap-2">
+            <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">
+              {tables.filter(t=>t.status==='free').length} Free
+            </span>
+            <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400">
+              {tables.filter(t=>t.status==='occupied').length} Occupied
+            </span>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-4">
+          {tables.map(table => {
+            const order = tableOrder(table.id)
+            const waiterName = order?.waiter || table.assignedWaiter
+            const waiterInitial = waiterName ? waiterName.charAt(0).toUpperCase() : null
+            const totalGuests = (order?.guests?.adults || 0) + (order?.guests?.children || 0)
+            const elapsedTime = order?.created_timestamp ? elapsed(order.created_timestamp) : null
+            const isOccupied = table.status === 'occupied'
+            return (
+              <div key={table.id} className="relative">
+                <button
+                  onClick={() => selectTable(table)}
+                  className={`w-full h-28 rounded-2xl border-2 p-3 text-left flex flex-col justify-between transition-all active:scale-[0.97] ${
+                    isOccupied
+                      ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-300 dark:border-indigo-700 hover:border-indigo-500 hover:shadow-md'
+                      : 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 hover:border-emerald-400 hover:shadow-md'
+                  }`}
+                >
+                  {/* Table number + status dot */}
+                  <div className="flex items-center justify-between">
+                    <span className={`text-xl font-extrabold leading-none tabular-nums ${isOccupied ? 'text-indigo-700 dark:text-indigo-300' : 'text-emerald-700 dark:text-emerald-300'}`}>
+                      T{table.number}
+                    </span>
+                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isOccupied ? 'bg-indigo-500' : 'bg-emerald-500'}`} />
+                  </div>
+
+                  {/* Always-same-height info rows */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Time</span>
+                      <span className={`text-xs font-extrabold tabular-nums ${isOccupied ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-300 dark:text-gray-600'}`}>
+                        {elapsedTime || '—'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Guests</span>
+                      <span className={`text-xs font-extrabold tabular-nums ${isOccupied && totalGuests > 0 ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-300 dark:text-gray-600'}`}>
+                        {isOccupied && totalGuests > 0 ? totalGuests : '—'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Waiter row — always reserving space */}
+                  <div className="pt-0.5 border-t border-gray-100 dark:border-gray-700/60 flex items-center gap-1.5 min-h-[1.25rem]">
+                    {isOccupied && waiterName ? (
+                      <>
+                        <div className="w-4 h-4 rounded-full bg-indigo-200 dark:bg-indigo-800 flex items-center justify-center text-[9px] font-bold text-indigo-700 dark:text-indigo-300 flex-shrink-0">
+                          {waiterInitial}
+                        </div>
+                        <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 truncate">{waiterName.split(' ')[0]}</span>
+                      </>
+                    ) : (
+                      <span className={`text-[10px] font-semibold ${isOccupied ? 'text-gray-300 dark:text-gray-600' : 'text-emerald-500 dark:text-emerald-400'}`}>
+                        {isOccupied ? 'No waiter' : 'Available'}
+                      </span>
+                    )}
+                  </div>
+                </button>
+
+                {/* Waiter assign badge */}
+                <button
+                  onClick={e => { e.stopPropagation(); setAssignModal(table) }}
+                  title="Assign waiter"
+                  className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-all flex items-center justify-center text-[10px] font-bold shadow-sm"
+                >
+                  {waiterInitial || '+'}
+                </button>
+
+                {/* Edit guests badge — occupied only */}
+                {isOccupied && (
+                  <button
+                    onClick={e => { e.stopPropagation(); openEditGuests(table) }}
+                    title="Update guests"
+                    className="absolute -bottom-1.5 -right-1.5 w-5 h-5 rounded-full bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition-all flex items-center justify-center text-[9px] font-bold shadow-sm"
+                  >
+                    {totalGuests || '+'}
+                  </button>
+                )}
+              </div>
+            )
+          })}
+        </div>
+        <div className="flex items-center gap-4 text-xs text-gray-400 pt-1 border-t border-gray-100 dark:border-gray-700/60">
+          <span className="flex items-center gap-1.5">
+            <span className="w-4 h-4 rounded-full border border-gray-300 dark:border-gray-500 flex items-center justify-center bg-white dark:bg-gray-700 font-bold text-[10px]">+</span>
+            Top-right badge: assign waiter
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-4 h-4 rounded-full border border-gray-300 dark:border-gray-500 flex items-center justify-center bg-white dark:bg-gray-700 font-bold text-[10px]">G</span>
+            Bottom-right badge: update guests
+          </span>
+        </div>
       </Card>
       <Card>
         <h2 className="font-medium text-gray-900 dark:text-white mb-3">Active orders</h2>
-        <Table headers={['Table','Type','Status','Action']}>
+        <Table headers={['Table','Waiter','Status','Action']}>
           {liveOrders.filter(o => !['paid'].includes(o.status)).map(o => (
             <TR key={o.id}>
               <TD className="font-medium">{o.order_type === 'takeaway' ? 'Takeaway' : `T${o.table_number}`}</TD>
-              <TD><Badge color={o.order_type==='takeaway'?'orange':'blue'}>{o.order_type==='takeaway'?'Takeaway':'Dine-in'}</Badge></TD>
+              <TD>
+                {o.waiter ? (
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center text-xs font-bold text-indigo-600 dark:text-indigo-400 flex-shrink-0">
+                      {o.waiter.charAt(0)}
+                    </div>
+                    <span className="text-xs text-gray-600 dark:text-gray-300 truncate max-w-[5rem]">{o.waiter.split(' ')[0]}</span>
+                  </div>
+                ) : (
+                  <span className="text-xs text-gray-400">—</span>
+                )}
+              </TD>
               <TD><Badge color={statusColor(o.status)}>{o.status}</Badge></TD>
               <TD>
                 <div className="flex gap-1.5 flex-wrap">
@@ -418,7 +898,9 @@ export function Orders({ navTo, orderContext }) {
         status: 'cooking',
         waiter: user?.full_name || 'Staff',
         notes,
+        guests: orderContext?.guests || { adults: 0, children: 0 },
         created_at: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        created_timestamp: Date.now(),
         items: newItems.map(i => ({ name: i.name_en, qty: i.qty, price: i.price, mods: i.selectedMods || [], note: i.note || '' })),
         rounds: 1,
       }
@@ -431,11 +913,6 @@ export function Orders({ navTo, orderContext }) {
     setNotes('')
     navTo('tables')
   }
-
-  // Active orders sidebar data
-  const activeOrders = liveOrders.filter(o => !['paid'].includes(o.status))
-  const statusLabel = { pending: 'Pending', cooking: 'Cooking', ready: 'Ready', served: 'Served', completed: 'At Cashier' }
-  const statusBadge = { pending: 'yellow', cooking: 'blue', ready: 'green', served: 'orange', completed: 'indigo' }
 
   return (
     <>
@@ -506,53 +983,19 @@ export function Orders({ navTo, orderContext }) {
         </div>
       </div>
     )}
-    <div className="flex gap-3">
-
-      {/* ── Left sidebar: all active orders ── */}
-      <div className="w-52 flex-shrink-0 hidden md:flex flex-col gap-2">
-        <div className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider px-1 mb-1">Active Orders</div>
-        {activeOrders.length === 0 && (
-          <div className="text-xs text-gray-400 text-center py-4">No active orders</div>
-        )}
-        {activeOrders.map(o => {
-          const isCurrentOrder = orderContext?.existingOrder?.id === o.id
-          return (
-            <div key={o.id} className={`rounded-xl border p-2.5 space-y-1.5 transition-all ${isCurrentOrder ? 'border-indigo-400 bg-indigo-50 dark:bg-indigo-900/20' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'}`}>
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-gray-800 dark:text-gray-200">
-                  {o.order_type === 'takeaway' ? 'Takeaway' : `Table ${o.table_number}`}
-                </span>
-                <Badge color={statusBadge[o.status] || 'gray'}>{statusLabel[o.status] || o.status}</Badge>
-              </div>
-              <div className="text-xs text-gray-400">{o.items.length} item(s) • #{o.order_number}</div>
-              <div className="text-xs text-gray-500 dark:text-gray-400 truncate">Waiter: {o.waiter}</div>
-              <div className="flex flex-col gap-1 pt-1">
-                {o.status === 'ready' && (
-                  <Btn size="sm" variant="success" onClick={() => markOrderServed(o.id)}>✓ Mark Served</Btn>
-                )}
-                {o.status === 'served' && (
-                  <Btn size="sm" variant="warning" onClick={() => completeProcess(o.table_id)}>✅ Complete Process</Btn>
-                )}
-                {o.status === 'completed' && (
-                  <div className="text-xs text-center text-indigo-600 dark:text-indigo-400 font-semibold py-1 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">💰 At Cashier</div>
-                )}
-                {['pending','cooking'].includes(o.status) && (
-                  <Btn size="sm" onClick={() => navTo('orders', { tableId: o.table_id, tableNumber: o.table_number, isTakeaway: o.order_type === 'takeaway', existingOrder: o })}>+ Add Items</Btn>
-                )}
-              </div>
-            </div>
-          )
-        })}
-        <Btn size="sm" variant="ghost" fullWidth onClick={() => navTo('tables')}>← Tables</Btn>
-      </div>
-
-      {/* ── Right: order builder ── */}
-      <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {/* Menu side */}
       <div>
         <Card className="mb-4">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-gray-900 dark:text-white">{label}</h2>
+            <div>
+              <h2 className="font-semibold text-gray-900 dark:text-white">{label}</h2>
+              {orderContext?.guests && (orderContext.guests.adults + orderContext.guests.children) > 0 && (
+                <div className="text-xs text-gray-400 mt-0.5">
+                  {orderContext.guests.adults} adult{orderContext.guests.adults !== 1 ? 's' : ''}{orderContext.guests.children > 0 ? ` · ${orderContext.guests.children} child${orderContext.guests.children !== 1 ? 'ren' : ''}` : ''}
+                </div>
+              )}
+            </div>
             <div className="flex items-center gap-2">
               {isAddingToExisting && <Badge color="indigo">Round {round}</Badge>}
               <Badge color={orderContext?.isTakeaway ? 'orange' : 'blue'}>{orderContext?.isTakeaway ? 'Takeaway' : 'Dine-in'}</Badge>
@@ -694,7 +1137,6 @@ export function Orders({ navTo, orderContext }) {
         </Btn>
         <Btn fullWidth onClick={() => navTo('tables')}>Back to Tables</Btn>
       </div>
-      </div>
     </div>
     </>
   )
@@ -746,7 +1188,7 @@ export function Kitchen() {
               <div className="text-base font-bold text-gray-900 dark:text-white">
                 {o.order_type === 'takeaway' ? 'Takeaway' : `Table ${o.table_number}`}
               </div>
-              <div className="text-xs text-gray-400 mt-0.5">#{o.order_number} · {o.created_at} · {o.waiter}</div>
+              <div className="text-xs text-gray-400 mt-0.5">#{o.order_number} · {o.created_at} · {o.waiter}{o.guests && (o.guests.adults + o.guests.children) > 0 ? ` · ${o.guests.adults + o.guests.children} guests` : ''}</div>
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -954,8 +1396,8 @@ export function Billing() {
           </div>
           <div className="text-center text-xs text-gray-400 mb-5 italic">{company.receipt_footer}</div>
           <div className="grid grid-cols-2 gap-2">
-            <Btn variant="primary" onClick={() => alert('Sending to printer...')}>🖨 Print</Btn>
-            <Btn onClick={() => alert('Share via email/WhatsApp...')}>📤 Share</Btn>
+            <Btn variant="primary" onClick={() => alert('Sending to printer...')}>Print</Btn>
+            <Btn onClick={() => alert('Share via email/WhatsApp...')}>Share</Btn>
           </div>
           <Btn variant="success" fullWidth className="mt-2" onClick={() => {
             setReceipt(null); setCart([]); setBillItems([]); setPayMethod(null); setCashGiven(0); setLoadedBillId(null); setMobileBillTab('menu'); setBillNote('')
@@ -1287,18 +1729,18 @@ export function Billing() {
 
           {/* Confirm + Cancel buttons — only when bill has items */}
           {allCartItems.length > 0 && (
-          <div className="px-3 pb-3 pt-2 flex gap-2 flex-shrink-0">
+          <div className="px-3 pb-3 pt-2 grid grid-cols-2 gap-2 flex-shrink-0">
             <button
               onClick={() => setShowPayModal(true)}
-              className="flex-1 py-2 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white shadow-sm transition-all"
+              className="py-3 rounded-xl text-sm font-bold bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white shadow-sm transition-all"
             >
-              ✅ Confirm
+              Confirm
             </button>
             <button
               onClick={() => { clearLoadedBill(); setPayMethod(null); setCashGiven(0); }}
-              className="flex-1 py-2 rounded-lg text-xs font-bold border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
+              className="py-3 rounded-xl text-sm font-bold border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
             >
-              ✕ Cancel
+              Cancel
             </button>
           </div>
           )}
