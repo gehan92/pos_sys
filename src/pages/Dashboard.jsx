@@ -4,6 +4,7 @@ import { useApp, ROLES } from '../context/AppContext'
 import { t } from '../i18n/translations'
 import { Card, StatCard, Badge, Table, TR, TD, Btn, Avatar, Divider, SectionLabel, statusColor, Input, Select, Textarea } from '../components/UI'
 import { SAMPLE_USERS, SAMPLE_ORDERS, INVENTORY_ITEMS, TABLES, MENU_CATEGORIES, MENU_ITEMS, SAMPLE_INVOICES, SUPPLIER_INVOICES } from '../lib/mockData'
+import { AlertTriangle } from 'lucide-react'
 
 export function Dashboard({ navTo }) {
   const { user, lang, users, approveUser } = useApp()
@@ -1043,6 +1044,17 @@ export function Orders({ navTo, orderContext }) {
 
       {/* Order side */}
       <div className="space-y-3">
+
+        {/* Allergy / Notes warning for existing orders */}
+        {isAddingToExisting && existingOrder?.notes && (
+          <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50">
+            <AlertTriangle size={16} className="text-amber-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <div className="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider mb-0.5">⚠ Allergy / Note</div>
+              <div className="text-sm text-amber-800 dark:text-amber-300 font-medium">{existingOrder.notes}</div>
+            </div>
+          </div>
+        )}
 
         {/* Already ordered (existing rounds) */}
         {isAddingToExisting && existingItems.length > 0 && (

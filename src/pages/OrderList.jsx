@@ -3,7 +3,7 @@ import { useApp } from '../context/AppContext'
 import { Btn } from '../components/UI'
 import {
   ClipboardList, ChefHat, Wine, Search, ShoppingBag, Utensils,
-  AlertTriangle, MessageSquare, X, Check, Eye, Printer
+  AlertTriangle, MessageSquare, X, Check, Eye, Printer, Play
 } from 'lucide-react'
 
 const ACTIVE_STATUSES = ['pending', 'cooking', 'ready']
@@ -12,6 +12,12 @@ const STATUS_BADGE = {
   pending: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
   cooking: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
   ready:   'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+}
+
+const STATUS_LABEL = {
+  pending: 'Pending',
+  cooking: 'Started',
+  ready:   'Ready',
 }
 
 function OrderDetailModal({ order, onClose, navTo }) {
@@ -430,10 +436,21 @@ const SUB_TABS = [
 ]
 
 export default function OrderList({ navTo }) {
-  const { liveOrders, user } = useApp()
+  const { liveOrders, user, setLiveOrders } = useApp()
   const [search, setSearch] = useState('')
   const [viewOrder, setViewOrder] = useState(null)
   const [tab, setTab] = useState('all')
+
+  function startOrder(order) {
+    const kitchenItems = order.items.filter(i => (i.station || 'kitchen') !== 'bar')
+    const barItems = order.items.filter(i => i.station === 'bar')
+    const now = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+    if (kitchenItems.length > 0) printStationTicket(order, kitchenItems, 'Kitchen')
+    if (barItems.length > 0) setTimeout(() => printStationTicket(order, barItems, 'Bar'), 400)
+    setLiveOrders(prev => prev.map(o =>
+      o.id === order.id ? { ...o, status: 'cooking', started_at: now } : o
+    ))
+  }
 
   const isWaiter = user?.role === 'waiter'
   const baseOrders = (isWaiter
@@ -441,7 +458,6 @@ export default function OrderList({ navTo }) {
     : [...liveOrders]
   ).filter(o => ACTIVE_STATUSES.includes(o.status))
 
-  // For kitchen/bar tabs, also include orders with active station statuses
   const tabOrders = baseOrders.filter(o => {
     if (tab === 'kitchen') return o.items.some(i => (i.station || 'kitchen') !== 'bar')
     if (tab === 'bar')     return o.items.some(i => i.station === 'bar')
@@ -458,178 +474,319 @@ export default function OrderList({ navTo }) {
   }).sort((a, b) => b.order_number - a.order_number)
 
   return (
-    <div className="flex gap-4 h-full">
+    <div className="flex flex-col gap-4 h-full">
       {viewOrder && <OrderDetailModal order={viewOrder} onClose={() => setViewOrder(null)} navTo={navTo} />}
 
-      {/* Left Sub-Nav */}
-      <div className="flex flex-col gap-1 min-w-[140px] pt-1">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 px-2 mb-1">View</p>
+      {/* Sub-Nav: horizontal pills always */}
+      <div className="flex flex-row gap-1.5 overflow-x-auto pb-1 scrollbar-none">
         {SUB_TABS.map(t => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all text-left
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all whitespace-nowrap flex-shrink-0
               ${tab === t.key
                 ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 dark:shadow-indigo-900/40'
-                : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50'
+                : 'text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700/50 hover:bg-gray-200 dark:hover:bg-gray-700'
               }`}
           >
-            <t.Icon size={16} />
+            <t.Icon size={15} />
             <span>{t.label}</span>
           </button>
         ))}
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 space-y-4 min-w-0">
+      <div className="flex-1 space-y-3 min-w-0">
         {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-lg font-extrabold text-gray-900 dark:text-white flex items-center gap-2">
-              {(() => { const T = SUB_TABS.find(t => t.key === tab); return T ? <T.Icon size={18} /> : null })()}
+            <h1 className="text-base md:text-lg font-extrabold text-gray-900 dark:text-white flex items-center gap-2">
+              {(() => { const T = SUB_TABS.find(t => t.key === tab); return T ? <T.Icon size={17} /> : null })()}
               {SUB_TABS.find(t => t.key === tab)?.label}
             </h1>
             <p className="text-xs text-gray-400 mt-0.5">
               {isWaiter ? 'Your active orders' : 'Live orders — pending, cooking & ready'}
             </p>
           </div>
-          <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <div className="relative w-full sm:w-56">
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search order, table, waiter…"
-              className="pl-9 pr-4 py-2 text-xs rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 w-60"
+              className="w-full pl-9 pr-4 py-2 text-xs rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
         </div>
 
-        {/* Table */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700/60 overflow-x-auto">
-          {filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16">
-              <div className="mb-3 text-gray-300 dark:text-gray-600">{(() => { const T = SUB_TABS.find(t => t.key === tab); return T ? <T.Icon size={40} /> : null })()}</div>
-              <div className="text-sm font-semibold text-gray-400">No active orders</div>
-              <div className="text-xs text-gray-300 dark:text-gray-600 mt-1">
-                {search ? 'Try a different search term' : 'Waiting for new orders…'}
-              </div>
+        {/* Empty state */}
+        {filtered.length === 0 ? (
+          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700/60 flex flex-col items-center justify-center py-16">
+            <div className="mb-3 text-gray-300 dark:text-gray-600">{(() => { const T = SUB_TABS.find(t => t.key === tab); return T ? <T.Icon size={40} /> : null })()}</div>
+            <div className="text-sm font-semibold text-gray-400">No active orders</div>
+            <div className="text-xs text-gray-300 dark:text-gray-600 mt-1">
+              {search ? 'Try a different search term' : 'Waiting for new orders…'}
             </div>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 dark:border-gray-700/60 bg-gray-50 dark:bg-gray-800/80">
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">#</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Table</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Waiter</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Time</th>
-                  {tab === 'all' && (
-                    <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total</th>
-                  )}
-                  {tab === 'kitchen' && (
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Food Items</th>
-                  )}
-                  {tab === 'bar' && (
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Drink Items</th>
-                  )}
-                  <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-gray-700/40">
-                {filtered.map(order => {
-                  const total = order.items.reduce((s, i) => s + i.price * i.qty, 0)
-                  const kitchenItems = order.items.filter(i => (i.station || 'kitchen') !== 'bar')
-                  const barItems = order.items.filter(i => i.station === 'bar')
-                  return (
-                    <tr key={order.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
-                      <td className="px-4 py-3 font-extrabold text-indigo-600 dark:text-indigo-400 whitespace-nowrap">
-                        #{order.order_number}
-                      </td>
-                      <td className="px-4 py-3 font-semibold text-gray-800 dark:text-gray-100 whitespace-nowrap">
-                        <span className="flex items-center gap-1.5">
-                          {order.order_type === 'takeaway'
-                            ? <><ShoppingBag size={14} className="text-gray-400" />Takeaway</>
-                            : <><Utensils size={14} className="text-gray-400" />Table {order.table_number}</>}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                        {order.waiter || '—'}
-                      </td>
-                      <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">
-                        {order.created_at}
-                      </td>
-
-                      {/* All Orders: Total */}
+          </div>
+        ) : (
+          <>
+            {/* Mobile: card list */}
+            <div className="flex flex-col gap-3 md:hidden">
+              {filtered.map(order => {
+                const total = order.items.reduce((s, i) => s + i.price * i.qty, 0)
+                const kitchenItems = order.items.filter(i => (i.station || 'kitchen') !== 'bar')
+                const barItems = order.items.filter(i => i.station === 'bar')
+                const stationItems = tab === 'kitchen' ? kitchenItems : tab === 'bar' ? barItems : null
+                return (
+                  <div key={order.id} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700/60 p-4 space-y-3">
+                    {/* Card header */}
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-extrabold text-indigo-600 dark:text-indigo-400">#{order.order_number}</span>
+                      <span className="flex items-center gap-1.5 text-xs font-semibold text-gray-700 dark:text-gray-200">
+                        {order.order_type === 'takeaway'
+                          ? <><ShoppingBag size={13} className="text-gray-400" />Takeaway</>
+                          : <><Utensils size={13} className="text-gray-400" />Table {order.table_number}</>}
+                      </span>
+                    </div>
+                    {/* Meta row */}
+                    <div className="grid grid-cols-3 gap-2 text-xs">
+                      <div className="bg-gray-50 dark:bg-gray-700/40 rounded-lg px-2 py-1.5">
+                        <div className="text-gray-400 mb-0.5">Waiter</div>
+                        <div className="font-semibold text-gray-700 dark:text-gray-200 truncate">{order.waiter || '—'}</div>
+                      </div>
+                      <div className="bg-gray-50 dark:bg-gray-700/40 rounded-lg px-2 py-1.5">
+                        <div className="text-gray-400 mb-0.5">Time</div>
+                        <div className="font-semibold text-gray-700 dark:text-gray-200">{order.created_at}</div>
+                      </div>
                       {tab === 'all' && (
-                        <td className="px-4 py-3 text-right font-extrabold text-gray-800 dark:text-gray-100 whitespace-nowrap">
-                          €{total.toFixed(2)}
-                        </td>
-                      )}
-
-                      {/* Kitchen: food items list */}
-                      {tab === 'kitchen' && (
-                        <td className="px-4 py-3">
-                          <div className="flex flex-col gap-1">
-                            {kitchenItems.map((item, i) => (
-                              <div key={i} className="flex items-center gap-2">
-                                <span className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 text-[11px] font-extrabold flex-shrink-0">
-                                  {item.qty}
-                                </span>
-                                <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{item.name || item.name_en}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </td>
-                      )}
-
-                      {/* Bar: drink items list */}
-                      {tab === 'bar' && (
-                        <td className="px-4 py-3">
-                          <div className="flex flex-col gap-1">
-                            {barItems.map((item, i) => (
-                              <div key={i} className="flex items-center gap-2">
-                                <span className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 text-[11px] font-extrabold flex-shrink-0">
-                                  {item.qty}
-                                </span>
-                                <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{item.name || item.name_en}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </td>
-                      )}
-
-                      <td className="px-4 py-3 text-center whitespace-nowrap">
-                        <div className="flex items-center justify-center gap-2">
-                          <button
-                            onClick={() => setViewOrder(order)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 border border-indigo-200 dark:border-indigo-800/60 transition-all"
-                          >
-                            <Eye size={13} />View
-                          </button>
-                          {tab === 'kitchen' && (
-                            <button
-                              onClick={() => printStationTicket(order, order.items.filter(i => i.station === 'kitchen'), 'Kitchen')}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-orange-50 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-900/50 border border-orange-200 dark:border-orange-800/60 transition-all"
-                            >
-                              <Printer size={13} />Print
-                            </button>
-                          )}
-                          {tab === 'bar' && (
-                            <button
-                              onClick={() => printStationTicket(order, order.items.filter(i => i.station === 'bar'), 'Bar')}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/50 border border-purple-200 dark:border-purple-800/60 transition-all"
-                            >
-                              <Printer size={13} />Print
-                            </button>
-                          )}
+                        <div className="bg-gray-50 dark:bg-gray-700/40 rounded-lg px-2 py-1.5">
+                          <div className="text-gray-400 mb-0.5">Total</div>
+                          <div className="font-extrabold text-indigo-600 dark:text-indigo-400">€{total.toFixed(2)}</div>
                         </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
+                      )}
+                    </div>
+                    {/* Status + Started row for All / Kitchen / Bar tabs */}
+                    {(tab === 'all' || tab === 'kitchen' || tab === 'bar') && (
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div className="bg-gray-50 dark:bg-gray-700/40 rounded-lg px-2 py-1.5">
+                          <div className="text-gray-400 mb-0.5">Status</div>
+                          <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-bold capitalize ${STATUS_BADGE[order.status] || 'bg-gray-100 text-gray-500'}`}>
+                            {STATUS_LABEL[order.status] || order.status}
+                          </span>
+                        </div>
+                        <div className="bg-gray-50 dark:bg-gray-700/40 rounded-lg px-2 py-1.5">
+                          <div className="text-gray-400 mb-0.5">Started</div>
+                          <div className="font-semibold text-gray-700 dark:text-gray-200">{order.started_at || '—'}</div>
+                        </div>
+                      </div>
+                    )}
+                    {/* Items for kitchen/bar */}
+                    {stationItems && stationItems.length > 0 && (
+                      <div className="flex flex-col gap-1 pt-1 border-t border-gray-100 dark:border-gray-700">
+                        {stationItems.map((item, i) => (
+                          <div key={i} className="flex items-center gap-2">
+                            <span className={`inline-flex items-center justify-center w-5 h-5 rounded-md text-[11px] font-extrabold flex-shrink-0
+                              ${tab === 'kitchen' ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400' : 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400'}`}>
+                              {item.qty}
+                            </span>
+                            <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{item.name || item.name_en}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {/* Actions */}
+                    <div className="flex gap-2 pt-1 border-t border-gray-100 dark:border-gray-700">
+                      <button
+                        onClick={() => setViewOrder(order)}
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/60"
+                      >
+                        <Eye size={13} />View
+                      </button>
+                      {tab === 'all' && !order.started_at && (
+                        <button
+                          onClick={() => startOrder(order)}
+                          className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400 border border-green-200 dark:border-green-800/60"
+                        >
+                          <Play size={13} />Start
+                        </button>
+                      )}
+                      {tab === 'kitchen' && (
+                        <button
+                          onClick={() => printStationTicket(order, kitchenItems, 'Kitchen')}
+                          className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold bg-orange-50 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-800/60"
+                        >
+                          <Printer size={13} />Print
+                        </button>
+                      )}
+                      {tab === 'bar' && (
+                        <button
+                          onClick={() => printStationTicket(order, barItems, 'Bar')}
+                          className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-800/60"
+                        >
+                          <Printer size={13} />Print
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Desktop: table */}
+            <div className="hidden md:block bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700/60 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 dark:border-gray-700/60 bg-gray-50 dark:bg-gray-800/80">
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">#</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Table</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Waiter</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Time</th>
+                    {tab === 'all' && (
+                      <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total</th>
+                    )}
+                    {tab === 'all' && (
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                    )}
+                    {tab === 'all' && (
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Started</th>
+                    )}
+                    {tab === 'kitchen' && (
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Food Items</th>
+                    )}
+                    {tab === 'bar' && (
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Drink Items</th>
+                    )}
+                    {(tab === 'kitchen' || tab === 'bar') && (
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                    )}
+                    {(tab === 'kitchen' || tab === 'bar') && (
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Started</th>
+                    )}
+                    <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-700/40">
+                  {filtered.map(order => {
+                    const total = order.items.reduce((s, i) => s + i.price * i.qty, 0)
+                    const kitchenItems = order.items.filter(i => (i.station || 'kitchen') !== 'bar')
+                    const barItems = order.items.filter(i => i.station === 'bar')
+                    return (
+                      <tr key={order.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+                        <td className="px-4 py-3 font-extrabold text-indigo-600 dark:text-indigo-400 whitespace-nowrap">
+                          #{order.order_number}
+                        </td>
+                        <td className="px-4 py-3 font-semibold text-gray-800 dark:text-gray-100 whitespace-nowrap">
+                          <span className="flex items-center gap-1.5">
+                            {order.order_type === 'takeaway'
+                              ? <><ShoppingBag size={14} className="text-gray-400" />Takeaway</>
+                              : <><Utensils size={14} className="text-gray-400" />Table {order.table_number}</>}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                          {order.waiter || '—'}
+                        </td>
+                        <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">
+                          {order.created_at}
+                        </td>
+                        {tab === 'all' && (
+                          <td className="px-4 py-3 text-right font-extrabold text-gray-800 dark:text-gray-100 whitespace-nowrap">
+                            €{total.toFixed(2)}
+                          </td>
+                        )}
+                        {tab === 'all' && (
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-bold capitalize ${STATUS_BADGE[order.status] || 'bg-gray-100 text-gray-500'}`}>
+                              {STATUS_LABEL[order.status] || order.status}
+                            </span>
+                          </td>
+                        )}
+                        {tab === 'all' && (
+                          <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">
+                            {order.started_at || '—'}
+                          </td>
+                        )}
+                        {tab === 'kitchen' && (
+                          <td className="px-4 py-3">
+                            <div className="flex flex-col gap-1">
+                              {kitchenItems.map((item, i) => (
+                                <div key={i} className="flex items-center gap-2">
+                                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 text-[11px] font-extrabold flex-shrink-0">
+                                    {item.qty}
+                                  </span>
+                                  <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{item.name || item.name_en}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </td>
+                        )}
+                        {tab === 'bar' && (
+                          <td className="px-4 py-3">
+                            <div className="flex flex-col gap-1">
+                              {barItems.map((item, i) => (
+                                <div key={i} className="flex items-center gap-2">
+                                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 text-[11px] font-extrabold flex-shrink-0">
+                                    {item.qty}
+                                  </span>
+                                  <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{item.name || item.name_en}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </td>
+                        )}
+                        {(tab === 'kitchen' || tab === 'bar') && (
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-bold capitalize ${STATUS_BADGE[order.status] || 'bg-gray-100 text-gray-500'}`}>
+                              {STATUS_LABEL[order.status] || order.status}
+                            </span>
+                          </td>
+                        )}
+                        {(tab === 'kitchen' || tab === 'bar') && (
+                          <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">
+                            {order.started_at || '—'}
+                          </td>
+                        )}
+                        <td className="px-4 py-3 text-center whitespace-nowrap">
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => setViewOrder(order)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 border border-indigo-200 dark:border-indigo-800/60 transition-all"
+                            >
+                              <Eye size={13} />View
+                            </button>
+                            {tab === 'all' && !order.started_at && (
+                              <button
+                                onClick={() => startOrder(order)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/50 border border-green-200 dark:border-green-800/60 transition-all"
+                              >
+                                <Play size={13} />Start
+                              </button>
+                            )}
+                            {tab === 'kitchen' && (
+                              <button
+                                onClick={() => printStationTicket(order, kitchenItems, 'Kitchen')}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-orange-50 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-900/50 border border-orange-200 dark:border-orange-800/60 transition-all"
+                              >
+                                <Printer size={13} />Print
+                              </button>
+                            )}
+                            {tab === 'bar' && (
+                              <button
+                                onClick={() => printStationTicket(order, barItems, 'Bar')}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/50 border border-purple-200 dark:border-purple-800/60 transition-all"
+                              >
+                                <Printer size={13} />Print
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
