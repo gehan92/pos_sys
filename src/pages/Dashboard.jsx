@@ -492,61 +492,76 @@ export function Tables({ navTo, setOrderContext }) {
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
       {/* Assign waiter modal */}
       {assignModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setAssignModal(null)}>
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-xs mx-4 p-5" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-gray-900 dark:text-white">Assign Waiter — Table {assignModal.number}</h3>
-              <button onClick={() => setAssignModal(null)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
-            </div>
-            {activeWaiters.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-4">No active waiters. Add waiters in the Waiters page.</p>
-            ) : (
-              <div className="space-y-2">
-                {activeWaiters.map(w => {
-                  const order = tableOrder(assignModal.id)
-                  const isAssigned = order?.waiter === w.full_name
-                  return (
-                    <button
-                      key={w.id}
-                      onClick={() => {
-                        if (order) {
-                          // Update waiter on the live order
-                          setAssignModal(null)
-                        }
-                        setTables(p => p.map(t => t.id === assignModal.id ? { ...t, assignedWaiter: w.full_name } : t))
-                        setAssignModal(null)
-                      }}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border-2 text-left transition-all ${
-                        isAssigned
-                          ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
-                          : 'border-gray-200 dark:border-gray-700 hover:border-indigo-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                      }`}
-                    >
-                      <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center text-sm font-bold text-indigo-600 dark:text-indigo-400 flex-shrink-0">
-                        {w.full_name.charAt(0)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-semibold text-gray-800 dark:text-gray-200">{w.full_name}</div>
-                        <div className="text-xs text-gray-400 font-mono">@{w.username}</div>
-                      </div>
-                      {isAssigned && <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">✓</span>}
-                    </button>
-                  )
-                })}
-                <button
-                  onClick={() => {
-                    setTables(p => p.map(t => t.id === assignModal.id ? { ...t, assignedWaiter: null } : t))
-                    setAssignModal(null)
-                  }}
-                  className="w-full py-2 text-xs text-gray-400 hover:text-rose-500 transition-colors text-center"
-                >
-                  Clear assignment
-                </button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setAssignModal(null)}>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-xs mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
+              <div>
+                <div className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-0.5">Table {assignModal.number}</div>
+                <div className="text-base font-extrabold text-gray-900 dark:text-white">Assign Waiter</div>
               </div>
-            )}
+              <button onClick={() => setAssignModal(null)} className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors font-bold text-base">✕</button>
+            </div>
+
+            {/* Body */}
+            <div className="px-5 py-4">
+              {activeWaiters.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-4">No active waiters. Add waiters in the Waiters page.</p>
+              ) : (
+                <div className="space-y-2">
+                  {activeWaiters.map(w => {
+                    const order = tableOrder(assignModal.id)
+                    const isAssigned = order?.waiter === w.full_name
+                    return (
+                      <button
+                        key={w.id}
+                        onClick={() => {
+                          setTables(p => p.map(t => t.id === assignModal.id ? { ...t, assignedWaiter: w.full_name } : t))
+                          setAssignModal(null)
+                        }}
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border-2 text-left transition-all ${
+                          isAssigned
+                            ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
+                            : 'border-gray-200 dark:border-gray-700 hover:border-indigo-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center text-sm font-bold text-indigo-600 dark:text-indigo-400 flex-shrink-0">
+                          {w.full_name.charAt(0)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-semibold text-gray-800 dark:text-gray-200">{w.full_name}</div>
+                          <div className="text-xs text-gray-400 font-mono">@{w.username}</div>
+                        </div>
+                        {isAssigned && <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">✓</span>}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-5 pb-5 flex gap-2.5">
+              <button
+                onClick={() => {
+                  setTables(p => p.map(t => t.id === assignModal.id ? { ...t, assignedWaiter: null } : t))
+                  setAssignModal(null)
+                }}
+                className="flex-1 py-3 rounded-xl text-sm font-bold border-2 border-rose-200 dark:border-rose-800 text-rose-500 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-all"
+              >
+                Clear
+              </button>
+              <button
+                onClick={() => setAssignModal(null)}
+                className="flex-1 py-3 rounded-xl text-sm font-bold border-2 border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -671,7 +686,7 @@ export function Tables({ navTo, setOrderContext }) {
         </div>
       )}
 
-      <Card>
+      <Card className="lg:col-span-2">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="font-semibold text-gray-900 dark:text-white">Table Layout</h2>
@@ -781,10 +796,10 @@ export function Tables({ navTo, setOrderContext }) {
       </Card>
       <Card>
         <h2 className="font-medium text-gray-900 dark:text-white mb-3">Active orders</h2>
-        <Table headers={['Table','Waiter','Action']}>
+        <Table headers={['Table','Waiter']}>
           {liveOrders.filter(o => !['paid'].includes(o.status)).map(o => (
             <TR key={o.id}>
-              <TD className="font-medium">{o.order_type === 'takeaway' ? 'Takeaway' : `T${o.table_number}`}</TD>
+              <TD className="font-medium">{`T${o.table_number || 0}`}</TD>
               <TD>
                 {o.waiter ? (
                   <div className="flex items-center gap-1.5">
@@ -796,16 +811,6 @@ export function Tables({ navTo, setOrderContext }) {
                 ) : (
                   <span className="text-xs text-gray-400">—</span>
                 )}
-              </TD>
-              <TD>
-                <div className="flex gap-1.5 flex-wrap">
-                  {['pending','cooking'].includes(o.status) && (
-                    <Btn size="sm" onClick={() => addToOrder(o)}>+ Add</Btn>
-                  )}
-                  {o.status === 'completed' && (
-                    <Badge color="indigo">At Cashier</Badge>
-                  )}
-                </div>
               </TD>
             </TR>
           ))}
@@ -926,7 +931,7 @@ export function Orders({ navTo, orderContext }) {
 
     setNewItems([])
     setNotes('')
-    navTo('tables')
+    navTo('orders')
   }
 
   return (
@@ -1426,7 +1431,7 @@ export function Bar() {
 
 // ─── Billing ──────────────────────────────────────────────────────────────────
 export function Billing({ orderContext }) {
-  const { lang, company, liveOrders, openBills, finalizeBill, menuItems, menuCategories } = useApp()
+  const { lang, user, company, liveOrders, openBills, finalizeBill, addToHistory, menuItems, menuCategories } = useApp()
   const vatRate = company.vat_rate / 100
 
   // ── Cart state ──────────────────────────────────────────────────────────────
@@ -1579,14 +1584,31 @@ export function Billing({ orderContext }) {
   function confirmPayment() {
     if (!payMethod || allCartItems.length === 0) return
     const orderNum = Math.floor(Math.random() * 900) + 100
-    // Finalize the open bill (marks all linked orders as paid)
+    const bill = loadedBillId ? openBills.find(b => b.id === loadedBillId) : null
+    const paidAt = new Date()
     if (loadedBillId) finalizeBill(loadedBillId)
+
+    addToHistory({
+      id: `hist_${Date.now()}`,
+      order_number: orderNum,
+      table_label: bill?.tableLabel || 'Walk-in',
+      waiter: bill?.waiter || '—',
+      cashier: user?.full_name || '—',
+      items: allCartItems,
+      subtotal, vat, total,
+      total_savings: totalSavings,
+      pay_method: payMethod,
+      cash_given: cashGiven,
+      change: cashGiven > 0 ? Math.max(0, cashGiven - total) : 0,
+      note: billNote.trim(),
+      paid_at: paidAt,
+    })
 
     setReceipt({
       items: allCartItems,
       subtotal, vat, total, totalSavings, payMethod, cashGiven,
       change: cashGiven > 0 ? Math.max(0, cashGiven - total) : 0,
-      date: new Date(),
+      date: paidAt,
       order_number: orderNum,
       note: billNote.trim(),
     })
@@ -3305,6 +3327,170 @@ export function MenuManagement() {
             )}
           </tbody>
         </table>
+        </div>
+      </Card>
+    </div>
+  )
+}
+
+// ─── Order History ────────────────────────────────────────────────────────────
+export function History() {
+  const { orderHistory, company } = useApp()
+  const [search, setSearch] = useState('')
+  const [filterMethod, setFilterMethod] = useState('all')
+  const [expandedId, setExpandedId] = useState(null)
+
+  const vatRate = company?.vat_rate ?? 18
+
+  const filtered = orderHistory.filter(r => {
+    const q = search.trim().toLowerCase()
+    const matchSearch = !q ||
+      String(r.order_number).includes(q) ||
+      r.table_label.toLowerCase().includes(q) ||
+      r.waiter.toLowerCase().includes(q) ||
+      r.cashier.toLowerCase().includes(q)
+    const matchMethod = filterMethod === 'all' || r.pay_method === filterMethod
+    return matchSearch && matchMethod
+  })
+
+  const todayTotal = orderHistory.filter(r => {
+    const d = r.paid_at instanceof Date ? r.paid_at : new Date(r.paid_at)
+    return d.toDateString() === new Date().toDateString()
+  }).reduce((s, r) => s + r.total, 0)
+
+  const methodColor = { cash: 'green', card: 'indigo', mobile: 'cyan' }
+  const methodLabel = { cash: 'Cash', card: 'Card', mobile: 'Mobile' }
+
+  return (
+    <div className="space-y-4">
+      {/* Summary stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <Card>
+          <div className="text-xs text-gray-400 mb-1">Total Orders</div>
+          <div className="text-2xl font-extrabold text-gray-900 dark:text-white">{orderHistory.length}</div>
+        </Card>
+        <Card>
+          <div className="text-xs text-gray-400 mb-1">Today's Revenue</div>
+          <div className="text-2xl font-extrabold text-indigo-600 dark:text-indigo-400">€{todayTotal.toFixed(2)}</div>
+        </Card>
+        <Card>
+          <div className="text-xs text-gray-400 mb-1">Cash Payments</div>
+          <div className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">{orderHistory.filter(r => r.pay_method === 'cash').length}</div>
+        </Card>
+        <Card>
+          <div className="text-xs text-gray-400 mb-1">Card / Mobile</div>
+          <div className="text-2xl font-extrabold text-gray-700 dark:text-gray-200">{orderHistory.filter(r => r.pay_method !== 'cash').length}</div>
+        </Card>
+      </div>
+
+      <Card>
+        {/* Filters */}
+        <div className="flex flex-wrap gap-2 mb-4">
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search order #, table, waiter…"
+            className="flex-1 min-w-[180px] text-sm px-3.5 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          />
+          <select
+            value={filterMethod}
+            onChange={e => setFilterMethod(e.target.value)}
+            className="text-sm px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          >
+            <option value="all">All Methods</option>
+            <option value="cash">Cash</option>
+            <option value="card">Card</option>
+            <option value="mobile">Mobile</option>
+          </select>
+        </div>
+
+        {/* Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 dark:border-gray-700">
+                {['Date & Time','Order #','Table','Waiter','Cashier','Items','Method','Total'].map(h => (
+                  <th key={h} className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wide pb-2 pr-4 last:pr-0">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 && (
+                <tr><td colSpan={8} className="text-center py-10 text-gray-400 text-sm">No records found</td></tr>
+              )}
+              {filtered.map(r => {
+                const d = r.paid_at instanceof Date ? r.paid_at : new Date(r.paid_at)
+                const isExpanded = expandedId === r.id
+                return (
+                  <>
+                    <tr
+                      key={r.id}
+                      onClick={() => setExpandedId(isExpanded ? null : r.id)}
+                      className="border-b border-gray-50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors"
+                    >
+                      <td className="py-2.5 pr-4">
+                        <div className="text-xs font-medium text-gray-700 dark:text-gray-300">{d.toLocaleDateString()}</div>
+                        <div className="text-xs text-gray-400">{d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                      </td>
+                      <td className="py-2.5 pr-4 font-bold text-gray-800 dark:text-gray-200">#{r.order_number}</td>
+                      <td className="py-2.5 pr-4 text-gray-700 dark:text-gray-300">{r.table_label}</td>
+                      <td className="py-2.5 pr-4 text-gray-600 dark:text-gray-400">{r.waiter}</td>
+                      <td className="py-2.5 pr-4 text-gray-600 dark:text-gray-400">{r.cashier}</td>
+                      <td className="py-2.5 pr-4 text-gray-600 dark:text-gray-400">{r.items.length} item{r.items.length !== 1 ? 's' : ''}</td>
+                      <td className="py-2.5 pr-4">
+                        <Badge color={methodColor[r.pay_method] || 'gray'}>{methodLabel[r.pay_method] || r.pay_method}</Badge>
+                      </td>
+                      <td className="py-2.5 font-extrabold text-indigo-600 dark:text-indigo-400">€{r.total.toFixed(2)}</td>
+                    </tr>
+                    {isExpanded && (
+                      <tr key={`${r.id}-detail`} className="bg-gray-50 dark:bg-gray-800/60">
+                        <td colSpan={8} className="px-4 py-3">
+                          <div className="grid sm:grid-cols-2 gap-4">
+                            {/* Items */}
+                            <div>
+                              <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Items</div>
+                              <div className="space-y-1">
+                                {r.items.map((item, i) => {
+                                  const disc = Number(item.discount_pct || 0) / 100
+                                  const line = item.price * (1 - disc) * item.qty
+                                  return (
+                                    <div key={i} className="flex justify-between text-xs">
+                                      <span className="text-gray-700 dark:text-gray-300">
+                                        <span className="font-bold text-gray-500">{item.qty}×</span> {item.name_en || item.name}
+                                        {disc > 0 && <span className="ml-1 text-rose-500">−{item.discount_pct}%</span>}
+                                      </span>
+                                      <span className="font-semibold text-gray-700 dark:text-gray-300">€{line.toFixed(2)}</span>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                            {/* Totals + note */}
+                            <div>
+                              <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Summary</div>
+                              <div className="space-y-1 text-xs">
+                                <div className="flex justify-between text-gray-500"><span>Subtotal</span><span>€{r.subtotal.toFixed(2)}</span></div>
+                                {r.total_savings > 0 && <div className="flex justify-between text-rose-500"><span>Savings</span><span>−€{r.total_savings.toFixed(2)}</span></div>}
+                                <div className="flex justify-between text-gray-500"><span>VAT {vatRate}%</span><span>€{r.vat.toFixed(2)}</span></div>
+                                <div className="flex justify-between font-bold text-gray-800 dark:text-gray-200 pt-1 border-t border-gray-200 dark:border-gray-700"><span>Total</span><span>€{r.total.toFixed(2)}</span></div>
+                                {r.pay_method === 'cash' && r.cash_given > 0 && (
+                                  <>
+                                    <div className="flex justify-between text-gray-400"><span>Cash given</span><span>€{r.cash_given.toFixed(2)}</span></div>
+                                    <div className="flex justify-between text-gray-400"><span>Change</span><span>€{r.change.toFixed(2)}</span></div>
+                                  </>
+                                )}
+                                {r.note && <div className="mt-2 text-gray-400 italic">Note: {r.note}</div>}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </>
+                )
+              })}
+            </tbody>
+          </table>
         </div>
       </Card>
     </div>

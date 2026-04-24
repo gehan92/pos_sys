@@ -17,13 +17,13 @@ export const ROLES = {
 }
 
 export const ROLE_NAV = {
-  superadmin: ['dashboard','company','users','customers','inventory','menu','reports','settings','audit','notifications'],
-  admin:      ['dashboard','users','waiters','customers','tables','billing','orderlist','inventory','menu','reports','kitchen','bar','settings','notifications'],
-  owner:      ['dashboard','reports','users','waiters','customers','billing','orderlist','inventory','menu','kitchen','bar','settings','notifications'],
-  manager:    ['dashboard','users','waiters','customers','orderlist','shifts','inventory','menu','kitchen','bar','notifications'],
-  cashier:    ['billing','receipts','shifts','notifications'],
-  supervisor: ['dashboard','supervisor','reports','shifts','notifications'],
-  waiter:     ['tables','billing','orders','orderlist','shifts','notifications'],
+  superadmin: ['dashboard','company','users','customers','inventory','menu','reports','settings','audit','shifts','history','notifications'],
+  admin:      ['dashboard','users','waiters','customers','tables','billing','orderlist','inventory','menu','reports','kitchen','bar','settings','shifts','history','notifications'],
+  owner:      ['dashboard','reports','users','waiters','customers','billing','orderlist','inventory','menu','kitchen','bar','settings','shifts','history','notifications'],
+  manager:    ['dashboard','users','waiters','customers','orderlist','inventory','menu','kitchen','bar','shifts','history','notifications'],
+  cashier:    ['billing','receipts','shifts','history','notifications'],
+  supervisor: ['dashboard','supervisor','reports','shifts','history','notifications'],
+  waiter:     ['tables','billing','orderlist','shifts','history','notifications'],
   cook:       ['kitchen','bar','shifts','notifications'],
   bartender:  ['bar','shifts','notifications'],
   supplier:   ['inventory','invoices','notifications'],
@@ -33,7 +33,7 @@ export const NAV_ICONS = {
   dashboard:'🏠', company:'🏢', users:'👥', waiters:'🧑‍🍽️', reports:'📊', settings:'⚙️', audit:'🔒',
   tables:'🍽️', orders:'📋', billing:'💰', orderlist:'📃', inventory:'📦', menu:'🗂️',
   cashier:'💰', receipts:'🖨️', supervisor:'👁️', shifts:'🗓️', kitchen:'👨‍🍳', bar:'🍸',
-  invoices:'📄', notifications:'🔔', customers:'👤',
+  invoices:'📄', notifications:'🔔', customers:'👤', history:'🕓',
 }
 
 const INITIAL_USERS = [
@@ -70,6 +70,11 @@ export function AppProvider({ children }) {
   const [customers, setCustomers] = useState(INITIAL_CUSTOMERS)
   const [company, setCompany] = useState({ name: 'Bella Vista Malta', address: '123 Republic Street, Valletta', currency: 'EUR', vat_rate: 18, receipt_footer: 'Thank you — Grazzi — Grazie' })
   const [openBills, setOpenBills] = useState([]) // { id, tableId, tableLabel, waiter, orderIds, items, extraItems, status:'open', completedAt }
+  const [orderHistory, setOrderHistory] = useState([
+    { id:'hist_1', order_number:41, table_label:'Table 2', waiter:'Maria Waiter', cashier:'John Cashier', items:[{name_en:'Grilled Sea Bass',price:18.50,qty:2,discount_pct:0},{name_en:'House Wine (Glass)',price:5.00,qty:2,discount_pct:0}], subtotal:47.00, vat:8.46, total:55.46, total_savings:0, pay_method:'card', cash_given:0, change:0, note:'', paid_at: new Date(Date.now()-3600000*2) },
+    { id:'hist_2', order_number:42, table_label:'Table 5', waiter:'Maria Waiter', cashier:'John Cashier', items:[{name_en:'Margherita Pizza',price:12.00,qty:1,discount_pct:10},{name_en:'Tiramisu',price:6.50,qty:2,discount_pct:0}], subtotal:23.50, vat:4.23, total:27.73, total_savings:1.20, pay_method:'cash', cash_given:30, change:2.27, note:'No nuts', paid_at: new Date(Date.now()-3600000*4) },
+    { id:'hist_3', order_number:43, table_label:'Takeaway', waiter:'—', cashier:'John Cashier', items:[{name_en:'Beef Burger',price:14.00,qty:1,discount_pct:0},{name_en:'Soft Drink',price:3.00,qty:1,discount_pct:0}], subtotal:17.00, vat:3.06, total:20.06, total_savings:0, pay_method:'mobile', cash_given:0, change:0, note:'Extra sauce', paid_at: new Date(Date.now()-3600000*5) },
+  ])
   const [clockRecords, setClockRecords] = useState([
     // seed: Tony Cook clocked in today as example
     { id:'cr1', userId:'8', userName:'Tony Cook', role:'cook', clockIn: new Date(new Date().setHours(8,30,0,0)), clockOut: null },
@@ -214,6 +219,10 @@ export function AppProvider({ children }) {
     })
   }
 
+  function addToHistory(record) {
+    setOrderHistory(p => [record, ...p])
+  }
+
   // Cashier finalizes the bill — marks all linked orders as paid and removes the open bill
   function finalizeBill(billId) {
     const bill = openBills.find(b => b.id === billId)
@@ -258,7 +267,7 @@ export function AppProvider({ children }) {
     : false
 
   return (
-    <AppContext.Provider value={{ user, login, logout, lang, setLang, theme, setTheme, company, setCompany, users, createUser, approveUser, deactivateUser, updateUser, deleteUser, notifications, markAllRead, unreadCount, liveOrders, setLiveOrders, nextOrderNum, setNextOrderNum, openBills, markOrderServed, completeProcess, finalizeBill, menuItems, setMenuItems, menuCategories, setMenuCategories, inventoryItems, setInventoryItems, customers, createCustomer, updateCustomer, deleteCustomer, recordCustomerSale, clockRecords, clockIn, clockOut, isClockedIn }}>
+    <AppContext.Provider value={{ user, login, logout, lang, setLang, theme, setTheme, company, setCompany, users, createUser, approveUser, deactivateUser, updateUser, deleteUser, notifications, markAllRead, unreadCount, liveOrders, setLiveOrders, nextOrderNum, setNextOrderNum, openBills, markOrderServed, completeProcess, finalizeBill, orderHistory, addToHistory, menuItems, setMenuItems, menuCategories, setMenuCategories, inventoryItems, setInventoryItems, customers, createCustomer, updateCustomer, deleteCustomer, recordCustomerSale, clockRecords, clockIn, clockOut, isClockedIn }}>
       {children}
     </AppContext.Provider>
   )

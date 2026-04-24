@@ -113,9 +113,7 @@ function OrderDetailModal({ order, onClose, navTo }) {
             </div>
             <div>
               <div className="text-sm font-extrabold text-gray-900 dark:text-white flex items-center gap-1.5">
-                {order.order_type === 'takeaway'
-                  ? <><ShoppingBag size={14} className="text-gray-400" />Takeaway</>
-                  : <><Utensils size={14} className="text-gray-400" />Table {order.table_number}</>}
+                <Utensils size={14} className="text-gray-400" />Table {order.table_number || 0}
               </div>
               <span className={`inline-block mt-0.5 px-2 py-0.5 rounded-full text-[11px] font-bold capitalize ${badge}`}>
                 {order.status}
@@ -399,7 +397,7 @@ function printStationTicket(o, items, stationLabel) {
     <div><div class="label">Date</div><div class="value">${printDate}</div></div>
     <div><div class="label">Time</div><div class="value">${printTime}</div></div>
     <div><div class="label">Order Time</div><div class="value">${o.created_at || '—'}</div></div>
-    <div><div class="label">Table</div><div class="value">${o.order_type === 'takeaway' ? 'TAKEAWAY' : 'Table ' + o.table_number}</div></div>
+    <div><div class="label">Table</div><div class="value">Table ${o.table_number || 0}</div></div>
     <div><div class="label">Waiter</div><div class="value">${o.waiter || '—'}</div></div>
     <div><div class="label">Bill No.</div><div class="value">#${o.order_number}</div></div>
     <div><div class="label">Order ID</div><div class="value">${o.id || '—'}</div></div>
@@ -543,9 +541,7 @@ export default function OrderList({ navTo }) {
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-extrabold text-indigo-600 dark:text-indigo-400">#{order.order_number}</span>
                       <span className="flex items-center gap-1.5 text-xs font-semibold text-gray-700 dark:text-gray-200">
-                        {order.order_type === 'takeaway'
-                          ? <><ShoppingBag size={13} className="text-gray-400" />Takeaway</>
-                          : <><Utensils size={13} className="text-gray-400" />Table {order.table_number}</>}
+                        <Utensils size={13} className="text-gray-400" />Table {order.table_number || 0}
                       </span>
                     </div>
                     {/* Meta row */}
@@ -677,9 +673,7 @@ export default function OrderList({ navTo }) {
                         </td>
                         <td className="px-4 py-3 font-semibold text-gray-800 dark:text-gray-100 whitespace-nowrap">
                           <span className="flex items-center gap-1.5">
-                            {order.order_type === 'takeaway'
-                              ? <><ShoppingBag size={14} className="text-gray-400" />Takeaway</>
-                              : <><Utensils size={14} className="text-gray-400" />Table {order.table_number}</>}
+                            <Utensils size={14} className="text-gray-400" />Table {order.table_number || 0}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">
