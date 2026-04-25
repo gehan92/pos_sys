@@ -1875,16 +1875,6 @@ export function Billing({ orderContext }) {
                   </>
                 )}
 
-                {/* Add items button */}
-                <button
-                  onClick={() => { setModalCat('all'); setModalSearch(''); setShowAddModal(true) }}
-                  className="w-full py-2.5 rounded-xl text-xs font-bold border-2 border-dashed border-indigo-300 dark:border-indigo-700 text-indigo-500 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all"
-                >
-                  + Add Food Items
-                </button>
-              </>
-            )}
-
             {/* Bill note — always visible */}
             <div className="pt-2">
               <textarea
@@ -1895,6 +1885,8 @@ export function Billing({ orderContext }) {
                 className="w-full text-xs px-2.5 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-400 resize-none"
               />
             </div>
+          </>
+          )}
           </div>
 
           {/* Totals footer — only when bill has items */}

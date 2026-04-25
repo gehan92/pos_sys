@@ -528,8 +528,8 @@ export default function OrderList({ navTo }) {
           </div>
         ) : (
           <>
-            {/* Mobile: card list */}
-            <div className="flex flex-col gap-3 md:hidden">
+            {/* Mobile/Tablet: card list */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 lg:hidden">
               {filtered.map(order => {
                 const total = order.items.reduce((s, i) => s + i.price * i.qty, 0)
                 const kitchenItems = order.items.filter(i => (i.station || 'kitchen') !== 'bar')
@@ -629,7 +629,7 @@ export default function OrderList({ navTo }) {
             </div>
 
             {/* Desktop: table */}
-            <div className="hidden md:block bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700/60 overflow-x-auto">
+            <div className="hidden lg:block bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700/60 overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-100 dark:border-gray-700/60 bg-gray-50 dark:bg-gray-800/80">
