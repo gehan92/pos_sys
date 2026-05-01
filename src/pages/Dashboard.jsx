@@ -2081,6 +2081,13 @@ export function Billing({ orderContext }) {
   const [modalCat, setModalCat] = useState('all')
   const [modalSearch, setModalSearch] = useState('')
   const [showShopModal, setShowShopModal] = useState(false)
+  const [showSplitModal, setShowSplitModal] = useState(false)
+  const [splitMode, setSplitMode] = useState('equal')   // 'equal' | 'byItem'
+  const [splitCount, setSplitCount] = useState(2)
+  const [itemSplits, setItemSplits] = useState({})       // { itemKey: personIndex (0-based) }
+  const [splitPaid, setSplitPaid] = useState({})         // { personIndex: bool }
+  const [splitPayMethods, setSplitPayMethods] = useState({}) // { personIndex: 'cash'|'card' }
+  const [splitCashGiven, setSplitCashGiven] = useState({})   // { personIndex: number }
   const [billItemModal, setBillItemModal] = useState(null)
   const [billModalQty, setBillModalQty] = useState(1)
   const [billModalSelections, setBillModalSelections] = useState({})
@@ -2538,25 +2545,35 @@ export function Billing({ orderContext }) {
 
           {/* Confirm + Cancel buttons — only when bill has items */}
           {allCartItems.length > 0 && (
-          <div className="px-3 pb-3 pt-2 grid grid-cols-3 gap-2 flex-shrink-0">
-            <button
-              onClick={() => setShowPayModal(true)}
-              className="py-3 rounded-xl text-sm font-bold bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white shadow-sm transition-all"
-            >
-              Confirm
-            </button>
-            <button
-              onClick={() => setShowShopModal(true)}
-              className="py-3 rounded-xl text-sm font-bold bg-indigo-100 hover:bg-indigo-200 dark:bg-indigo-900/40 dark:hover:bg-indigo-900/60 active:scale-[0.98] text-indigo-700 dark:text-indigo-300 transition-all"
-            >
-              Shop
-            </button>
-            <button
-              onClick={() => { clearLoadedBill(); setPayMethod(null); setCashGiven(0); }}
-              className="py-3 rounded-xl text-sm font-bold border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
-            >
-              Cancel
-            </button>
+          <div className="px-3 pb-3 pt-2 flex-shrink-0 space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setShowPayModal(true)}
+                className="py-3 rounded-xl text-sm font-bold bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white shadow-sm transition-all"
+              >
+                Confirm
+              </button>
+              <button
+                onClick={() => { setShowSplitModal(true); setSplitMode('equal'); setSplitCount(2); setItemSplits({}); setSplitPaid({}); setSplitPayMethods({}); setSplitCashGiven({}); }}
+                className="py-3 rounded-xl text-sm font-bold bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/40 dark:hover:bg-blue-900/60 active:scale-[0.98] text-blue-700 dark:text-blue-300 transition-all"
+              >
+                ✂ Split
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setShowShopModal(true)}
+                className="py-3 rounded-xl text-sm font-bold bg-indigo-100 hover:bg-indigo-200 dark:bg-indigo-900/40 dark:hover:bg-indigo-900/60 active:scale-[0.98] text-indigo-700 dark:text-indigo-300 transition-all"
+              >
+                Shop
+              </button>
+              <button
+                onClick={() => { clearLoadedBill(); setPayMethod(null); setCashGiven(0); }}
+                className="py-3 rounded-xl text-sm font-bold border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
           )}
         </Card>
@@ -2616,6 +2633,271 @@ export function Billing({ orderContext }) {
         </div>
       </div>
     )}
+
+    {/* ── Split Bill Modal ── */}
+    {showSplitModal && (() => {
+      const personColors = ['bg-rose-500','bg-blue-500','bg-emerald-500','bg-amber-500','bg-purple-500','bg-pink-500']
+      const personLabels = ['Person 1','Person 2','Person 3','Person 4','Person 5','Person 6']
+      const persons = Array.from({ length: splitCount }, (_, i) => i)
+
+      // Item key helper
+      const itemKey = (item, idx) => item.cartKey || item.id + '-' + idx
+
+      // Equal split amounts
+      const perPersonEqual = total / splitCount
+
+      // By-item: compute totals per person
+      const personTotals = persons.map(pi => {
+        const items = allCartItems.filter((it, idx) => itemSplits[itemKey(it, idx)] === pi)
+        const sub = items.reduce((a, i) => {
+          const disc = Number(i.discount_pct || 0) / 100
+          return a + (i.price * (1 - disc)) * i.qty
+        }, 0)
+        return { subtotal: sub, vat: sub * vatRate, total: sub + sub * vatRate, items }
+      })
+
+      const allPaid = persons.every(pi => splitPaid[pi])
+      const unassigned = allCartItems.filter((it, idx) => itemSplits[itemKey(it, idx)] === undefined)
+
+      function closeSplit() {
+        setShowSplitModal(false)
+        setSplitPaid({})
+        setSplitPayMethods({})
+        setSplitCashGiven({})
+        setItemSplits({})
+      }
+
+      function finalizeSplitBill() {
+        const orderNum = Math.floor(Math.random() * 900) + 100
+        const bill = loadedBillId ? openBills.find(b => b.id === loadedBillId) : null
+        const paidAt = new Date()
+        if (loadedBillId) finalizeBill(loadedBillId)
+        addToHistory({
+          id: `hist_${Date.now()}`,
+          order_number: orderNum,
+          table_label: bill?.tableLabel || 'Walk-in',
+          waiter: bill?.waiter || '—',
+          cashier: user?.full_name || '—',
+          items: allCartItems,
+          subtotal, vat, total,
+          total_savings: totalSavings,
+          pay_method: 'Split',
+          cash_given: 0,
+          change: 0,
+          note: billNote.trim(),
+          paid_at: paidAt,
+        })
+        setReceipt({
+          items: allCartItems,
+          subtotal, vat, total, totalSavings,
+          payMethod: 'Split',
+          cashGiven: 0,
+          change: 0,
+          date: paidAt,
+          order_number: orderNum,
+          note: billNote.trim(),
+        })
+        closeSplit()
+      }
+
+      function markPaid(pi) {
+        const method = splitPayMethods[pi] || 'cash'
+        const cash = Number(splitCashGiven[pi] || 0)
+        const amt = splitMode === 'equal' ? perPersonEqual : personTotals[pi].total
+        if (method === 'cash' && cash < amt) return
+        setSplitPaid(p => ({ ...p, [pi]: true }))
+      }
+
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3" onClick={closeSplit}>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[94vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700 flex-shrink-0">
+              <div>
+                <h3 className="text-base font-extrabold text-gray-900 dark:text-white">✂ Split Bill</h3>
+                <div className="text-xs text-gray-400 mt-0.5">Total: <span className="font-bold text-gray-700 dark:text-gray-300">€{total.toFixed(2)}</span></div>
+              </div>
+              <button onClick={closeSplit} className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors font-bold">✕</button>
+            </div>
+
+            <div className="overflow-y-auto flex-1 p-4 space-y-4">
+              {/* Mode toggle */}
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setSplitMode('equal')}
+                  className={`py-2.5 rounded-xl text-sm font-bold transition-all ${splitMode === 'equal' ? 'bg-blue-600 text-white shadow' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}
+                >
+                  ⚖ Equal Split
+                </button>
+                <button
+                  onClick={() => setSplitMode('byItem')}
+                  className={`py-2.5 rounded-xl text-sm font-bold transition-all ${splitMode === 'byItem' ? 'bg-blue-600 text-white shadow' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}
+                >
+                  🍽 By Item
+                </button>
+              </div>
+
+              {/* Number of people */}
+              <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-700/50 rounded-xl px-4 py-3">
+                <span className="text-sm font-bold text-gray-700 dark:text-gray-200">Number of people</span>
+                <div className="flex items-center gap-3">
+                  <button onClick={() => setSplitCount(c => Math.max(2, c - 1))} className="w-8 h-8 rounded-lg bg-gray-200 dark:bg-gray-600 font-bold text-gray-700 dark:text-gray-200 flex items-center justify-center hover:bg-gray-300">−</button>
+                  <span className="text-lg font-extrabold text-gray-900 dark:text-white w-5 text-center">{splitCount}</span>
+                  <button onClick={() => setSplitCount(c => Math.min(6, c + 1))} className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/40 font-bold text-blue-700 dark:text-blue-300 flex items-center justify-center hover:bg-blue-200">+</button>
+                </div>
+              </div>
+
+              {/* By Item — assign items */}
+              {splitMode === 'byItem' && (
+                <div>
+                  <div className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Assign Items</div>
+                  {unassigned.length > 0 && (
+                    <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-3 py-1.5 mb-2">
+                      {unassigned.length} item{unassigned.length > 1 ? 's' : ''} not yet assigned
+                    </div>
+                  )}
+                  <div className="space-y-1.5">
+                    {allCartItems.map((item, idx) => {
+                      const key = itemKey(item, idx)
+                      const assigned = itemSplits[key]
+                      return (
+                        <div key={key} className="flex items-center gap-2 bg-gray-50 dark:bg-gray-700/50 rounded-xl px-3 py-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{item.name_en}</div>
+                            <div className="text-xs text-gray-400">×{item.qty} — €{((item.price * (1 - (item.discount_pct || 0) / 100)) * item.qty).toFixed(2)}</div>
+                          </div>
+                          <div className="flex gap-1 flex-shrink-0">
+                            {persons.map(pi => (
+                              <button
+                                key={pi}
+                                onClick={() => setItemSplits(p => ({ ...p, [key]: assigned === pi ? undefined : pi }))}
+                                className={`w-7 h-7 rounded-full text-xs font-bold transition-all ${assigned === pi ? personColors[pi] + ' text-white scale-110 shadow' : 'bg-gray-200 dark:bg-gray-600 text-gray-500 hover:bg-gray-300'}`}
+                              >
+                                {pi + 1}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Per-person payment panels */}
+              <div className="space-y-3">
+                <div className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  {splitMode === 'equal' ? 'Payments' : 'Per-person Totals'}
+                </div>
+                {persons.map(pi => {
+                  const amt = splitMode === 'equal' ? perPersonEqual : personTotals[pi].total
+                  const paid = splitPaid[pi]
+                  const method = splitPayMethods[pi] || 'cash'
+                  const cash = Number(splitCashGiven[pi] || 0)
+                  const change = Math.max(0, cash - amt)
+                  const canPay = method === 'card' || cash >= amt
+
+                  if (splitMode === 'byItem' && personTotals[pi].items.length === 0) {
+                    return (
+                      <div key={pi} className="flex items-center gap-3 bg-gray-50 dark:bg-gray-700/40 rounded-xl px-4 py-3 opacity-50">
+                        <div className={`w-8 h-8 rounded-full ${personColors[pi]} flex items-center justify-center text-white text-xs font-bold flex-shrink-0`}>{pi + 1}</div>
+                        <div className="text-sm text-gray-400 dark:text-gray-500">No items assigned</div>
+                      </div>
+                    )
+                  }
+
+                  return (
+                    <div key={pi} className={`rounded-xl border-2 transition-all ${paid ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-900/20' : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-750'}`}>
+                      <div className="flex items-center gap-3 px-4 py-3">
+                        <div className={`w-8 h-8 rounded-full ${personColors[pi]} flex items-center justify-center text-white text-xs font-bold flex-shrink-0`}>{pi + 1}</div>
+                        <div className="flex-1">
+                          <div className="text-sm font-bold text-gray-800 dark:text-gray-200">{personLabels[pi]}</div>
+                          {splitMode === 'byItem' && personTotals[pi].items.length > 0 && (
+                            <div className="text-xs text-gray-400">{personTotals[pi].items.map(it => it.name_en).join(', ')}</div>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <div className="text-base font-extrabold text-gray-900 dark:text-white">€{amt.toFixed(2)}</div>
+                          {paid && <div className="text-xs text-emerald-600 font-bold">✓ Paid</div>}
+                        </div>
+                      </div>
+                      {!paid && (
+                        <div className="px-4 pb-3 space-y-2 border-t border-gray-100 dark:border-gray-700 pt-2">
+                          {/* Method toggle */}
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <button
+                              onClick={() => setSplitPayMethods(p => ({ ...p, [pi]: 'cash' }))}
+                              className={`py-1.5 rounded-lg text-xs font-bold transition-all ${method === 'cash' ? 'bg-emerald-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-500'}`}
+                            >
+                              💵 Cash
+                            </button>
+                            <button
+                              onClick={() => setSplitPayMethods(p => ({ ...p, [pi]: 'card' }))}
+                              className={`py-1.5 rounded-lg text-xs font-bold transition-all ${method === 'card' ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-500'}`}
+                            >
+                              💳 Card
+                            </button>
+                          </div>
+                          {method === 'cash' && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-gray-500 flex-shrink-0">Cash Given €</span>
+                              <input
+                                type="number"
+                                min={0}
+                                step="0.01"
+                                value={splitCashGiven[pi] || ''}
+                                onChange={e => setSplitCashGiven(p => ({ ...p, [pi]: e.target.value }))}
+                                placeholder={amt.toFixed(2)}
+                                className="flex-1 bg-gray-100 dark:bg-gray-700 rounded-lg px-2 py-1 text-sm font-bold text-gray-900 dark:text-white outline-none"
+                              />
+                              {cash >= amt && cash > 0 && (
+                                <span className="text-xs text-emerald-600 font-bold flex-shrink-0">Change €{change.toFixed(2)}</span>
+                              )}
+                            </div>
+                          )}
+                          <button
+                            onClick={() => markPaid(pi)}
+                            disabled={!canPay}
+                            className={`w-full py-2 rounded-xl text-sm font-bold transition-all ${canPay ? 'bg-emerald-600 hover:bg-emerald-700 text-white active:scale-[0.98]' : 'bg-gray-100 dark:bg-gray-700 text-gray-400 cursor-not-allowed'}`}
+                          >
+                            ✓ Mark Paid
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-4 pb-4 pt-3 border-t border-gray-100 dark:border-gray-700 flex-shrink-0">
+              {allPaid ? (
+                <button
+                  onClick={finalizeSplitBill}
+                  className="w-full py-3.5 rounded-xl text-sm font-extrabold bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white shadow transition-all"
+                >
+                  ✓ Finalize — All Paid
+                </button>
+              ) : (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-500 dark:text-gray-400">{persons.filter(pi => splitPaid[pi]).length} of {splitCount} paid</span>
+                  <div className="flex gap-2">
+                    {persons.filter(pi => splitPaid[pi]).length > 0 && (
+                      <div className="flex gap-0.5">
+                        {persons.map(pi => (
+                          <div key={pi} className={`w-3 h-3 rounded-full ${splitPaid[pi] ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-gray-600'}`} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )
+    })()}
 
     {/* ── Item Modifier Modal (Billing) ── */}
     {billItemModal && (
