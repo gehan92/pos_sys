@@ -223,6 +223,58 @@ export function AppProvider({ children }) {
     setOrderHistory(p => [record, ...p])
   }
 
+  function transferOrder(fromTableId, toTableId, toTableNumber) {
+    setLiveOrders(prev => prev.map(o =>
+      o.table_id === fromTableId && !['paid'].includes(o.status)
+        ? { ...o, table_id: toTableId, table_number: toTableNumber, transferred_from_id: fromTableId }
+        : o
+    ))
+    setOpenBills(prev => prev.map(b =>
+      b.tableId === fromTableId
+        ? { ...b, tableId: toTableId, tableLabel: `Table ${toTableNumber}` }
+        : b
+    ))
+  }
+
+  function mergeOrder(fromTableId, fromTableNumber, toTableId, toTableNumber) {
+    // Tag orders with merged_from so unmerge can split them back
+    setLiveOrders(prev => prev.map(o =>
+      o.table_id === fromTableId && !['paid'].includes(o.status)
+        ? { ...o, table_id: toTableId, table_number: toTableNumber, merged_from_id: fromTableId, merged_from_number: fromTableNumber }
+        : o
+    ))
+    // Merge open bills
+    setOpenBills(prev => {
+      const fromBill = prev.find(b => b.tableId === fromTableId && b.status === 'open')
+      const toBill   = prev.find(b => b.tableId === toTableId   && b.status === 'open')
+      if (fromBill && toBill) {
+        return prev
+          .filter(b => b.id !== fromBill.id)
+          .map(b => b.id === toBill.id
+            ? { ...b, items: [...b.items, ...fromBill.items], orderIds: [...b.orderIds, ...fromBill.orderIds] }
+            : b
+          )
+      }
+      if (fromBill && !toBill) {
+        return prev.map(b =>
+          b.id === fromBill.id
+            ? { ...b, tableId: toTableId, tableLabel: `Table ${toTableNumber}` }
+            : b
+        )
+      }
+      return prev
+    })
+  }
+
+  function unmergeOrder(fromTableId, fromTableNumber) {
+    // Move back orders that were merged from this table
+    setLiveOrders(prev => prev.map(o =>
+      o.merged_from_id === fromTableId && !['paid'].includes(o.status)
+        ? { ...o, table_id: fromTableId, table_number: fromTableNumber, merged_from_id: null, merged_from_number: null }
+        : o
+    ))
+  }
+
   // Cashier finalizes the bill — marks all linked orders as paid and removes the open bill
   function finalizeBill(billId) {
     const bill = openBills.find(b => b.id === billId)
@@ -267,7 +319,7 @@ export function AppProvider({ children }) {
     : false
 
   return (
-    <AppContext.Provider value={{ user, login, logout, lang, setLang, theme, setTheme, company, setCompany, users, createUser, approveUser, deactivateUser, updateUser, deleteUser, notifications, markAllRead, unreadCount, liveOrders, setLiveOrders, nextOrderNum, setNextOrderNum, openBills, markOrderServed, completeProcess, finalizeBill, orderHistory, addToHistory, menuItems, setMenuItems, menuCategories, setMenuCategories, inventoryItems, setInventoryItems, customers, createCustomer, updateCustomer, deleteCustomer, recordCustomerSale, clockRecords, clockIn, clockOut, isClockedIn }}>
+    <AppContext.Provider value={{ user, login, logout, lang, setLang, theme, setTheme, company, setCompany, users, createUser, approveUser, deactivateUser, updateUser, deleteUser, notifications, markAllRead, unreadCount, liveOrders, setLiveOrders, nextOrderNum, setNextOrderNum, openBills, markOrderServed, completeProcess, finalizeBill, orderHistory, addToHistory, transferOrder, mergeOrder, unmergeOrder, menuItems, setMenuItems, menuCategories, setMenuCategories, inventoryItems, setInventoryItems, customers, createCustomer, updateCustomer, deleteCustomer, recordCustomerSale, clockRecords, clockIn, clockOut, isClockedIn }}>
       {children}
     </AppContext.Provider>
   )

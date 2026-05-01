@@ -435,10 +435,14 @@ export function Waiters() {
 
 // ─── Tables ───────────────────────────────────────────────────────────────────
 export function Tables({ navTo, setOrderContext }) {
-  const { liveOrders, setLiveOrders, users } = useApp()
+  const { liveOrders, setLiveOrders, users, company, openBills, transferOrder, mergeOrder, unmergeOrder } = useApp()
   const [tables, setTables] = useState(TABLES)
-  const [assignModal, setAssignModal] = useState(null)  // table object
-  const [guestModal, setGuestModal] = useState(null)    // { table, mode: 'open'|'edit' }
+  const [assignModal, setAssignModal] = useState(null)    // table object
+  const [guestModal, setGuestModal] = useState(null)      // { table, mode: 'open'|'edit' }
+  const [actionModal, setActionModal] = useState(null)    // { table, order }
+  const [transferModal, setTransferModal] = useState(null) // { fromTable }
+  const [mergeModal, setMergeModal] = useState(null)      // { fromTable }
+  const [reprintModal, setReprintModal] = useState(null) // { order }
   const [guestAdults, setGuestAdults] = useState(1)
   const [guestChildren, setGuestChildren] = useState(0)
   const [now, setNow] = useState(Date.now())
@@ -473,12 +477,49 @@ export function Tables({ navTo, setOrderContext }) {
       setGuestChildren(0)
       setGuestModal({ table, mode: 'open' })
     } else {
-      const existingOrder = liveOrders.find(o => o.table_id === table.id)
-      if (existingOrder) {
-        setOrderContext({ tableId: table.id, tableNumber: table.number, isTakeaway: false, existingOrder })
-        navTo('orders')
-      }
+      const existingOrder = liveOrders.find(o => o.table_id === table.id && !['paid'].includes(o.status))
+      setActionModal({ table, order: existingOrder })
     }
+  }
+
+
+  function confirmTransfer(toTable) {
+    const { fromTable } = transferModal
+    transferOrder(fromTable.id, toTable.id, toTable.number)
+    setTables(prev => prev.map(t => {
+      if (t.id === fromTable.id) return { ...t, status: 'free', assignedWaiter: null }
+      if (t.id === toTable.id) return { ...t, status: 'occupied' }
+      return t
+    }))
+    setTransferModal(null)
+    setActionModal(null)
+  }
+
+  function confirmMerge(toTable) {
+    const { fromTable } = mergeModal
+    mergeOrder(fromTable.id, fromTable.number, toTable.id, toTable.number)
+    setTables(prev => prev.map(t => {
+      if (t.id === fromTable.id)
+        return { ...t, status: 'merged', mergedInto: { id: toTable.id, number: toTable.number } }
+      if (t.id === toTable.id)
+        return { ...t, mergedTables: [...(t.mergedTables || []), { id: fromTable.id, number: fromTable.number }] }
+      return t
+    }))
+    setMergeModal(null)
+    setActionModal(null)
+  }
+
+  function confirmUnmerge(mergedTable) {
+    unmergeOrder(mergedTable.id, mergedTable.number)
+    setTables(prev => prev.map(t => {
+      if (t.id === mergedTable.id)
+        return { ...t, status: 'occupied', mergedInto: null }
+      // Remove from target's mergedTables list
+      if (t.mergedTables?.some(m => m.id === mergedTable.id))
+        return { ...t, mergedTables: t.mergedTables.filter(m => m.id !== mergedTable.id) }
+      return t
+    }))
+    setActionModal(null)
   }
 
   function addToOrder(order) {
@@ -686,6 +727,161 @@ export function Tables({ navTo, setOrderContext }) {
         </div>
       )}
 
+      {/* Action modal — shown when tapping an occupied table */}
+      {actionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setActionModal(null)}>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-xs mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
+              <div>
+                <div className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-0.5">Table {actionModal.table.number}</div>
+                <div className="text-base font-extrabold text-gray-900 dark:text-white">What would you like to do?</div>
+              </div>
+              <button onClick={() => setActionModal(null)} className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors font-bold text-base">✕</button>
+            </div>
+            <div className="px-5 py-4 space-y-2.5">
+              {actionModal.table.status === 'merged' ? (
+                /* Merged source table — only show Unmerge */
+                <button
+                  onClick={() => confirmUnmerge(actionModal.table)}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20 hover:border-blue-400 transition-all text-left"
+                >
+                  <span className="text-xl">🔓</span>
+                  <div>
+                    <div className="text-sm font-bold text-blue-700 dark:text-blue-300">Unmerge Table</div>
+                    <div className="text-xs text-gray-400">Split back from Table {actionModal.table.mergedInto?.number}</div>
+                  </div>
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => {
+                      setOrderContext({ tableId: actionModal.table.id, tableNumber: actionModal.table.number, isTakeaway: false, existingOrder: actionModal.order })
+                      setActionModal(null)
+                      navTo('orders')
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-indigo-200 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-900/20 hover:border-indigo-400 transition-all text-left"
+                  >
+                    <span className="text-xl">➕</span>
+                    <div>
+                      <div className="text-sm font-bold text-indigo-700 dark:text-indigo-300">Add Items</div>
+                      <div className="text-xs text-gray-400">Add more items to this order</div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => { setTransferModal({ fromTable: actionModal.table }); setActionModal(null) }}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 hover:border-amber-400 transition-all text-left"
+                  >
+                    <span className="text-xl">🔀</span>
+                    <div>
+                      <div className="text-sm font-bold text-amber-700 dark:text-amber-300">Transfer Table</div>
+                      <div className="text-xs text-gray-400">Move this order to a free table</div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => { setMergeModal({ fromTable: actionModal.table }); setActionModal(null) }}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-purple-200 dark:border-purple-700 bg-purple-50 dark:bg-purple-900/20 hover:border-purple-400 transition-all text-left"
+                  >
+                    <span className="text-xl">🔗</span>
+                    <div>
+                      <div className="text-sm font-bold text-purple-700 dark:text-purple-300">Merge Table</div>
+                      <div className="text-xs text-gray-400">Combine with another occupied table</div>
+                    </div>
+                  </button>
+                </>
+              )}
+            </div>
+            <div className="px-5 pb-5">
+              <button
+                onClick={() => setActionModal(null)}
+                className="w-full py-3 rounded-xl text-sm font-bold border-2 border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
+              >Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Transfer table modal */}
+      {transferModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setTransferModal(null)}>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
+              <div>
+                <div className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-0.5">Transfer from Table {transferModal.fromTable.number}</div>
+                <div className="text-base font-extrabold text-gray-900 dark:text-white">Select New Table</div>
+              </div>
+              <button onClick={() => setTransferModal(null)} className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors font-bold text-base">✕</button>
+            </div>
+            <div className="px-5 py-4">
+              <p className="text-xs text-gray-400 mb-3">Only free tables are available for transfer</p>
+              <div className="grid grid-cols-3 gap-2">
+                {tables.filter(t => t.status === 'free').map(t => (
+                  <button
+                    key={t.id}
+                    onClick={() => confirmTransfer(t)}
+                    className="h-16 rounded-xl border-2 border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 hover:border-emerald-500 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 active:scale-[0.97] transition-all flex flex-col items-center justify-center gap-0.5"
+                  >
+                    <span className="text-lg font-extrabold text-emerald-700 dark:text-emerald-300">T{t.number}</span>
+                    <span className="text-[10px] font-semibold text-emerald-500">Free</span>
+                  </button>
+                ))}
+                {tables.filter(t => t.status === 'free').length === 0 && (
+                  <p className="col-span-3 text-center text-sm text-gray-400 py-6">No free tables available</p>
+                )}
+              </div>
+            </div>
+            <div className="px-5 pb-5">
+              <button
+                onClick={() => setTransferModal(null)}
+                className="w-full py-3 rounded-xl text-sm font-bold border-2 border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
+              >Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Merge table modal */}
+      {mergeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setMergeModal(null)}>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
+              <div>
+                <div className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-0.5">Merge from Table {mergeModal.fromTable.number}</div>
+                <div className="text-base font-extrabold text-gray-900 dark:text-white">Merge Into Which Table?</div>
+              </div>
+              <button onClick={() => setMergeModal(null)} className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors font-bold text-base">✕</button>
+            </div>
+            <div className="px-5 py-4">
+              <p className="text-xs text-gray-400 mb-3">All items from <span className="font-bold text-gray-600 dark:text-gray-300">Table {mergeModal.fromTable.number}</span> will be added to the selected table. Table {mergeModal.fromTable.number} will be freed.</p>
+              <div className="grid grid-cols-3 gap-2">
+                {tables.filter(t => t.status === 'occupied' && t.id !== mergeModal.fromTable.id).map(t => {
+                  const ord = tableOrder(t.id)
+                  const itemCount = ord?.items?.length || 0
+                  return (
+                    <button
+                      key={t.id}
+                      onClick={() => confirmMerge(t)}
+                      className="h-16 rounded-xl border-2 border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 hover:border-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20 active:scale-[0.97] transition-all flex flex-col items-center justify-center gap-0.5"
+                    >
+                      <span className="text-lg font-extrabold text-red-700 dark:text-red-300">T{t.number}</span>
+                      <span className="text-[10px] font-semibold text-gray-400">{itemCount} item{itemCount !== 1 ? 's' : ''}</span>
+                    </button>
+                  )
+                })}
+                {tables.filter(t => t.status === 'occupied' && t.id !== mergeModal.fromTable.id).length === 0 && (
+                  <p className="col-span-3 text-center text-sm text-gray-400 py-6">No other occupied tables</p>
+                )}
+              </div>
+            </div>
+            <div className="px-5 pb-5">
+              <button
+                onClick={() => setMergeModal(null)}
+                className="w-full py-3 rounded-xl text-sm font-bold border-2 border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
+              >Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Card className="lg:col-span-2">
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -696,9 +892,17 @@ export function Tables({ navTo, setOrderContext }) {
             <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">
               {tables.filter(t=>t.status==='free').length} Free
             </span>
-            <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400">
+            <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">
               {tables.filter(t=>t.status==='occupied').length} Occupied
             </span>
+            <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400">
+              {openBills.length} Bill Ready
+            </span>
+            {tables.some(t=>t.status==='merged') && (
+              <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">
+                {tables.filter(t=>t.status==='merged').length} Merged
+              </span>
+            )}
           </div>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-4">
@@ -709,53 +913,80 @@ export function Tables({ navTo, setOrderContext }) {
             const totalGuests = (order?.guests?.adults || 0) + (order?.guests?.children || 0)
             const elapsedTime = order?.created_timestamp ? elapsed(order.created_timestamp) : null
             const isOccupied = table.status === 'occupied'
+            const isMerged   = table.status === 'merged'
+            const isBillReady = isOccupied && openBills.some(b => b.tableId === table.id && b.status === 'open')
+
+            // World-standard color tokens per state
+            const colors = isMerged ? {
+              card:        'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700 hover:border-blue-400 hover:shadow-md',
+              number:      'text-blue-700 dark:text-blue-300',
+              dot:         'bg-blue-400',
+              value:       'text-blue-500 dark:text-blue-400',
+              statusLabel: 'text-blue-500 dark:text-blue-400',
+              statusText:  `→ T${table.mergedInto?.number ?? '?'}`,
+            } : isBillReady ? {
+              card:        'bg-orange-50 dark:bg-orange-900/20 border-orange-300 dark:border-orange-700 hover:border-orange-500 hover:shadow-md',
+              number:      'text-orange-700 dark:text-orange-300',
+              dot:         'bg-orange-500',
+              value:       'text-orange-600 dark:text-orange-400',
+              statusLabel: 'text-orange-500 dark:text-orange-400',
+              statusText:  'Bill Ready',
+            } : isOccupied ? {
+              card:        'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700 hover:border-red-500 hover:shadow-md',
+              number:      'text-red-700 dark:text-red-300',
+              dot:         'bg-red-500',
+              value:       'text-red-600 dark:text-red-400',
+              statusLabel: 'text-red-500 dark:text-red-400',
+              statusText:  'Occupied',
+            } : {
+              card:        'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 hover:border-emerald-400 hover:shadow-md',
+              number:      'text-emerald-700 dark:text-emerald-300',
+              dot:         'bg-emerald-500',
+              value:       'text-gray-300 dark:text-gray-600',
+              statusLabel: 'text-emerald-500 dark:text-emerald-400',
+              statusText:  'Available',
+            }
+
             return (
               <div key={table.id} className="relative">
                 <button
                   onClick={() => selectTable(table)}
-                  className={`w-full h-28 rounded-2xl border-2 p-3 text-left flex flex-col justify-between transition-all active:scale-[0.97] ${
-                    isOccupied
-                      ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-300 dark:border-indigo-700 hover:border-indigo-500 hover:shadow-md'
-                      : 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 hover:border-emerald-400 hover:shadow-md'
-                  }`}
+                  className={`w-full h-28 rounded-2xl border-2 p-3 text-left flex flex-col justify-between transition-all active:scale-[0.97] ${colors.card}`}
                 >
                   {/* Table number + status dot */}
                   <div className="flex items-center justify-between">
-                    <span className={`text-xl font-extrabold leading-none tabular-nums ${isOccupied ? 'text-indigo-700 dark:text-indigo-300' : 'text-emerald-700 dark:text-emerald-300'}`}>
+                    <span className={`text-xl font-extrabold leading-none tabular-nums ${colors.number}`}>
                       T{table.number}
                     </span>
-                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isOccupied ? 'bg-indigo-500' : 'bg-emerald-500'}`} />
+                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${colors.dot}`} />
                   </div>
 
                   {/* Always-same-height info rows */}
                   <div className="space-y-1">
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Time</span>
-                      <span className={`text-xs font-extrabold tabular-nums ${isOccupied ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-300 dark:text-gray-600'}`}>
+                      <span className={`text-xs font-extrabold tabular-nums ${isOccupied ? colors.value : 'text-gray-300 dark:text-gray-600'}`}>
                         {elapsedTime || '—'}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Guests</span>
-                      <span className={`text-xs font-extrabold tabular-nums ${isOccupied && totalGuests > 0 ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-300 dark:text-gray-600'}`}>
+                      <span className={`text-xs font-extrabold tabular-nums ${isOccupied && totalGuests > 0 ? colors.value : 'text-gray-300 dark:text-gray-600'}`}>
                         {isOccupied && totalGuests > 0 ? totalGuests : '—'}
                       </span>
                     </div>
                   </div>
 
-                  {/* Waiter row — always reserving space */}
-                  <div className="pt-0.5 border-t border-gray-100 dark:border-gray-700/60 flex items-center gap-1.5 min-h-[1.25rem]">
-                    {isOccupied && waiterName ? (
-                      <>
-                        <div className="w-4 h-4 rounded-full bg-indigo-200 dark:bg-indigo-800 flex items-center justify-center text-[9px] font-bold text-indigo-700 dark:text-indigo-300 flex-shrink-0">
+                  {/* Status row */}
+                  <div className="pt-0.5 border-t border-gray-100 dark:border-gray-700/60 flex items-center justify-between gap-1.5 min-h-[1.25rem]">
+                    <span className={`text-[10px] font-bold ${colors.statusLabel}`}>{colors.statusText}</span>
+                    {isOccupied && waiterName && (
+                      <div className="flex items-center gap-1">
+                        <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0 ${isBillReady ? 'bg-orange-200 dark:bg-orange-800 text-orange-700 dark:text-orange-300' : 'bg-red-200 dark:bg-red-800 text-red-700 dark:text-red-300'}`}>
                           {waiterInitial}
                         </div>
                         <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 truncate">{waiterName.split(' ')[0]}</span>
-                      </>
-                    ) : (
-                      <span className={`text-[10px] font-semibold ${isOccupied ? 'text-gray-300 dark:text-gray-600' : 'text-emerald-500 dark:text-emerald-400'}`}>
-                        {isOccupied ? 'No waiter' : 'Available'}
-                      </span>
+                      </div>
                     )}
                   </div>
                 </button>
@@ -768,6 +999,17 @@ export function Tables({ navTo, setOrderContext }) {
                 >
                   {waiterInitial || '+'}
                 </button>
+
+                {/* Merged tables badge — shown on target table */}
+                {table.mergedTables?.length > 0 && (
+                  <div className="absolute -top-1.5 -left-1.5 flex gap-0.5">
+                    {table.mergedTables.map(m => (
+                      <span key={m.id} className="px-1.5 py-0.5 rounded-full bg-blue-500 text-white text-[9px] font-bold shadow-sm">
+                        +T{m.number}
+                      </span>
+                    ))}
+                  </div>
+                )}
 
                 {/* Edit guests badge — occupied only */}
                 {isOccupied && (
@@ -783,39 +1025,177 @@ export function Tables({ navTo, setOrderContext }) {
             )
           })}
         </div>
-        <div className="flex items-center gap-4 text-xs text-gray-400 pt-1 border-t border-gray-100 dark:border-gray-700/60">
-          <span className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-4 text-xs text-gray-400 pt-2 border-t border-gray-100 dark:border-gray-700/60">
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />Free</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500" />Occupied</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-orange-500" />Bill Ready</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-blue-400" />Merged</span>
+          <span className="flex items-center gap-1.5 ml-auto">
             <span className="w-4 h-4 rounded-full border border-gray-300 dark:border-gray-500 flex items-center justify-center bg-white dark:bg-gray-700 font-bold text-[10px]">+</span>
-            Top-right badge: assign waiter
+            Assign waiter
           </span>
           <span className="flex items-center gap-1.5">
             <span className="w-4 h-4 rounded-full border border-gray-300 dark:border-gray-500 flex items-center justify-center bg-white dark:bg-gray-700 font-bold text-[10px]">G</span>
-            Bottom-right badge: update guests
+            Update guests
           </span>
         </div>
       </Card>
       <Card>
-        <h2 className="font-medium text-gray-900 dark:text-white mb-3">Active orders</h2>
-        <Table headers={['Table','Waiter']}>
-          {liveOrders.filter(o => !['paid'].includes(o.status)).map(o => (
-            <TR key={o.id}>
-              <TD className="font-medium">{`T${o.table_number || 0}`}</TD>
-              <TD>
-                {o.waiter ? (
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center text-xs font-bold text-indigo-600 dark:text-indigo-400 flex-shrink-0">
-                      {o.waiter.charAt(0)}
-                    </div>
-                    <span className="text-xs text-gray-600 dark:text-gray-300 truncate max-w-[5rem]">{o.waiter.split(' ')[0]}</span>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-medium text-gray-900 dark:text-white">Active Orders</h2>
+          <span className="text-xs font-bold px-2 py-0.5 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
+            {liveOrders.filter(o => !['paid'].includes(o.status)).length} orders
+          </span>
+        </div>
+        {liveOrders.filter(o => !['paid'].includes(o.status)).length === 0 ? (
+          <div className="text-center py-8 text-gray-400 text-sm">No active orders</div>
+        ) : (
+          <div className="space-y-2">
+            {liveOrders.filter(o => !['paid'].includes(o.status)).map(o => {
+              const statusColors = {
+                pending:   'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300',
+                cooking:   'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
+                served:    'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400',
+                completed: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400',
+              }
+              const isMergedOrder = !!o.merged_from_id
+              const isTransferred = !!o.transferred_from_id
+              return (
+                <div key={o.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-gray-100 dark:border-gray-700/60 bg-gray-50/50 dark:bg-gray-800/40 hover:bg-gray-100/80 dark:hover:bg-gray-800 transition-colors">
+
+                  {/* Table label */}
+                  <div className="flex flex-col min-w-[3rem]">
+                    <span className="text-sm font-extrabold text-gray-800 dark:text-gray-200">
+                      {o.order_type === 'takeaway' ? 'T/A' : `T${o.table_number || '?'}`}
+                    </span>
+                    {isMergedOrder && (
+                      <span className="text-[10px] font-semibold text-blue-500">from T{o.merged_from_number}</span>
+                    )}
                   </div>
-                ) : (
-                  <span className="text-xs text-gray-400">—</span>
-                )}
-              </TD>
-            </TR>
-          ))}
-        </Table>
+
+                  {/* Order number + items */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-bold text-gray-500 dark:text-gray-400">#{o.order_number}</span>
+                      <span className="text-xs text-gray-400">·</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">{o.items?.length || 0} item{o.items?.length !== 1 ? 's' : ''}</span>
+                    </div>
+                    {o.waiter && (
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <div className="w-3.5 h-3.5 rounded-full bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center text-[9px] font-bold text-indigo-600 dark:text-indigo-400 flex-shrink-0">
+                          {o.waiter.charAt(0)}
+                        </div>
+                        <span className="text-[11px] text-gray-400 truncate">{o.waiter.split(' ')[0]}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Status badge */}
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full capitalize flex-shrink-0 ${statusColors[o.status] || 'bg-gray-100 text-gray-500'}`}>
+                    {o.status}
+                  </span>
+
+                  {/* Actions */}
+                  <div className="flex gap-1.5 flex-shrink-0">
+                    <button
+                      onClick={() => setReprintModal({ order: o })}
+                      title="Reprint chit"
+                      className="text-[11px] font-bold px-2 py-1 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                    >🖨</button>
+                    <button
+                      onClick={() => {
+                        setOrderContext({ tableId: o.table_id, tableNumber: o.table_number, isTakeaway: o.order_type === 'takeaway', existingOrder: o })
+                        navTo('orders')
+                      }}
+                      className="text-[11px] font-bold px-2.5 py-1 rounded-lg border border-indigo-200 dark:border-indigo-700 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
+                    >View</button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </Card>
+
+      {/* Reprint modal */}
+      {reprintModal && (() => {
+        const o = reprintModal.order
+        const kitchenItems = (o.items || []).filter(i => (i.station || 'kitchen') !== 'bar')
+        const barItems     = (o.items || []).filter(i => i.station === 'bar')
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setReprintModal(null)}>
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-xs mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
+                <div>
+                  <div className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-0.5">
+                    {o.order_type === 'takeaway' ? 'Takeaway' : `Table ${o.table_number}`} · #{o.order_number}
+                  </div>
+                  <div className="text-base font-extrabold text-gray-900 dark:text-white">Reprint Chit</div>
+                </div>
+                <button onClick={() => setReprintModal(null)} className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors font-bold text-base">✕</button>
+              </div>
+              <div className="px-5 py-4 space-y-2.5">
+                {kitchenItems.length > 0 ? (
+                  <button
+                    onClick={() => { printStationTicket(o, kitchenItems, 'Kitchen'); setReprintModal(null) }}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 hover:border-amber-400 transition-all text-left"
+                  >
+                    <span className="text-xl">👨‍🍳</span>
+                    <div>
+                      <div className="text-sm font-bold text-amber-700 dark:text-amber-300">Reprint Kitchen</div>
+                      <div className="text-xs text-gray-400">{kitchenItems.length} kitchen item{kitchenItems.length !== 1 ? 's' : ''}</div>
+                    </div>
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-gray-100 dark:border-gray-700 opacity-40 cursor-not-allowed">
+                    <span className="text-xl">👨‍🍳</span>
+                    <div>
+                      <div className="text-sm font-bold text-gray-500">Kitchen</div>
+                      <div className="text-xs text-gray-400">No kitchen items</div>
+                    </div>
+                  </div>
+                )}
+                {barItems.length > 0 ? (
+                  <button
+                    onClick={() => { printStationTicket(o, barItems, 'Bar'); setReprintModal(null) }}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-cyan-200 dark:border-cyan-700 bg-cyan-50 dark:bg-cyan-900/20 hover:border-cyan-400 transition-all text-left"
+                  >
+                    <span className="text-xl">🍸</span>
+                    <div>
+                      <div className="text-sm font-bold text-cyan-700 dark:text-cyan-300">Reprint Bar</div>
+                      <div className="text-xs text-gray-400">{barItems.length} bar item{barItems.length !== 1 ? 's' : ''}</div>
+                    </div>
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-gray-100 dark:border-gray-700 opacity-40 cursor-not-allowed">
+                    <span className="text-xl">🍸</span>
+                    <div>
+                      <div className="text-sm font-bold text-gray-500">Bar</div>
+                      <div className="text-xs text-gray-400">No bar items</div>
+                    </div>
+                  </div>
+                )}
+                <button
+                  onClick={() => { printStationTicket(o, o.items || [], 'Full Order'); setReprintModal(null) }}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-gray-200 dark:border-gray-600 hover:border-gray-400 transition-all text-left"
+                >
+                  <span className="text-xl">📋</span>
+                  <div>
+                    <div className="text-sm font-bold text-gray-700 dark:text-gray-300">Full Order</div>
+                    <div className="text-xs text-gray-400">All {o.items?.length || 0} items on one ticket</div>
+                  </div>
+                </button>
+              </div>
+              <div className="px-5 pb-5">
+                <button
+                  onClick={() => setReprintModal(null)}
+                  className="w-full py-3 rounded-xl text-sm font-bold border-2 border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
+                >Cancel</button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
@@ -885,34 +1265,35 @@ export function Orders({ navTo, orderContext }) {
     if (!newItems.length) return
 
     const mappedItems = newItems.map(i => ({ name: i.name_en, qty: i.qty, price: i.price, mods: i.selectedMods || [], note: i.note || '', station: i.station || 'kitchen' }))
-    const hasKitchenItems = mappedItems.some(i => i.station !== 'bar')
-    const hasBarItems     = mappedItems.some(i => i.station === 'bar')
+    const kitchenItems = mappedItems.filter(i => (i.station || 'kitchen') !== 'bar')
+    const barItems     = mappedItems.filter(i => i.station === 'bar')
+    const hasKitchen   = kitchenItems.length > 0
+    const hasBar       = barItems.length > 0
 
     if (isAddingToExisting) {
-      // Append new items to existing order
-      setLiveOrders(prev => prev.map(o => {
-        if (o.id !== existingOrder.id) return o
-        const mergedItems = [...o.items, ...mappedItems]
-        const allHasKitchen = mergedItems.some(i => (i.station || 'kitchen') !== 'bar')
-        const allHasBar     = mergedItems.some(i => i.station === 'bar')
-        return {
-          ...o,
-          items: mergedItems,
-          rounds: round,
-          status: 'cooking',
-          kitchenStatus: allHasKitchen ? (o.kitchenStatus === 'served' ? 'cooking' : o.kitchenStatus || 'cooking') : null,
-          barStatus:     allHasBar     ? (o.barStatus     === 'served' ? 'pending'  : o.barStatus     || 'pending')  : null,
-        }
-      }))
-      alert(`Round ${round} sent!\n${newItems.length} new item(s) added to ${label}`)
+      const mergedItems   = [...existingOrder.items, ...mappedItems]
+      const allHasKitchen = mergedItems.some(i => (i.station || 'kitchen') !== 'bar')
+      const allHasBar     = mergedItems.some(i => i.station === 'bar')
+      const updatedOrder  = {
+        ...existingOrder,
+        items: mergedItems,
+        rounds: round,
+        status: 'cooking',
+        kitchenStatus: allHasKitchen ? (existingOrder.kitchenStatus === 'served' ? 'cooking' : existingOrder.kitchenStatus || 'cooking') : null,
+        barStatus:     allHasBar     ? (existingOrder.barStatus     === 'served' ? 'pending'  : existingOrder.barStatus     || 'pending')  : null,
+      }
+      setLiveOrders(prev => prev.map(o => o.id === existingOrder.id ? updatedOrder : o))
+      // Auto-print only the new items for this round
+      const roundTicket = { ...existingOrder, rounds: round }
+      if (hasKitchen) printStationTicket(roundTicket, kitchenItems, 'Kitchen')
+      if (hasBar)     printStationTicket(roundTicket, barItems, 'Bar')
     } else {
-      // New order
       const newOrder = {
         id: `o${Date.now()}`,
         order_number: nextOrderNum,
-        table_id: orderContext?.tableId || null,
+        table_id:     orderContext?.tableId   || null,
         table_number: orderContext?.tableNumber || null,
-        order_type: orderContext?.isTakeaway ? 'takeaway' : 'dinein',
+        order_type:   orderContext?.isTakeaway ? 'takeaway' : 'dinein',
         status: 'cooking',
         waiter: user?.full_name || 'Staff',
         notes,
@@ -921,12 +1302,14 @@ export function Orders({ navTo, orderContext }) {
         created_timestamp: Date.now(),
         items: mappedItems,
         rounds: 1,
-        kitchenStatus: hasKitchenItems ? 'cooking' : null,
-        barStatus:     hasBarItems     ? 'pending'  : null,
+        kitchenStatus: hasKitchen ? 'cooking' : null,
+        barStatus:     hasBar     ? 'pending'  : null,
       }
       setLiveOrders(prev => [...prev, newOrder])
       setNextOrderNum(n => n + 1)
-      alert(`Order #${nextOrderNum} sent!\n${newItems.length} item(s) for ${label}`)
+      // Auto-print chits
+      if (hasKitchen) printStationTicket(newOrder, kitchenItems, 'Kitchen')
+      if (hasBar)     printStationTicket(newOrder, barItems, 'Bar')
     }
 
     setNewItems([])
