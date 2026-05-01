@@ -2231,8 +2231,39 @@ export function Billing({ orderContext }) {
     setCompApprover('')
   }
 
-  function removeComp(key) {
-    setCompItems(p => { const n = { ...p }; delete n[key]; return n })
+  // ── Comp Reversal state ───────────────────────────────────────────────────────
+  // reverseDialog: null | { key, itemName, price, qty, originalReason, originalApprover }
+  const [reverseDialog, setReverseDialog] = useState(null)
+  const [reverseReason, setReverseReason] = useState('')
+  const [reverseApprover, setReverseApprover] = useState('')
+  // compRemovedLog: audit trail of items un-comped in this billing session
+  const [compRemovedLog, setCompRemovedLog] = useState([])
+
+  const REVERSE_REASONS = ['Incorrectly Flagged', 'Customer Will Pay', 'Manager Override', 'Input Error', 'Other']
+
+  function openReverseDialog(key, itemName, price, qty) {
+    setReverseDialog({ key, itemName, price, qty, originalReason: compItems[key]?.reason, originalApprover: compItems[key]?.approvedBy })
+    setReverseReason('')
+    setReverseApprover('')
+  }
+
+  function confirmReversal() {
+    if (!reverseReason) return
+    setCompRemovedLog(p => [...p, {
+      key: reverseDialog.key,
+      itemName: reverseDialog.itemName,
+      price: reverseDialog.price,
+      qty: reverseDialog.qty,
+      originalReason: reverseDialog.originalReason,
+      originalApprover: reverseDialog.originalApprover,
+      reverseReason,
+      reversedBy: reverseApprover.trim() || user?.full_name || '—',
+      reversedAt: new Date(),
+    }])
+    setCompItems(p => { const n = { ...p }; delete n[reverseDialog.key]; return n })
+    setReverseDialog(null)
+    setReverseReason('')
+    setReverseApprover('')
   }
 
   // ── Open bill tracking ──────────────────────────────────────────────────────
@@ -2312,6 +2343,7 @@ export function Billing({ orderContext }) {
     setBillNote('')
     setPreloadLabel('')
     setCompItems({})
+    setCompRemovedLog([])
   }
 
   function openBillItemModal(item) {
@@ -2439,6 +2471,16 @@ export function Billing({ orderContext }) {
       change: cashGiven > 0 ? Math.max(0, cashGiven - total) : 0,
       note: billNote.trim(),
       paid_at: paidAt,
+      comp_reversals: compRemovedLog.length > 0 ? compRemovedLog.map(r => ({
+        itemName: r.itemName,
+        price: r.price,
+        qty: r.qty,
+        originalReason: r.originalReason,
+        originalApprover: r.originalApprover,
+        reverseReason: r.reverseReason,
+        reversedBy: r.reversedBy,
+        reversedAt: r.reversedAt.toISOString(),
+      })) : undefined,
     })
 
     setReceipt({
@@ -2454,6 +2496,7 @@ export function Billing({ orderContext }) {
       compCount,
     })
     setCompItems({})
+    setCompRemovedLog([])
   }
 
   // ── Receipt view ─────────────────────────────────────────────────────────────
@@ -2526,7 +2569,7 @@ export function Billing({ orderContext }) {
             <Btn onClick={() => alert('Share via email/WhatsApp...')}>Share</Btn>
           </div>
           <Btn variant="success" fullWidth className="mt-2" onClick={() => {
-            setReceipt(null); setCart([]); setBillItems([]); setPayMethod(null); setCashGiven(0); setLoadedBillId(null); setMobileBillTab('menu'); setBillNote(''); setCompItems({})
+            setReceipt(null); setCart([]); setBillItems([]); setPayMethod(null); setCashGiven(0); setLoadedBillId(null); setMobileBillTab('menu'); setBillNote(''); setCompItems({}); setCompRemovedLog([])
           }}>
             New Sale
           </Btn>
@@ -2702,9 +2745,9 @@ export function Billing({ orderContext }) {
                         </span>
                         {/* Comp toggle */}
                         <button
-                          onClick={() => comped ? removeComp(key) : openCompDialog(key, item.name_en, item.price, item.qty)}
-                          title={comped ? 'Remove Comp' : 'Mark as Comp (On the House)'}
-                          className={`w-6 h-6 flex items-center justify-center rounded-lg text-xs flex-shrink-0 transition-colors font-bold ${comped ? 'bg-amber-400 text-white hover:bg-amber-500' : 'text-gray-300 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20'}`}
+                          onClick={() => comped ? openReverseDialog(key, item.name_en, item.price, item.qty) : openCompDialog(key, item.name_en, item.price, item.qty)}
+                          title={comped ? 'Reverse Comp' : 'Mark as Comp (On the House)'}
+                          className={`w-6 h-6 flex items-center justify-center rounded-lg text-xs flex-shrink-0 transition-colors font-bold ${comped ? 'bg-amber-400 text-white hover:bg-rose-500' : 'text-gray-300 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20'}`}
                         >🎁</button>
                         <button onClick={() => removeBillItem(i)} className="w-6 h-6 flex items-center justify-center rounded-lg text-gray-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors text-xs flex-shrink-0">✕</button>
                       </div>
@@ -2746,9 +2789,9 @@ export function Billing({ orderContext }) {
                           </span>
                           {/* Comp toggle */}
                           <button
-                            onClick={() => comped ? removeComp(key) : openCompDialog(key, item.name_en, item.price, item.qty)}
-                            title={comped ? 'Remove Comp' : 'Mark as Comp (On the House)'}
-                            className={`w-6 h-6 flex items-center justify-center rounded-lg text-xs flex-shrink-0 transition-colors font-bold ${comped ? 'bg-amber-400 text-white hover:bg-amber-500' : 'text-gray-300 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20'}`}
+                            onClick={() => comped ? openReverseDialog(key, item.name_en, item.price, item.qty) : openCompDialog(key, item.name_en, item.price, item.qty)}
+                            title={comped ? 'Reverse Comp' : 'Mark as Comp (On the House)'}
+                            className={`w-6 h-6 flex items-center justify-center rounded-lg text-xs flex-shrink-0 transition-colors font-bold ${comped ? 'bg-amber-400 text-white hover:bg-rose-500' : 'text-gray-300 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20'}`}
                           >🎁</button>
                           <button onClick={() => removeFromCart(item.id)} className="w-6 h-6 flex items-center justify-center rounded-lg text-gray-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors text-xs">✕</button>
                         </div>
@@ -2787,6 +2830,23 @@ export function Billing({ orderContext }) {
               <div className="flex justify-between text-xs text-amber-600 dark:text-amber-400 font-semibold">
                 <span>🎁 Comp ({compCount} item{compCount !== 1 ? 's' : ''})</span>
                 <span>−€{compTotal.toFixed(2)}</span>
+              </div>
+            )}
+            {compRemovedLog.length > 0 && (
+              <div className="rounded-xl bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-700/40 px-3 py-2 space-y-1.5 mt-1">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-md bg-rose-500 text-white tracking-widest">REVERSED</span>
+                  <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400">{compRemovedLog.length} comp{compRemovedLog.length !== 1 ? 's' : ''} removed this session</span>
+                </div>
+                {compRemovedLog.map((r, i) => (
+                  <div key={i} className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-[10px] font-semibold text-rose-700 dark:text-rose-300 truncate">↩ {r.itemName}</div>
+                      <div className="text-[9px] text-rose-500 dark:text-rose-400 truncate">{r.reverseReason} · {r.reversedBy}</div>
+                    </div>
+                    <div className="text-[10px] font-bold text-rose-700 dark:text-rose-300 flex-shrink-0">+€{(r.price * r.qty).toFixed(2)}</div>
+                  </div>
+                ))}
               </div>
             )}
             <div className="flex justify-between text-xs text-gray-400">
@@ -2901,6 +2961,83 @@ export function Billing({ orderContext }) {
               disabled={!compReason}
               className="py-3 rounded-xl text-sm font-bold bg-amber-500 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-all active:scale-[0.98]"
             >Confirm Comp</button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* ── Comp Reversal Confirmation Dialog ────────────────────────────────────── */}
+    {reverseDialog && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setReverseDialog(null)}>
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
+          {/* Header */}
+          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700 bg-rose-50 dark:bg-rose-900/20">
+            <div className="flex items-center gap-2.5">
+              <span className="text-xl">↩️</span>
+              <div>
+                <h3 className="text-sm font-extrabold text-gray-900 dark:text-white">Reverse Comp</h3>
+                <p className="text-xs text-rose-600 dark:text-rose-400 font-medium truncate max-w-[200px]">{reverseDialog.itemName}</p>
+              </div>
+            </div>
+            <button onClick={() => setReverseDialog(null)} className="w-8 h-8 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors font-bold">✕</button>
+          </div>
+
+          {/* Original comp info */}
+          <div className="mx-5 mt-4 flex items-center justify-between bg-amber-50 dark:bg-amber-900/20 rounded-xl px-4 py-3">
+            <div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">Original comp</div>
+              <div className="text-xs font-bold text-amber-700 dark:text-amber-300 mt-0.5">{reverseDialog.originalReason || '—'}</div>
+            </div>
+            <div className="text-right">
+              <div className="text-xs text-gray-400">by {reverseDialog.originalApprover || '—'}</div>
+              <div className="text-sm font-extrabold text-amber-700 dark:text-amber-300">€{(reverseDialog.price * reverseDialog.qty).toFixed(2)}</div>
+            </div>
+          </div>
+
+          {/* Bill impact notice */}
+          <div className="mx-5 mt-3 flex items-center gap-2 bg-rose-50 dark:bg-rose-900/20 rounded-xl px-4 py-2.5">
+            <span className="text-rose-500 text-sm">⚠️</span>
+            <div className="text-xs text-rose-700 dark:text-rose-300 font-semibold">
+              €{(reverseDialog.price * reverseDialog.qty).toFixed(2)} will be <span className="underline">added back</span> to the bill
+            </div>
+          </div>
+
+          {/* Reversal reason */}
+          <div className="px-5 pt-4">
+            <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-2">Reason for Reversal <span className="text-rose-500">*</span></label>
+            <div className="grid grid-cols-2 gap-1.5 mb-3">
+              {REVERSE_REASONS.map(r => (
+                <button
+                  key={r}
+                  onClick={() => setReverseReason(r)}
+                  className={`text-xs font-semibold px-2.5 py-2 rounded-xl border-2 text-left transition-all ${reverseReason === r ? 'border-rose-500 bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300' : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-rose-300'}`}
+                >{r}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* Authorised By */}
+          <div className="px-5 pb-4">
+            <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5">Authorised By</label>
+            <input
+              value={reverseApprover}
+              onChange={e => setReverseApprover(e.target.value)}
+              placeholder={`Default: ${user?.full_name || 'Current user'}`}
+              className="w-full text-xs px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-rose-400"
+            />
+          </div>
+
+          {/* Actions */}
+          <div className="px-5 pb-5 grid grid-cols-2 gap-2">
+            <button
+              onClick={() => setReverseDialog(null)}
+              className="py-3 rounded-xl text-sm font-bold border-2 border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
+            >Keep Comp</button>
+            <button
+              onClick={confirmReversal}
+              disabled={!reverseReason}
+              className="py-3 rounded-xl text-sm font-bold bg-rose-500 hover:bg-rose-600 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-all active:scale-[0.98]"
+            >Reverse Comp</button>
           </div>
         </div>
       </div>
