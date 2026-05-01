@@ -433,6 +433,183 @@ export function Waiters() {
   )
 }
 
+// ─── Active Orders Card (expandable) ─────────────────────────────────────────
+const STATUS_CFG_DASH = {
+  pending:   { label: 'Pending',  bg: 'bg-amber-100 dark:bg-amber-900/30', text: 'text-amber-700 dark:text-amber-400', dot: 'bg-amber-400' },
+  cooking:   { label: 'Cooking',  bg: 'bg-blue-100 dark:bg-blue-900/30',   text: 'text-blue-700 dark:text-blue-400',   dot: 'bg-blue-500' },
+  ready:     { label: 'Ready',    bg: 'bg-green-100 dark:bg-green-900/30', text: 'text-green-700 dark:text-green-400', dot: 'bg-green-500' },
+  served:    { label: 'Served',   bg: 'bg-indigo-100 dark:bg-indigo-900/30', text: 'text-indigo-700 dark:text-indigo-400', dot: 'bg-indigo-500' },
+  completed: { label: 'Done',     bg: 'bg-gray-100 dark:bg-gray-700', text: 'text-gray-600 dark:text-gray-300', dot: 'bg-gray-400' },
+}
+
+function ActiveOrdersCard({ liveOrders, setReprintModal, setOrderContext, navTo }) {
+  const [expanded, setExpanded] = useState(null)
+  const active = liveOrders.filter(o => !['paid'].includes(o.status))
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-medium text-gray-900 dark:text-white">Active Orders</h2>
+        <span className="text-xs font-bold px-2 py-0.5 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
+          {active.length} orders
+        </span>
+      </div>
+      {active.length === 0 ? (
+        <div className="text-center py-8 text-gray-400 text-sm">No active orders</div>
+      ) : (
+        <div className="space-y-2">
+          {active.map(o => {
+            const cfg = STATUS_CFG_DASH[o.status] || STATUS_CFG_DASH.pending
+            const total = (o.items || []).reduce((s, i) => s + i.price * i.qty, 0)
+            const isOpen = expanded === o.id
+            const kitchenItems = (o.items || []).filter(i => (i.station || 'kitchen') !== 'bar')
+            const barItems     = (o.items || []).filter(i => i.station === 'bar')
+            return (
+              <div key={o.id} className={`rounded-xl border transition-all overflow-hidden ${isOpen ? 'border-indigo-200 dark:border-indigo-700/60 shadow-sm' : 'border-gray-100 dark:border-gray-700/60'}`}>
+                {/* Header row — always visible, click to expand */}
+                <button
+                  className="w-full flex items-center gap-3 px-3 py-2.5 bg-gray-50/50 dark:bg-gray-800/40 hover:bg-gray-100/80 dark:hover:bg-gray-700/40 transition-colors text-left"
+                  onClick={() => setExpanded(isOpen ? null : o.id)}
+                >
+                  {/* Table */}
+                  <div className="flex flex-col min-w-[3rem]">
+                    <span className="text-sm font-extrabold text-gray-800 dark:text-gray-200">
+                      {o.order_type === 'takeaway' ? 'T/A' : `T${o.table_number || 0}`}
+                    </span>
+                    {o.merged_from_number && (
+                      <span className="text-[10px] font-semibold text-blue-500">+T{o.merged_from_number}</span>
+                    )}
+                  </div>
+
+                  {/* Order # + waiter */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">#{o.order_number}</span>
+                      <span className="text-[11px] text-gray-400">{(o.items || []).reduce((s,i)=>s+i.qty,0)} items · €{total.toFixed(2)}</span>
+                    </div>
+                    <div className="flex items-center gap-1 mt-0.5">
+                      {o.waiter && (
+                        <>
+                          <div className="w-3.5 h-3.5 rounded-full bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center text-[9px] font-bold text-indigo-600 dark:text-indigo-400 flex-shrink-0">
+                            {o.waiter.charAt(0)}
+                          </div>
+                          <span className="text-[11px] text-gray-400 truncate">{o.waiter.split(' ')[0]}</span>
+                          <span className="text-[11px] text-gray-300 dark:text-gray-600">·</span>
+                        </>
+                      )}
+                      <span className="text-[11px] text-gray-400">{o.created_at || ''}</span>
+                    </div>
+                  </div>
+
+                  {/* Status */}
+                  <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${cfg.bg} ${cfg.text}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
+                    {cfg.label}
+                  </span>
+
+                  {/* Chevron */}
+                  <span className={`text-gray-400 flex-shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 12 15 18 9" /></svg>
+                  </span>
+                </button>
+
+                {/* Expanded details */}
+                {isOpen && (
+                  <div className="px-3 pb-3 pt-2 bg-white dark:bg-gray-800 border-t border-gray-100 dark:border-gray-700/60 space-y-3">
+
+                    {/* Table info grid */}
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="bg-gray-50 dark:bg-gray-700/40 rounded-lg px-2.5 py-2">
+                        <div className="text-[10px] text-gray-400 mb-0.5">Table</div>
+                        <div className="text-xs font-bold text-gray-800 dark:text-gray-100">
+                          {o.order_type === 'takeaway' ? 'Takeaway' : `Table ${o.table_number || 0}`}
+                          {o.merged_from_number && <span className="ml-1 text-blue-500">+T{o.merged_from_number}</span>}
+                        </div>
+                      </div>
+                      <div className="bg-gray-50 dark:bg-gray-700/40 rounded-lg px-2.5 py-2">
+                        <div className="text-[10px] text-gray-400 mb-0.5">Waiter</div>
+                        <div className="text-xs font-bold text-gray-800 dark:text-gray-100">{o.waiter || '—'}</div>
+                      </div>
+                      <div className="bg-gray-50 dark:bg-gray-700/40 rounded-lg px-2.5 py-2">
+                        <div className="text-[10px] text-gray-400 mb-0.5">Total</div>
+                        <div className="text-xs font-bold text-indigo-600 dark:text-indigo-400">€{total.toFixed(2)}</div>
+                      </div>
+                    </div>
+
+                    {/* Items list */}
+                    {kitchenItems.length > 0 && (
+                      <div>
+                        <div className="text-[10px] font-bold text-orange-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                          <ChefHat size={11} />Kitchen
+                        </div>
+                        <div className="rounded-lg border border-orange-100 dark:border-orange-900/30 overflow-hidden">
+                          {kitchenItems.map((item, i) => (
+                            <div key={i} className="flex items-center justify-between px-2.5 py-1.5 border-b border-orange-50 dark:border-orange-900/20 last:border-0 bg-orange-50/40 dark:bg-orange-900/5">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="w-5 h-5 rounded-md bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 text-[11px] font-extrabold flex items-center justify-center flex-shrink-0">{item.qty}</span>
+                                <span className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate">{item.name || item.name_en}</span>
+                                {item.mods?.length > 0 && <span className="text-[10px] text-indigo-500 truncate">· {item.mods.join(', ')}</span>}
+                              </div>
+                              <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 flex-shrink-0 ml-2">€{(item.price * item.qty).toFixed(2)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {barItems.length > 0 && (
+                      <div>
+                        <div className="text-[10px] font-bold text-purple-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                          <Wine size={11} />Bar
+                        </div>
+                        <div className="rounded-lg border border-purple-100 dark:border-purple-900/30 overflow-hidden">
+                          {barItems.map((item, i) => (
+                            <div key={i} className="flex items-center justify-between px-2.5 py-1.5 border-b border-purple-50 dark:border-purple-900/20 last:border-0 bg-purple-50/40 dark:bg-purple-900/5">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="w-5 h-5 rounded-md bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 text-[11px] font-extrabold flex items-center justify-center flex-shrink-0">{item.qty}</span>
+                                <span className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate">{item.name || item.name_en}</span>
+                                {item.mods?.length > 0 && <span className="text-[10px] text-indigo-500 truncate">· {item.mods.join(', ')}</span>}
+                              </div>
+                              <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 flex-shrink-0 ml-2">€{(item.price * item.qty).toFixed(2)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {o.notes && (
+                      <div className="flex items-start gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 rounded-lg px-2.5 py-2">
+                        <AlertTriangle size={12} className="text-amber-500 flex-shrink-0 mt-0.5" />
+                        <span className="text-[11px] text-amber-700 dark:text-amber-400 font-medium">{o.notes}</span>
+                      </div>
+                    )}
+
+                    {/* Action buttons */}
+                    <div className="flex gap-2 pt-0.5">
+                      <button
+                        onClick={() => setReprintModal({ order: o })}
+                        className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                      ><Printer size={11} />Print</button>
+                      <button
+                        onClick={() => { setOrderContext({ tableId: o.table_id, tableNumber: o.table_number, isTakeaway: o.order_type === 'takeaway', existingOrder: o }); navTo('orders') }}
+                        className="flex-1 flex items-center justify-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-indigo-200 dark:border-indigo-700 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
+                      >Add Items</button>
+                      <button
+                        onClick={() => navTo('billing', { preloadOrder: o })}
+                        className="flex-1 flex items-center justify-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
+                      >Go to Bill</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </Card>
+  )
+}
+
 // ─── Tables ───────────────────────────────────────────────────────────────────
 export function Tables({ navTo, setOrderContext }) {
   const { liveOrders, setLiveOrders, users, company, openBills, transferOrder, mergeOrder, unmergeOrder } = useApp()
@@ -1040,82 +1217,7 @@ export function Tables({ navTo, setOrderContext }) {
           </span>
         </div>
       </Card>
-      <Card>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-medium text-gray-900 dark:text-white">Active Orders</h2>
-          <span className="text-xs font-bold px-2 py-0.5 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
-            {liveOrders.filter(o => !['paid'].includes(o.status)).length} orders
-          </span>
-        </div>
-        {liveOrders.filter(o => !['paid'].includes(o.status)).length === 0 ? (
-          <div className="text-center py-8 text-gray-400 text-sm">No active orders</div>
-        ) : (
-          <div className="space-y-2">
-            {liveOrders.filter(o => !['paid'].includes(o.status)).map(o => {
-              const statusColors = {
-                pending:   'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300',
-                cooking:   'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
-                served:    'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400',
-                completed: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400',
-              }
-              const isMergedOrder = !!o.merged_from_id
-              const isTransferred = !!o.transferred_from_id
-              return (
-                <div key={o.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-gray-100 dark:border-gray-700/60 bg-gray-50/50 dark:bg-gray-800/40 hover:bg-gray-100/80 dark:hover:bg-gray-800 transition-colors">
-
-                  {/* Table label */}
-                  <div className="flex flex-col min-w-[3rem]">
-                    <span className="text-sm font-extrabold text-gray-800 dark:text-gray-200">
-                      {o.order_type === 'takeaway' ? 'T/A' : `T${o.table_number || '?'}`}
-                    </span>
-                    {isMergedOrder && (
-                      <span className="text-[10px] font-semibold text-blue-500">from T{o.merged_from_number}</span>
-                    )}
-                  </div>
-
-                  {/* Order number + items */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-bold text-gray-500 dark:text-gray-400">#{o.order_number}</span>
-                      <span className="text-xs text-gray-400">·</span>
-                      <span className="text-xs text-gray-500 dark:text-gray-400">{o.items?.length || 0} item{o.items?.length !== 1 ? 's' : ''}</span>
-                    </div>
-                    {o.waiter && (
-                      <div className="flex items-center gap-1 mt-0.5">
-                        <div className="w-3.5 h-3.5 rounded-full bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center text-[9px] font-bold text-indigo-600 dark:text-indigo-400 flex-shrink-0">
-                          {o.waiter.charAt(0)}
-                        </div>
-                        <span className="text-[11px] text-gray-400 truncate">{o.waiter.split(' ')[0]}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Status badge */}
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full capitalize flex-shrink-0 ${statusColors[o.status] || 'bg-gray-100 text-gray-500'}`}>
-                    {o.status}
-                  </span>
-
-                  {/* Actions */}
-                  <div className="flex gap-1.5 flex-shrink-0">
-                    <button
-                      onClick={() => setReprintModal({ order: o })}
-                      title="Reprint chit"
-                      className="text-[11px] font-bold px-2 py-1 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                    >🖨</button>
-                    <button
-                      onClick={() => {
-                        setOrderContext({ tableId: o.table_id, tableNumber: o.table_number, isTakeaway: o.order_type === 'takeaway', existingOrder: o })
-                        navTo('orders')
-                      }}
-                      className="text-[11px] font-bold px-2.5 py-1 rounded-lg border border-indigo-200 dark:border-indigo-700 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
-                    >View</button>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </Card>
+      <ActiveOrdersCard liveOrders={liveOrders} setReprintModal={setReprintModal} setOrderContext={setOrderContext} navTo={navTo} />
 
       {/* Reprint modal */}
       {reprintModal && (() => {
