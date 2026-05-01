@@ -4,7 +4,7 @@ import { useApp, ROLES } from '../context/AppContext'
 import { t } from '../i18n/translations'
 import { Card, StatCard, Badge, Table, TR, TD, Btn, Avatar, Divider, SectionLabel, statusColor, Input, Select, Textarea } from '../components/UI'
 import { SAMPLE_USERS, SAMPLE_ORDERS, INVENTORY_ITEMS, TABLES, MENU_CATEGORIES, MENU_ITEMS, SAMPLE_INVOICES, SUPPLIER_INVOICES } from '../lib/mockData'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, Timer, GitMerge, ArrowRight, CheckCircle2, Flame, Activity, Printer, Play, AlertCircle, Wine, ChefHat } from 'lucide-react'
 
 export function Dashboard({ navTo }) {
   const { user, lang, users, approveUser } = useApp()
@@ -1590,7 +1590,6 @@ function printStationTicket(o, items, stationLabel) {
     ${i.note ? `<div class="note">&#9888; ${i.note}</div>` : ''}
   </div>`).join('<hr style="border-top:1px dotted #ccc;margin:4px 0">')}
   <hr>
-  ${o.notes ? `<div class="allergy">&#9888; ALLERGY/NOTE: ${o.notes}</div>` : ''}
   </body></html>`)
   win.document.close()
   win.focus()
@@ -1598,25 +1597,68 @@ function printStationTicket(o, items, stationLabel) {
 }
 
 // ─── Kitchen ──────────────────────────────────────────────────────────────────
+// ─── Shared station helpers ───────────────────────────────────────────────────
+function stationElapsedMin(timeStr) {
+  if (!timeStr || !timeStr.includes(':')) return null
+  const [h, m] = timeStr.split(':').map(Number)
+  if (isNaN(h) || isNaN(m)) return null
+  const now = new Date(), then = new Date()
+  then.setHours(h, m, 0, 0)
+  if (then > now) then.setDate(then.getDate() - 1)
+  return Math.max(0, Math.floor((now - then) / 60000))
+}
+
+function StationElapsed({ timeStr }) {
+  const min = stationElapsedMin(timeStr)
+  if (min === null) return <span className="text-xs text-gray-400">—</span>
+  const urgent = min > 20, warn = min >= 10 && min <= 20
+  const label  = min < 60 ? `${min}m` : `${Math.floor(min/60)}h ${min % 60}m`
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs font-bold ${urgent ? 'text-red-600 dark:text-red-400' : warn ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+      {urgent && <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping flex-shrink-0" />}
+      <Timer size={11} />{label}
+    </span>
+  )
+}
+
+function StationTableLabel({ o }) {
+  const base = o.order_type === 'takeaway' ? 'Takeaway' : `Table ${o.table_number}`
+  return (
+    <span className="flex items-center gap-1.5 flex-wrap">
+      <span className="font-bold text-gray-900 dark:text-white">{base}</span>
+      {o.merged_from_number && (
+        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[10px] font-bold">
+          <GitMerge size={9} />+T{o.merged_from_number}
+        </span>
+      )}
+      {o.transferred_from_id && !o.merged_from_number && (
+        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-[10px] font-bold">
+          <ArrowRight size={9} />moved
+        </span>
+      )}
+    </span>
+  )
+}
+
 export function Kitchen() {
   const { liveOrders, setLiveOrders } = useApp()
 
-  // Show orders that have kitchen items (kitchenStatus not null) and aren't kitchen-done
-  // Fall back to legacy orders without kitchenStatus field
   const kitchenOrders = [...liveOrders]
     .filter(o => {
       if (o.kitchenStatus === undefined) return ['pending','cooking','ready'].includes(o.status)
       return o.kitchenStatus !== null && o.kitchenStatus !== 'served'
     })
-    .sort((a, b) => (b.priority ? 1 : 0) - (a.priority ? 1 : 0))
+    .sort((a, b) => {
+      if (b.priority !== a.priority) return (b.priority ? 1 : 0) - (a.priority ? 1 : 0)
+      return (a.order_number || 0) - (b.order_number || 0)
+    })
 
   function advance(id) {
     setLiveOrders(p => p.map(o => {
       if (o.id !== id) return o
       const ks = o.kitchenStatus ?? o.status
       const next = ks === 'pending' ? 'cooking' : ks === 'cooking' ? 'ready' : ks === 'ready' ? 'served' : ks
-      const overall = computeOverallStatus(next, o.barStatus ?? null)
-      return { ...o, kitchenStatus: next, status: overall }
+      return { ...o, kitchenStatus: next, status: computeOverallStatus(next, o.barStatus ?? null) }
     }))
   }
 
@@ -1624,85 +1666,184 @@ export function Kitchen() {
     setLiveOrders(p => p.map(o => o.id === id ? { ...o, priority: !o.priority } : o))
   }
 
-  const borderColor = { pending: 'border-l-amber-400', cooking: 'border-l-blue-500', ready: 'border-l-green-500' }
-  const btnVariant  = { pending: 'primary', cooking: 'success', ready: 'warning' }
-  const btnLabel    = { pending: '▶ Start Cooking', cooking: '✓ Mark Ready', ready: '🛎 Ready — Notify Waiter' }
+  function printAll() {
+    kitchenOrders.forEach((o, idx) => {
+      const items = o.items.filter(i => (i.station || 'kitchen') !== 'bar')
+      setTimeout(() => printStationTicket(o, items, 'Kitchen'), idx * 450)
+    })
+  }
+
+  const stats = { pending: 0, cooking: 0, ready: 0 }
+  kitchenOrders.forEach(o => { const s = o.kitchenStatus ?? o.status; if (stats[s] !== undefined) stats[s]++ })
+
+  const KS_CFG = {
+    pending: { label:'Pending',  topBar:'bg-amber-400', bg:'bg-amber-100 dark:bg-amber-900/30', text:'text-amber-700 dark:text-amber-400', dot:'bg-amber-400' },
+    cooking: { label:'Cooking',  topBar:'bg-blue-500',  bg:'bg-blue-100 dark:bg-blue-900/30',   text:'text-blue-700 dark:text-blue-400',   dot:'bg-blue-500' },
+    ready:   { label:'Ready',    topBar:'bg-green-500', bg:'bg-green-100 dark:bg-green-900/30', text:'text-green-700 dark:text-green-400', dot:'bg-green-500' },
+  }
 
   if (kitchenOrders.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-48 text-gray-400">
-        <div className="text-4xl mb-2">👨‍🍳</div>
-        <div className="text-sm font-medium">No active kitchen orders</div>
-        <div className="text-xs mt-1">Waiting for new orders…</div>
+      <div className="flex flex-col items-center justify-center py-24 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700/60">
+        <ChefHat size={48} className="text-gray-300 dark:text-gray-600 mb-3" />
+        <div className="text-sm font-semibold text-gray-400">No active kitchen orders</div>
+        <div className="text-xs text-gray-300 dark:text-gray-600 mt-1">Waiting for new orders…</div>
       </div>
     )
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {kitchenOrders.map(o => {
-        const ks = o.kitchenStatus ?? o.status
-        const kitchenItems = o.items.filter(i => (i.station || 'kitchen') !== 'bar')
-        return (
-          <div key={o.id} className={`bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700/60 rounded-2xl shadow-card p-5 border-l-4 ${borderColor[ks] || 'border-l-gray-300'} ${o.priority ? 'ring-2 ring-red-400 dark:ring-red-500' : ''}`}>
-            {/* Order header */}
-            <div className="flex items-start justify-between mb-1">
-              <div>
-                <div className="text-base font-bold text-gray-900 dark:text-white">
-                  {o.order_type === 'takeaway' ? 'Takeaway' : `Table ${o.table_number}`}
-                </div>
-                <div className="text-xs text-gray-400 mt-0.5">#{o.order_number} · {o.created_at} · {o.waiter}{o.guests && (o.guests.adults + o.guests.children) > 0 ? ` · ${o.guests.adults + o.guests.children} guests` : ''}</div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => togglePriority(o.id)}
-                  className={`text-xs px-2.5 py-1 rounded-lg border font-semibold transition-all ${o.priority ? 'bg-red-500 text-white border-red-500' : 'border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-red-400 hover:text-red-500'}`}
-                >
-                  {o.priority ? '🚨 Priority' : 'Prioritise'}
-                </button>
-                <Badge color={statusColor(ks)}>{ks}</Badge>
-              </div>
-            </div>
-            {/* Kitchen-only items */}
-            <div className="mt-3 space-y-0">
-              {kitchenItems.map((item, i) => (
-                <div key={i} className="py-2 border-b border-gray-100 dark:border-gray-700 last:border-0">
-                  <div className="text-sm font-semibold text-gray-800 dark:text-gray-200">
-                    {item.name || item.name_en} <span className="text-indigo-500">×{item.qty}</span>
-                  </div>
-                  {item.mods?.length > 0 && (
-                    <div className="text-xs text-indigo-400 mt-0.5">+ {item.mods.join(' · ')}</div>
-                  )}
-                  {item.note && (
-                    <div className="text-xs text-amber-600 dark:text-amber-400 mt-0.5 bg-amber-50 dark:bg-amber-900/20 rounded px-2 py-0.5 inline-block">Note: {item.note}</div>
-                  )}
-                </div>
-              ))}
-            </div>
-            {/* Bar items indicator */}
-            {o.barStatus && o.barStatus !== 'served' && (
-              <div className="mt-2 text-xs text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-900/20 rounded-lg px-2 py-1.5">
-                🍸 Drinks also sent to Bar ({o.barStatus})
-              </div>
-            )}
-            {/* Allergy note */}
-            {o.notes && (
-              <div className="mt-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-2 py-1.5">
-                ⚠ Allergy / Note: {o.notes}
-              </div>
-            )}
-            <div className="mt-4 flex gap-2">
-              <button
-                onClick={() => printStationTicket(o, kitchenItems, 'Kitchen')}
-                className="flex-none text-xs px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium"
-              >🖨 Print</button>
-              <Btn variant={btnVariant[ks]} fullWidth size="lg" onClick={() => advance(o.id)}>
-                {btnLabel[ks]}
-              </Btn>
+    <div className="flex flex-col gap-4">
+
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
+            <ChefHat size={18} className="text-orange-600 dark:text-orange-400" />
+          </div>
+          <div>
+            <h1 className="text-base font-extrabold text-gray-900 dark:text-white leading-none">Kitchen Orders</h1>
+            <div className="flex items-center gap-1 mt-0.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+              <span className="text-xs text-gray-400">Live</span>
             </div>
           </div>
-        )
-      })}
+        </div>
+        <button
+          onClick={printAll}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400 border border-orange-200 dark:border-orange-800/60 hover:bg-orange-100 transition-all"
+        >
+          <Printer size={14} />Print All ({kitchenOrders.length})
+        </button>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { key:'pending', label:'Pending', Icon:Activity, iconCls:'text-amber-500', bg:'bg-amber-50 dark:bg-amber-900/20', border:'border-amber-200 dark:border-amber-800/40' },
+          { key:'cooking', label:'Cooking', Icon:Flame,    iconCls:'text-blue-500',  bg:'bg-blue-50 dark:bg-blue-900/20',   border:'border-blue-200 dark:border-blue-800/40' },
+          { key:'ready',   label:'Ready',   Icon:CheckCircle2, iconCls:'text-green-500', bg:'bg-green-50 dark:bg-green-900/20', border:'border-green-200 dark:border-green-800/40' },
+        ].map(({ key, label, Icon, iconCls, bg, border }) => (
+          <div key={key} className={`${bg} border ${border} rounded-2xl px-4 py-3 flex items-center gap-3`}>
+            <Icon size={20} className={`flex-shrink-0 ${iconCls}`} />
+            <div>
+              <div className="text-2xl font-extrabold text-gray-900 dark:text-white leading-none">{stats[key]}</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{label}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Order cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {kitchenOrders.map(o => {
+          const ks          = o.kitchenStatus ?? o.status
+          const cfg         = KS_CFG[ks] || KS_CFG.pending
+          const kitchenItems = o.items.filter(i => (i.station || 'kitchen') !== 'bar')
+          const elapsed     = stationElapsedMin(o.created_at) || 0
+          const isUrgent    = elapsed > 20 && ks === 'pending'
+
+          return (
+            <div
+              key={o.id}
+              className={`bg-white dark:bg-gray-800 rounded-2xl border overflow-hidden transition-all ${o.priority ? 'ring-2 ring-red-400 dark:ring-red-500' : ''} ${isUrgent ? 'border-red-300 dark:border-red-700 shadow-md shadow-red-100 dark:shadow-red-900/20' : 'border-gray-100 dark:border-gray-700/60'}`}
+            >
+              {/* Colour top bar */}
+              <div className={`h-1.5 w-full ${cfg.topBar}`} />
+
+              <div className="p-4 flex flex-col gap-3">
+
+                {/* Row 1: order# + status + elapsed */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base font-extrabold text-indigo-600 dark:text-indigo-400">#{o.order_number}</span>
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold ${cfg.bg} ${cfg.text}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} ${ks === 'cooking' ? 'animate-pulse' : ''}`} />
+                      {cfg.label}
+                    </span>
+                    {o.priority && (
+                      <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-[10px] font-extrabold">
+                        <AlertCircle size={9} />PRIORITY
+                      </span>
+                    )}
+                  </div>
+                  <StationElapsed timeStr={o.created_at} />
+                </div>
+
+                {/* Row 2: table + waiter */}
+                <div className="flex items-center justify-between">
+                  <StationTableLabel o={o} />
+                  <span className="text-xs text-gray-400 truncate max-w-[100px]">{o.waiter || '—'}</span>
+                </div>
+
+                {/* Items */}
+                <div className="bg-orange-50 dark:bg-orange-900/10 border border-orange-100 dark:border-orange-900/30 rounded-xl p-3 space-y-1.5">
+                  {kitchenItems.map((item, i) => (
+                    <div key={i} className="flex items-start gap-2">
+                      <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 text-xs font-extrabold flex-shrink-0 mt-0.5">{item.qty}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-semibold text-gray-800 dark:text-gray-200">{item.name || item.name_en}</div>
+                        {item.mods?.length > 0 && <div className="text-xs text-orange-500 mt-0.5">+ {item.mods.join(' · ')}</div>}
+                        {item.note && (
+                          <div className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 rounded px-2 py-0.5 mt-1 inline-block">
+                            ⚠ {item.note}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Bar crossover indicator */}
+                {o.barStatus && o.barStatus !== 'served' && (
+                  <div className="flex items-center gap-1.5 text-xs text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-900/20 border border-cyan-100 dark:border-cyan-900/30 rounded-xl px-3 py-2">
+                    <Wine size={12} />Drinks also at Bar <span className="font-bold">({o.barStatus})</span>
+                  </div>
+                )}
+
+                {/* Allergy */}
+                {o.notes && (
+                  <div className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 rounded-xl px-3 py-2 font-semibold">
+                    <AlertTriangle size={12} className="flex-shrink-0" />{o.notes}
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={() => togglePriority(o.id)}
+                    className={`flex-none inline-flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold border transition-all ${o.priority ? 'bg-red-500 text-white border-red-500' : 'bg-gray-50 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-600 hover:border-red-300 hover:text-red-500'}`}
+                  >
+                    <AlertCircle size={12} />{o.priority ? 'High' : 'Low'}
+                  </button>
+                  <button
+                    onClick={() => printStationTicket(o, kitchenItems, 'Kitchen')}
+                    className="flex-none inline-flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold bg-gray-50 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-600 hover:border-orange-300 hover:text-orange-500 transition-all"
+                  >
+                    <Printer size={13} />
+                  </button>
+                  {ks === 'pending' && (
+                    <button onClick={() => advance(o.id)} className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60 hover:bg-emerald-100 transition-all">
+                      <Play size={13} />Start Cooking
+                    </button>
+                  )}
+                  {ks === 'cooking' && (
+                    <button onClick={() => advance(o.id)} className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800/60 hover:bg-blue-100 transition-all">
+                      <CheckCircle2 size={13} />Mark Ready
+                    </button>
+                  )}
+                  {ks === 'ready' && (
+                    <button onClick={() => advance(o.id)} className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800/60 hover:bg-green-100 transition-all">
+                      <CheckCircle2 size={13} />Notify Waiter
+                    </button>
+                  )}
+                </div>
+
+              </div>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
