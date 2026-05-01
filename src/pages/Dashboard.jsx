@@ -1551,8 +1551,9 @@ export function Tables({ navTo, setOrderContext }) {
 }
 
 // ─── Orders ───────────────────────────────────────────────────────────────────
-export function Orders({ navTo, orderContext }) {
+export function Orders({ navTo, orderContext, setOrderContext }) {
   const { lang, user, liveOrders, setLiveOrders, nextOrderNum, setNextOrderNum, markOrderServed, completeProcess, menuItems, menuCategories } = useApp()
+  const [reprintModal, setReprintModal] = useState(null)
   const [newItems, setNewItems] = useState([])
   const [cat, setCat] = useState('cat1')
   const [notes, setNotes] = useState('')
@@ -1831,6 +1832,73 @@ export function Orders({ navTo, orderContext }) {
         </div>
       </div>
     )}
+
+    {/* ── Active Orders list with OTH comp flags ───────────────────────────────── */}
+    <div className="mb-5">
+      <ActiveOrdersCard
+        liveOrders={liveOrders}
+        setLiveOrders={setLiveOrders}
+        setReprintModal={setReprintModal}
+        setOrderContext={setOrderContext}
+        navTo={navTo}
+      />
+    </div>
+
+    {/* ── Reprint Modal ──────────────────────────────────────────────────────── */}
+    {reprintModal && (() => {
+      const o = reprintModal.order
+      const kitchenItems = (o.items || []).filter(i => (i.station || 'kitchen') !== 'bar')
+      const barItems     = (o.items || []).filter(i => i.station === 'bar')
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setReprintModal(null)}>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-xs mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
+              <div>
+                <div className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-0.5">
+                  {o.order_type === 'takeaway' ? 'Takeaway' : `Table ${o.table_number}`} · #{o.order_number}
+                </div>
+                <div className="text-base font-extrabold text-gray-900 dark:text-white">Reprint Chit</div>
+              </div>
+              <button onClick={() => setReprintModal(null)} className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors font-bold">✕</button>
+            </div>
+            <div className="px-5 py-4 space-y-2.5">
+              {kitchenItems.length > 0 ? (
+                <button onClick={() => { printStationTicket(o, kitchenItems, 'Kitchen'); setReprintModal(null) }}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 hover:border-amber-400 transition-all text-left">
+                  <span className="text-xl">👨‍🍳</span>
+                  <div>
+                    <div className="text-sm font-bold text-amber-700 dark:text-amber-300">Reprint Kitchen</div>
+                    <div className="text-xs text-gray-400">{kitchenItems.length} kitchen item{kitchenItems.length !== 1 ? 's' : ''}</div>
+                  </div>
+                </button>
+              ) : (
+                <div className="flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-gray-100 dark:border-gray-700 opacity-40">
+                  <span className="text-xl">👨‍🍳</span>
+                  <div className="text-sm font-bold text-gray-500">No kitchen items</div>
+                </div>
+              )}
+              {barItems.length > 0 ? (
+                <button onClick={() => { printStationTicket(o, barItems, 'Bar'); setReprintModal(null) }}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-cyan-200 dark:border-cyan-700 bg-cyan-50 dark:bg-cyan-900/20 hover:border-cyan-400 transition-all text-left">
+                  <span className="text-xl">🍸</span>
+                  <div>
+                    <div className="text-sm font-bold text-cyan-700 dark:text-cyan-300">Reprint Bar</div>
+                    <div className="text-xs text-gray-400">{barItems.length} bar item{barItems.length !== 1 ? 's' : ''}</div>
+                  </div>
+                </button>
+              ) : (
+                <div className="flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-gray-100 dark:border-gray-700 opacity-40">
+                  <span className="text-xl">🍸</span>
+                  <div className="text-sm font-bold text-gray-500">No bar items</div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )
+    })()}
+
+    {/* ── Order entry form ──────────────────────────────────────────────────── */}
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {/* Menu side */}
       <div>
