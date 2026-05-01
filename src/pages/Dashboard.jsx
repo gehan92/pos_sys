@@ -442,11 +442,49 @@ const STATUS_CFG_DASH = {
   completed: { label: 'Done',     bg: 'bg-gray-100 dark:bg-gray-700', text: 'text-gray-600 dark:text-gray-300', dot: 'bg-gray-400' },
 }
 
-function ActiveOrdersCard({ liveOrders, setReprintModal, setOrderContext, navTo }) {
+function ActiveOrdersCard({ liveOrders, setLiveOrders, setReprintModal, setOrderContext, navTo }) {
+  const { user } = useApp()
   const [expanded, setExpanded] = useState(null)
+  const [preCompDialog, setPreCompDialog] = useState(null) // { orderId, itemIdx, itemName, price, qty }
+  const [preCompReason, setPreCompReason] = useState('')
+  const [preCompApprover, setPreCompApprover] = useState('')
+  const PRE_COMP_REASONS = ['Incorrect Order', 'Customer Complaint', 'VIP / Loyalty', 'Quality Issue', 'Manager Decision', 'Other']
   const active = liveOrders.filter(o => !['paid'].includes(o.status))
 
+  function openPreCompDialog(orderId, itemIdx, itemName, price, qty) {
+    setPreCompDialog({ orderId, itemIdx, itemName, price, qty })
+    setPreCompReason('')
+    setPreCompApprover('')
+  }
+
+  function confirmPreComp() {
+    if (!preCompReason) return
+    setLiveOrders(prev => prev.map(o => {
+      if (o.id !== preCompDialog.orderId) return o
+      const items = o.items.map((item, idx) =>
+        idx === preCompDialog.itemIdx
+          ? { ...item, comped: true, compReason: preCompReason, compApprovedBy: preCompApprover.trim() || user?.full_name || '—' }
+          : item
+      )
+      return { ...o, items }
+    }))
+    setPreCompDialog(null); setPreCompReason(''); setPreCompApprover('')
+  }
+
+  function removePreComp(orderId, itemIdx) {
+    setLiveOrders(prev => prev.map(o => {
+      if (o.id !== orderId) return o
+      const items = o.items.map((item, idx) => {
+        if (idx !== itemIdx) return item
+        const { comped, compReason, compApprovedBy, ...rest } = item
+        return rest
+      })
+      return { ...o, items }
+    }))
+  }
+
   return (
+    <>
     <Card>
       <div className="flex items-center justify-between mb-3">
         <h2 className="font-medium text-gray-900 dark:text-white">Active Orders</h2>
@@ -462,8 +500,10 @@ function ActiveOrdersCard({ liveOrders, setReprintModal, setOrderContext, navTo 
             const cfg = STATUS_CFG_DASH[o.status] || STATUS_CFG_DASH.pending
             const total = (o.items || []).reduce((s, i) => s + i.price * i.qty, 0)
             const isOpen = expanded === o.id
-            const kitchenItems = (o.items || []).filter(i => (i.station || 'kitchen') !== 'bar')
-            const barItems     = (o.items || []).filter(i => i.station === 'bar')
+            const allItems = (o.items || []).map((item, idx) => ({ ...item, origIdx: idx }))
+            const kitchenItems = allItems.filter(i => (i.station || 'kitchen') !== 'bar')
+            const barItems     = allItems.filter(i => i.station === 'bar')
+            const preCompCount = (o.items || []).filter(i => i.comped).length
             return (
               <div key={o.id} className={`rounded-xl border transition-all overflow-hidden ${isOpen ? 'border-indigo-200 dark:border-indigo-700/60 shadow-sm' : 'border-gray-100 dark:border-gray-700/60'}`}>
                 {/* Header row — always visible, click to expand */}
@@ -483,9 +523,10 @@ function ActiveOrdersCard({ liveOrders, setReprintModal, setOrderContext, navTo 
 
                   {/* Order # + waiter */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">#{o.order_number}</span>
                       <span className="text-[11px] text-gray-400">{(o.items || []).reduce((s,i)=>s+i.qty,0)} items · €{total.toFixed(2)}</span>
+                      {preCompCount > 0 && <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">🎁 {preCompCount} comp{preCompCount !== 1 ? 's' : ''}</span>}
                     </div>
                     <div className="flex items-center gap-1 mt-0.5">
                       {o.waiter && (
@@ -543,14 +584,23 @@ function ActiveOrdersCard({ liveOrders, setReprintModal, setOrderContext, navTo 
                           <ChefHat size={11} />Kitchen
                         </div>
                         <div className="rounded-lg border border-orange-100 dark:border-orange-900/30 overflow-hidden">
-                          {kitchenItems.map((item, i) => (
-                            <div key={i} className="flex items-center justify-between px-2.5 py-1.5 border-b border-orange-50 dark:border-orange-900/20 last:border-0 bg-orange-50/40 dark:bg-orange-900/5">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <span className="w-5 h-5 rounded-md bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 text-[11px] font-extrabold flex items-center justify-center flex-shrink-0">{item.qty}</span>
-                                <span className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate">{item.name || item.name_en}</span>
-                                {item.mods?.length > 0 && <span className="text-[10px] text-indigo-500 truncate">· {item.mods.join(', ')}</span>}
+                          {kitchenItems.map(item => (
+                            <div key={item.origIdx} className={`flex items-center gap-2 px-2.5 py-1.5 border-b border-orange-50 dark:border-orange-900/20 last:border-0 ${item.comped ? 'bg-amber-50/60 dark:bg-amber-900/10' : 'bg-orange-50/40 dark:bg-orange-900/5'}`}>
+                              <span className="w-5 h-5 rounded-md bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 text-[11px] font-extrabold flex items-center justify-center flex-shrink-0">{item.qty}</span>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1 flex-wrap">
+                                  <span className={`text-xs font-medium truncate ${item.comped ? 'line-through text-gray-400' : 'text-gray-700 dark:text-gray-300'}`}>{item.name || item.name_en}</span>
+                                  {item.comped && <span className="text-[8px] font-extrabold px-1 py-0.5 rounded bg-amber-500 text-white tracking-widest flex-shrink-0">COMP</span>}
+                                  {item.mods?.length > 0 && <span className="text-[10px] text-indigo-500 truncate">· {item.mods.join(', ')}</span>}
+                                </div>
+                                {item.comped && <div className="text-[9px] text-amber-600 dark:text-amber-400 font-medium truncate">✓ {item.compReason} · {item.compApprovedBy}</div>}
                               </div>
-                              <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 flex-shrink-0 ml-2">€{(item.price * item.qty).toFixed(2)}</span>
+                              <span className={`text-[11px] font-bold flex-shrink-0 ${item.comped ? 'line-through text-gray-400' : 'text-gray-500 dark:text-gray-400'}`}>€{(item.price * item.qty).toFixed(2)}</span>
+                              <button
+                                onClick={() => item.comped ? removePreComp(o.id, item.origIdx) : openPreCompDialog(o.id, item.origIdx, item.name || item.name_en, item.price, item.qty)}
+                                title={item.comped ? 'Remove Comp Flag' : 'Pre-flag as Comp'}
+                                className={`w-5 h-5 flex items-center justify-center rounded-md text-[10px] flex-shrink-0 transition-colors ${item.comped ? 'bg-amber-400 text-white hover:bg-rose-400' : 'text-gray-300 hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20'}`}
+                              >🎁</button>
                             </div>
                           ))}
                         </div>
@@ -563,14 +613,23 @@ function ActiveOrdersCard({ liveOrders, setReprintModal, setOrderContext, navTo 
                           <Wine size={11} />Bar
                         </div>
                         <div className="rounded-lg border border-purple-100 dark:border-purple-900/30 overflow-hidden">
-                          {barItems.map((item, i) => (
-                            <div key={i} className="flex items-center justify-between px-2.5 py-1.5 border-b border-purple-50 dark:border-purple-900/20 last:border-0 bg-purple-50/40 dark:bg-purple-900/5">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <span className="w-5 h-5 rounded-md bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 text-[11px] font-extrabold flex items-center justify-center flex-shrink-0">{item.qty}</span>
-                                <span className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate">{item.name || item.name_en}</span>
-                                {item.mods?.length > 0 && <span className="text-[10px] text-indigo-500 truncate">· {item.mods.join(', ')}</span>}
+                          {barItems.map(item => (
+                            <div key={item.origIdx} className={`flex items-center gap-2 px-2.5 py-1.5 border-b border-purple-50 dark:border-purple-900/20 last:border-0 ${item.comped ? 'bg-amber-50/60 dark:bg-amber-900/10' : 'bg-purple-50/40 dark:bg-purple-900/5'}`}>
+                              <span className="w-5 h-5 rounded-md bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 text-[11px] font-extrabold flex items-center justify-center flex-shrink-0">{item.qty}</span>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1 flex-wrap">
+                                  <span className={`text-xs font-medium truncate ${item.comped ? 'line-through text-gray-400' : 'text-gray-700 dark:text-gray-300'}`}>{item.name || item.name_en}</span>
+                                  {item.comped && <span className="text-[8px] font-extrabold px-1 py-0.5 rounded bg-amber-500 text-white tracking-widest flex-shrink-0">COMP</span>}
+                                  {item.mods?.length > 0 && <span className="text-[10px] text-indigo-500 truncate">· {item.mods.join(', ')}</span>}
+                                </div>
+                                {item.comped && <div className="text-[9px] text-amber-600 dark:text-amber-400 font-medium truncate">✓ {item.compReason} · {item.compApprovedBy}</div>}
                               </div>
-                              <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 flex-shrink-0 ml-2">€{(item.price * item.qty).toFixed(2)}</span>
+                              <span className={`text-[11px] font-bold flex-shrink-0 ${item.comped ? 'line-through text-gray-400' : 'text-gray-500 dark:text-gray-400'}`}>€{(item.price * item.qty).toFixed(2)}</span>
+                              <button
+                                onClick={() => item.comped ? removePreComp(o.id, item.origIdx) : openPreCompDialog(o.id, item.origIdx, item.name || item.name_en, item.price, item.qty)}
+                                title={item.comped ? 'Remove Comp Flag' : 'Pre-flag as Comp'}
+                                className={`w-5 h-5 flex items-center justify-center rounded-md text-[10px] flex-shrink-0 transition-colors ${item.comped ? 'bg-amber-400 text-white hover:bg-rose-400' : 'text-gray-300 hover:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20'}`}
+                              >🎁</button>
                             </div>
                           ))}
                         </div>
@@ -607,6 +666,60 @@ function ActiveOrdersCard({ liveOrders, setReprintModal, setOrderContext, navTo 
         </div>
       )}
     </Card>
+
+    {/* ── Pre-Comp Flag Dialog ─────────────────────────────────────────────────── */}
+    {preCompDialog && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setPreCompDialog(null)}>
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700 bg-amber-50 dark:bg-amber-900/20">
+            <div className="flex items-center gap-2.5">
+              <span className="text-xl">🎁</span>
+              <div>
+                <h3 className="text-sm font-extrabold text-gray-900 dark:text-white">Pre-flag as Comp</h3>
+                <p className="text-xs text-amber-600 dark:text-amber-400 font-medium truncate max-w-[200px]">{preCompDialog.itemName}</p>
+              </div>
+            </div>
+            <button onClick={() => setPreCompDialog(null)} className="w-8 h-8 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors font-bold">✕</button>
+          </div>
+          <div className="mx-5 mt-4 flex items-center justify-between bg-amber-50 dark:bg-amber-900/20 rounded-xl px-4 py-3">
+            <div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">Will be comped at billing</div>
+              <div className="text-lg font-extrabold text-amber-700 dark:text-amber-300">€{(preCompDialog.price * preCompDialog.qty).toFixed(2)}</div>
+            </div>
+            <div className="text-right">
+              <div className="text-xs text-gray-400">×{preCompDialog.qty} @ €{preCompDialog.price.toFixed(2)}</div>
+              <div className="text-xs font-semibold text-amber-600 dark:text-amber-400 mt-0.5">Applied automatically</div>
+            </div>
+          </div>
+          <div className="px-5 pt-4">
+            <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-2">Reason <span className="text-rose-500">*</span></label>
+            <div className="grid grid-cols-2 gap-1.5 mb-3">
+              {PRE_COMP_REASONS.map(r => (
+                <button key={r} onClick={() => setPreCompReason(r)}
+                  className={`text-xs font-semibold px-2.5 py-2 rounded-xl border-2 text-left transition-all ${preCompReason === r ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-amber-300'}`}
+                >{r}</button>
+              ))}
+            </div>
+          </div>
+          <div className="px-5 pb-4">
+            <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5">Approved By</label>
+            <input value={preCompApprover} onChange={e => setPreCompApprover(e.target.value)}
+              placeholder={`Default: ${user?.full_name || 'Current user'}`}
+              className="w-full text-xs px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-400"
+            />
+          </div>
+          <div className="px-5 pb-5 grid grid-cols-2 gap-2">
+            <button onClick={() => setPreCompDialog(null)}
+              className="py-3 rounded-xl text-sm font-bold border-2 border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
+            >Cancel</button>
+            <button onClick={confirmPreComp} disabled={!preCompReason}
+              className="py-3 rounded-xl text-sm font-bold bg-amber-500 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-all active:scale-[0.98]"
+            >Flag as Comp</button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   )
 }
 
@@ -1352,7 +1465,7 @@ export function Tables({ navTo, setOrderContext }) {
           </span>
         </div>
       </Card>
-      <ActiveOrdersCard liveOrders={liveOrders} setReprintModal={setReprintModal} setOrderContext={setOrderContext} navTo={navTo} />
+      <ActiveOrdersCard liveOrders={liveOrders} setLiveOrders={setLiveOrders} setReprintModal={setReprintModal} setOrderContext={setOrderContext} navTo={navTo} />
 
       {/* Reprint modal */}
       {reprintModal && (() => {
@@ -1450,6 +1563,45 @@ export function Orders({ navTo, orderContext }) {
   const [modalSelections, setModalSelections] = useState({}) // { groupLabel: string[] }
   const [modalNote, setModalNote] = useState('')
 
+  // ── Pre-comp for existing order items ───────────────────────────────────────
+  const [existingPreCompDialog, setExistingPreCompDialog] = useState(null)
+  const [existingPreCompReason, setExistingPreCompReason] = useState('')
+  const [existingPreCompApprover, setExistingPreCompApprover] = useState('')
+  const PRE_COMP_REASONS = ['Incorrect Order', 'Customer Complaint', 'VIP / Loyalty', 'Quality Issue', 'Manager Decision', 'Other']
+
+  function openExistingPreCompDialog(itemIdx, itemName, price, qty) {
+    setExistingPreCompDialog({ itemIdx, itemName, price, qty })
+    setExistingPreCompReason('')
+    setExistingPreCompApprover('')
+  }
+
+  function confirmExistingPreComp() {
+    if (!existingPreCompReason || !existingOrder) return
+    setLiveOrders(prev => prev.map(o => {
+      if (o.id !== existingOrder.id) return o
+      const items = o.items.map((item, idx) =>
+        idx === existingPreCompDialog.itemIdx
+          ? { ...item, comped: true, compReason: existingPreCompReason, compApprovedBy: existingPreCompApprover.trim() || user?.full_name || '—' }
+          : item
+      )
+      return { ...o, items }
+    }))
+    setExistingPreCompDialog(null); setExistingPreCompReason(''); setExistingPreCompApprover('')
+  }
+
+  function removeExistingPreComp(itemIdx) {
+    if (!existingOrder) return
+    setLiveOrders(prev => prev.map(o => {
+      if (o.id !== existingOrder.id) return o
+      const items = o.items.map((item, idx) => {
+        if (idx !== itemIdx) return item
+        const { comped, compReason, compApprovedBy, ...rest } = item
+        return rest
+      })
+      return { ...o, items }
+    }))
+  }
+
   function openItemModal(item) {
     setItemModal(item)
     setModalQty(1)
@@ -1475,7 +1627,10 @@ export function Orders({ navTo, orderContext }) {
   }
 
   const isAddingToExisting = !!orderContext?.existingOrder
-  const existingOrder = orderContext?.existingOrder || null
+  // Use live liveOrders so pre-comp flags update reactively
+  const existingOrder = isAddingToExisting
+    ? (liveOrders.find(o => o.id === orderContext.existingOrder.id) || orderContext.existingOrder)
+    : null
   const existingItems = existingOrder?.items || []
   const round = isAddingToExisting ? (existingOrder.rounds ?? 1) + 1 : 1
 
@@ -1623,6 +1778,59 @@ export function Orders({ navTo, orderContext }) {
         </div>
       </div>
     )}
+
+    {/* ── Pre-Comp Flag Dialog (existing items) ────────────────────────────────── */}
+    {existingPreCompDialog && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setExistingPreCompDialog(null)}>
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700 bg-amber-50 dark:bg-amber-900/20">
+            <div className="flex items-center gap-2.5">
+              <span className="text-xl">🎁</span>
+              <div>
+                <h3 className="text-sm font-extrabold text-gray-900 dark:text-white">Pre-flag as Comp</h3>
+                <p className="text-xs text-amber-600 dark:text-amber-400 font-medium truncate max-w-[200px]">{existingPreCompDialog.itemName}</p>
+              </div>
+            </div>
+            <button onClick={() => setExistingPreCompDialog(null)} className="w-8 h-8 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors font-bold">✕</button>
+          </div>
+          <div className="mx-5 mt-4 flex items-center justify-between bg-amber-50 dark:bg-amber-900/20 rounded-xl px-4 py-3">
+            <div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">Will be comped at billing</div>
+              <div className="text-lg font-extrabold text-amber-700 dark:text-amber-300">€{(existingPreCompDialog.price * existingPreCompDialog.qty).toFixed(2)}</div>
+            </div>
+            <div className="text-right">
+              <div className="text-xs text-gray-400">×{existingPreCompDialog.qty} @ €{existingPreCompDialog.price.toFixed(2)}</div>
+              <div className="text-xs font-semibold text-amber-600 dark:text-amber-400 mt-0.5">Applied automatically</div>
+            </div>
+          </div>
+          <div className="px-5 pt-4">
+            <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-2">Reason <span className="text-rose-500">*</span></label>
+            <div className="grid grid-cols-2 gap-1.5 mb-3">
+              {PRE_COMP_REASONS.map(r => (
+                <button key={r} onClick={() => setExistingPreCompReason(r)}
+                  className={`text-xs font-semibold px-2.5 py-2 rounded-xl border-2 text-left transition-all ${existingPreCompReason === r ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-amber-300'}`}
+                >{r}</button>
+              ))}
+            </div>
+          </div>
+          <div className="px-5 pb-4">
+            <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5">Approved By</label>
+            <input value={existingPreCompApprover} onChange={e => setExistingPreCompApprover(e.target.value)}
+              placeholder={`Default: ${user?.full_name || 'Current user'}`}
+              className="w-full text-xs px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-400"
+            />
+          </div>
+          <div className="px-5 pb-5 grid grid-cols-2 gap-2">
+            <button onClick={() => setExistingPreCompDialog(null)}
+              className="py-3 rounded-xl text-sm font-bold border-2 border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
+            >Cancel</button>
+            <button onClick={confirmExistingPreComp} disabled={!existingPreCompReason}
+              className="py-3 rounded-xl text-sm font-bold bg-amber-500 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-all active:scale-[0.98]"
+            >Flag as Comp</button>
+          </div>
+        </div>
+      </div>
+    )}
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {/* Menu side */}
       <div>
@@ -1692,10 +1900,21 @@ export function Orders({ navTo, orderContext }) {
               <Badge color="gray">€{existingSubtotal.toFixed(2)}</Badge>
             </div>
             {existingItems.map((item, i) => (
-              <div key={i} className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700 last:border-0 opacity-60">
-                <span className="flex-1 text-sm text-gray-600 dark:text-gray-400">{item.name}</span>
-                <span className="text-xs text-gray-400 mr-3">x{item.qty}</span>
-                <span className="text-sm text-gray-500 dark:text-gray-400 w-14 text-right">€{(item.price * item.qty).toFixed(2)}</span>
+              <div key={i} className={`flex items-center gap-2 py-2 border-b border-gray-100 dark:border-gray-700 last:border-0 ${item.comped ? 'bg-amber-50/40 dark:bg-amber-900/10 -mx-1 px-1 rounded-lg' : 'opacity-60'}`}>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className={`text-sm ${item.comped ? 'line-through text-gray-400' : 'text-gray-600 dark:text-gray-400'}`}>{item.name}</span>
+                    {item.comped && <span className="text-[8px] font-extrabold px-1 py-0.5 rounded bg-amber-500 text-white tracking-widest flex-shrink-0">COMP</span>}
+                  </div>
+                  {item.comped && <div className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">✓ {item.compReason} · {item.compApprovedBy}</div>}
+                </div>
+                <span className="text-xs text-gray-400">x{item.qty}</span>
+                <span className={`text-sm w-14 text-right ${item.comped ? 'line-through text-gray-400' : 'text-gray-500 dark:text-gray-400'}`}>€{(item.price * item.qty).toFixed(2)}</span>
+                <button
+                  onClick={() => item.comped ? removeExistingPreComp(i) : openExistingPreCompDialog(i, item.name, item.price, item.qty)}
+                  title={item.comped ? 'Remove Comp Flag' : 'Pre-flag as Comp'}
+                  className={`w-6 h-6 flex items-center justify-center rounded-lg text-xs flex-shrink-0 transition-colors ${item.comped ? 'bg-amber-400 text-white hover:bg-rose-400' : 'text-gray-300 hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20'}`}
+                >🎁</button>
               </div>
             ))}
           </Card>
@@ -2329,6 +2548,14 @@ export function Billing({ orderContext }) {
       discount_pct: 0,
       fromBill: true,
     })))
+    // Auto-apply any pre-flagged comps from the order into billing
+    const preComps = {}
+    order.items.forEach((item, idx) => {
+      if (item.comped) {
+        preComps[itemKey('bill', idx)] = { reason: item.compReason || 'Pre-flagged', approvedBy: item.compApprovedBy || '—' }
+      }
+    })
+    setCompItems(preComps)
     setCart([])
     setLoadedBillId(null)
     setPreloadLabel(order.order_type === 'takeaway' ? `🥡 Takeaway — #${order.order_number}` : `🍽️ Table ${order.table_number} — #${order.order_number}`)
