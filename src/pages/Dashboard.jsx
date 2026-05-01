@@ -2192,7 +2192,7 @@ export function Bar() {
 
 // ─── Billing ──────────────────────────────────────────────────────────────────
 export function Billing({ orderContext }) {
-  const { lang, user, company, liveOrders, openBills, finalizeBill, addToHistory, menuItems, menuCategories } = useApp()
+  const { lang, user, company, liveOrders, openBills, finalizeBill, addToHistory, menuItems, menuCategories, addOthRecords } = useApp()
   const vatRate = company.vat_rate / 100
 
   // ── Cart state ──────────────────────────────────────────────────────────────
@@ -2202,6 +2202,38 @@ export function Billing({ orderContext }) {
   const [receipt, setReceipt] = useState(null)
   const [showPayModal, setShowPayModal] = useState(false)
   const [billNote, setBillNote] = useState('')
+
+  // ── OTH (Comp) state ────────────────────────────────────────────────────────
+  // compItems: { [itemKey]: { reason, approvedBy } }
+  const [compItems, setCompItems] = useState({})
+  // compDialog: null | { itemKey, itemName, price, qty, source: 'bill'|'cart' }
+  const [compDialog, setCompDialog] = useState(null)
+  const [compReason, setCompReason] = useState('')
+  const [compApprover, setCompApprover] = useState('')
+
+  const COMP_REASONS = ['Customer Complaint', 'VIP / Loyalty Guest', 'Staff Meal', 'Manager Comp', 'Promotion / Event', 'Incorrect Order', 'Other']
+
+  function itemKey(source, indexOrId) { return `${source}-${indexOrId}` }
+  function isComped(key) { return !!compItems[key] }
+
+  function openCompDialog(key, itemName, price, qty) {
+    setCompDialog({ key, itemName, price, qty })
+    const existing = compItems[key]
+    setCompReason(existing?.reason || '')
+    setCompApprover(existing?.approvedBy || '')
+  }
+
+  function confirmComp() {
+    if (!compReason) return
+    setCompItems(p => ({ ...p, [compDialog.key]: { reason: compReason, approvedBy: compApprover.trim() || user?.full_name || '—' } }))
+    setCompDialog(null)
+    setCompReason('')
+    setCompApprover('')
+  }
+
+  function removeComp(key) {
+    setCompItems(p => { const n = { ...p }; delete n[key]; return n })
+  }
 
   // ── Open bill tracking ──────────────────────────────────────────────────────
   const [loadedBillId, setLoadedBillId] = useState(null)    // which open bill is loaded
@@ -2279,6 +2311,7 @@ export function Billing({ orderContext }) {
     setCashGiven(0)
     setBillNote('')
     setPreloadLabel('')
+    setCompItems({})
   }
 
   function openBillItemModal(item) {
@@ -2337,13 +2370,30 @@ export function Billing({ orderContext }) {
 
   // ── Totals (bill items + cashier extras) ────────────────────────────────────
   const allCartItems = [...billItems, ...cart]
-  const subtotal = allCartItems.reduce((a, i) => {
-    const disc = Number(i.discount_pct || 0) / 100
-    return a + (i.price * (1 - disc)) * i.qty
+
+  // Compute per-item keys for comp check
+  const billItemKeys  = billItems.map((_, i) => itemKey('bill', i))
+  const cartItemKeys  = cart.map(item => itemKey('cart', item.id))
+  const allKeys       = [...billItemKeys, ...cartItemKeys]
+
+  const compCount = Object.keys(compItems).length
+  const compTotal = allCartItems.reduce((sum, item, idx) => {
+    const key = allKeys[idx]
+    if (!isComped(key)) return sum
+    return sum + item.price * item.qty
   }, 0)
-  const totalSavings = allCartItems.reduce((a, i) => {
-    const disc = Number(i.discount_pct || 0) / 100
-    return a + (i.price * disc) * i.qty
+
+  const subtotal = allCartItems.reduce((a, item, idx) => {
+    const key = allKeys[idx]
+    if (isComped(key)) return a  // comped items are free
+    const disc = Number(item.discount_pct || 0) / 100
+    return a + (item.price * (1 - disc)) * item.qty
+  }, 0)
+  const totalSavings = allCartItems.reduce((a, item, idx) => {
+    const key = allKeys[idx]
+    if (isComped(key)) return a
+    const disc = Number(item.discount_pct || 0) / 100
+    return a + (item.price * disc) * item.qty
   }, 0)
   const vat = subtotal * vatRate
   const total = subtotal + vat
@@ -2355,6 +2405,25 @@ export function Billing({ orderContext }) {
     const bill = loadedBillId ? openBills.find(b => b.id === loadedBillId) : null
     const paidAt = new Date()
     if (loadedBillId) finalizeBill(loadedBillId)
+
+    // Record comped items to OTH log
+    const othEntries = allCartItems
+      .map((item, idx) => ({ item, key: allKeys[idx] }))
+      .filter(({ key }) => isComped(key))
+      .map(({ item, key }) => ({
+        id: `oth_${Date.now()}_${key}`,
+        order_number: orderNum,
+        invoice_ref: `INV-${orderNum}`,
+        item_name: item.name_en,
+        quantity: item.qty,
+        original_price: item.price,
+        total_value: item.price * item.qty,
+        approved_by: compItems[key]?.approvedBy || user?.full_name || '—',
+        reason: compItems[key]?.reason || '',
+        table_label: bill?.tableLabel || 'Walk-in',
+        created_at: paidAt.toISOString(),
+      }))
+    if (othEntries.length > 0) addOthRecords(othEntries)
 
     addToHistory({
       id: `hist_${Date.now()}`,
@@ -2374,12 +2443,17 @@ export function Billing({ orderContext }) {
 
     setReceipt({
       items: allCartItems,
+      compItems: { ...compItems },
+      allKeys: [...allKeys],
       subtotal, vat, total, totalSavings, payMethod, cashGiven,
       change: cashGiven > 0 ? Math.max(0, cashGiven - total) : 0,
       date: paidAt,
       order_number: orderNum,
       note: billNote.trim(),
+      compTotal,
+      compCount,
     })
+    setCompItems({})
   }
 
   // ── Receipt view ─────────────────────────────────────────────────────────────
@@ -2401,14 +2475,22 @@ export function Billing({ orderContext }) {
           </div>
           {receipt.items.map((item, i) => {
             const disc = Number(item.discount_pct||0)
-            const lineTotal = item.price * (1 - disc/100) * item.qty
+            const key = receipt.allKeys?.[i]
+            const comped = key && receipt.compItems?.[key]
+            const lineTotal = comped ? 0 : item.price * (1 - disc/100) * item.qty
             return (
-            <div key={i} className="flex justify-between text-sm py-1.5 border-b border-gray-100 dark:border-gray-700">
+            <div key={i} className={`flex justify-between text-sm py-1.5 border-b border-gray-100 dark:border-gray-700 ${comped ? 'opacity-70' : ''}`}>
               <div>
-                <div className="text-gray-700 dark:text-gray-300">{item.name_en} ×{item.qty}</div>
-                {disc > 0 && <div className="text-xs text-rose-400">-{disc}% discount</div>}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className={`text-gray-700 dark:text-gray-300 ${comped ? 'line-through' : ''}`}>{item.name_en} ×{item.qty}</span>
+                  {comped && <span className="text-[9px] font-extrabold px-1 py-0.5 rounded bg-amber-500 text-white tracking-widest">COMP</span>}
+                </div>
+                {disc > 0 && !comped && <div className="text-xs text-rose-400">-{disc}% discount</div>}
+                {comped && <div className="text-xs text-amber-600 dark:text-amber-400">{receipt.compItems[key].reason}</div>}
               </div>
-              <span className="font-medium text-gray-800 dark:text-gray-200">€{lineTotal.toFixed(2)}</span>
+              <span className={`font-medium ${comped ? 'text-amber-600 dark:text-amber-400' : 'text-gray-800 dark:text-gray-200'}`}>
+                {comped ? 'COMP' : `€${lineTotal.toFixed(2)}`}
+              </span>
             </div>
             )
           })}
@@ -2416,6 +2498,7 @@ export function Billing({ orderContext }) {
           <div className="space-y-1.5 text-sm">
             <div className="flex justify-between text-gray-500"><span>Subtotal</span><span>€{receipt.subtotal.toFixed(2)}</span></div>
             {receipt.totalSavings > 0 && <div className="flex justify-between text-rose-500 font-semibold"><span>Discounts saved</span><span>-€{receipt.totalSavings.toFixed(2)}</span></div>}
+            {receipt.compCount > 0 && <div className="flex justify-between text-amber-600 dark:text-amber-400 font-semibold"><span>🎁 Comp ({receipt.compCount} item{receipt.compCount !== 1 ? 's' : ''})</span><span>−€{receipt.compTotal.toFixed(2)}</span></div>}
             <div className="flex justify-between text-gray-500"><span>VAT {company.vat_rate}%</span><span>€{receipt.vat.toFixed(2)}</span></div>
             <div className="flex justify-between font-bold text-base text-gray-900 dark:text-white pt-2 border-t-2 border-gray-200 dark:border-gray-600">
               <span>Total</span><span>€{receipt.total.toFixed(2)}</span>
@@ -2443,7 +2526,7 @@ export function Billing({ orderContext }) {
             <Btn onClick={() => alert('Share via email/WhatsApp...')}>Share</Btn>
           </div>
           <Btn variant="success" fullWidth className="mt-2" onClick={() => {
-            setReceipt(null); setCart([]); setBillItems([]); setPayMethod(null); setCashGiven(0); setLoadedBillId(null); setMobileBillTab('menu'); setBillNote('')
+            setReceipt(null); setCart([]); setBillItems([]); setPayMethod(null); setCashGiven(0); setLoadedBillId(null); setMobileBillTab('menu'); setBillNote(''); setCompItems({})
           }}>
             New Sale
           </Btn>
@@ -2594,23 +2677,39 @@ export function Billing({ orderContext }) {
                       <div className="flex-1 h-px bg-gray-100 dark:bg-gray-700"></div>
                       <span className="text-xs text-gray-400">{billItems.reduce((s,i)=>s+i.qty,0)} items</span>
                     </div>
-                    {billItems.map((item, i) => (
-                      <div key={`bill-${i}`} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-50 dark:bg-gray-700/30">
+                    {billItems.map((item, i) => {
+                      const key = itemKey('bill', i)
+                      const comped = isComped(key)
+                      return (
+                      <div key={`bill-${i}`} className={`flex items-center gap-2 px-3 py-2 rounded-xl transition-colors ${comped ? 'bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50' : 'bg-gray-50 dark:bg-gray-700/30'}`}>
                         <div className="flex-1 min-w-0">
-                          <div className="text-xs font-semibold text-gray-700 dark:text-gray-300 truncate">{item.name_en}</div>
-                          <div className="text-xs text-gray-400 mt-0.5">€{item.price.toFixed(2)} each</div>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <div className={`text-xs font-semibold truncate ${comped ? 'line-through text-gray-400' : 'text-gray-700 dark:text-gray-300'}`}>{item.name_en}</div>
+                            {comped && <span className="text-[9px] font-extrabold px-1 py-0.5 rounded bg-amber-500 text-white tracking-widest">COMP</span>}
+                          </div>
+                          {comped
+                            ? <div className="text-[10px] text-amber-600 dark:text-amber-400 font-medium mt-0.5 truncate">✓ {compItems[key]?.reason} · {compItems[key]?.approvedBy}</div>
+                            : <div className="text-xs text-gray-400 mt-0.5">€{item.price.toFixed(2)} each</div>
+                          }
                         </div>
                         <div className="flex items-center bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden flex-shrink-0">
                           <button onClick={() => changeBillItemQty(i, -1)} className="w-7 h-7 flex items-center justify-center text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 font-bold text-sm transition-colors">−</button>
                           <span className="text-xs font-extrabold px-2 text-gray-800 dark:text-gray-200">{item.qty}</span>
                           <button onClick={() => changeBillItemQty(i, 1)} className="w-7 h-7 flex items-center justify-center text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 font-bold text-sm transition-colors">+</button>
                         </div>
-                        <span className="text-xs font-bold text-gray-800 dark:text-gray-200 w-14 text-right flex-shrink-0">
+                        <span className={`text-xs font-bold w-14 text-right flex-shrink-0 ${comped ? 'line-through text-gray-400' : 'text-gray-800 dark:text-gray-200'}`}>
                           €{(item.price * (1 - Number(item.discount_pct || 0) / 100) * item.qty).toFixed(2)}
                         </span>
+                        {/* Comp toggle */}
+                        <button
+                          onClick={() => comped ? removeComp(key) : openCompDialog(key, item.name_en, item.price, item.qty)}
+                          title={comped ? 'Remove Comp' : 'Mark as Comp (On the House)'}
+                          className={`w-6 h-6 flex items-center justify-center rounded-lg text-xs flex-shrink-0 transition-colors font-bold ${comped ? 'bg-amber-400 text-white hover:bg-amber-500' : 'text-gray-300 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20'}`}
+                        >🎁</button>
                         <button onClick={() => removeBillItem(i)} className="w-6 h-6 flex items-center justify-center rounded-lg text-gray-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors text-xs flex-shrink-0">✕</button>
                       </div>
-                    ))}
+                      )
+                    })}
                   </>
                 )}
 
@@ -2621,25 +2720,41 @@ export function Billing({ orderContext }) {
                       <div className="text-xs font-bold text-indigo-500 uppercase tracking-wider">+ Added by Cashier</div>
                       <div className="flex-1 h-px bg-indigo-100 dark:bg-indigo-900/30"></div>
                     </div>
-                    {cart.map(item => (
-                      <div key={item.id} className="px-3 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-900/30">
+                    {cart.map(item => {
+                      const key = itemKey('cart', item.id)
+                      const comped = isComped(key)
+                      return (
+                      <div key={item.id} className={`px-3 py-2 rounded-xl border transition-colors ${comped ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-700/50' : 'bg-indigo-50 dark:bg-indigo-900/10 border-indigo-100 dark:border-indigo-900/30'}`}>
                         <div className="flex items-center gap-2">
                           <div className="flex-1 min-w-0">
-                            <div className="text-xs font-semibold text-gray-800 dark:text-gray-200 truncate">{item.name_en}</div>
-                            <div className="text-xs text-indigo-600 dark:text-indigo-400 font-bold mt-0.5">€{item.price.toFixed(2)} each</div>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <div className={`text-xs font-semibold truncate ${comped ? 'line-through text-gray-400' : 'text-gray-800 dark:text-gray-200'}`}>{item.name_en}</div>
+                              {comped && <span className="text-[9px] font-extrabold px-1 py-0.5 rounded bg-amber-500 text-white tracking-widest">COMP</span>}
+                            </div>
+                            {comped
+                              ? <div className="text-[10px] text-amber-600 dark:text-amber-400 font-medium mt-0.5 truncate">✓ {compItems[key]?.reason} · {compItems[key]?.approvedBy}</div>
+                              : <div className="text-xs text-indigo-600 dark:text-indigo-400 font-bold mt-0.5">€{item.price.toFixed(2)} each</div>
+                            }
                           </div>
                           <div className="flex items-center bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden">
                             <button onClick={() => changeQty(item.id, -1)} className="w-7 h-7 flex items-center justify-center text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 font-bold text-sm transition-colors">−</button>
                             <span className="text-xs font-extrabold px-2 text-gray-800 dark:text-gray-200">{item.qty}</span>
                             <button onClick={() => changeQty(item.id, 1)} className="w-7 h-7 flex items-center justify-center text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 font-bold text-sm transition-colors">+</button>
                           </div>
-                          <span className="text-xs font-extrabold text-gray-800 dark:text-gray-200 w-14 text-right">
+                          <span className={`text-xs font-extrabold w-14 text-right ${comped ? 'line-through text-gray-400' : 'text-gray-800 dark:text-gray-200'}`}>
                             €{(item.price * (1 - Number(item.discount_pct || 0) / 100) * item.qty).toFixed(2)}
                           </span>
+                          {/* Comp toggle */}
+                          <button
+                            onClick={() => comped ? removeComp(key) : openCompDialog(key, item.name_en, item.price, item.qty)}
+                            title={comped ? 'Remove Comp' : 'Mark as Comp (On the House)'}
+                            className={`w-6 h-6 flex items-center justify-center rounded-lg text-xs flex-shrink-0 transition-colors font-bold ${comped ? 'bg-amber-400 text-white hover:bg-amber-500' : 'text-gray-300 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20'}`}
+                          >🎁</button>
                           <button onClick={() => removeFromCart(item.id)} className="w-6 h-6 flex items-center justify-center rounded-lg text-gray-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors text-xs">✕</button>
                         </div>
                       </div>
-                    ))}
+                      )
+                    })}
                   </>
                 )}
 
@@ -2666,6 +2781,12 @@ export function Billing({ orderContext }) {
             {totalSavings > 0 && (
               <div className="flex justify-between text-xs text-rose-500 font-semibold">
                 <span>Discounts</span><span>−€{totalSavings.toFixed(2)}</span>
+              </div>
+            )}
+            {compCount > 0 && (
+              <div className="flex justify-between text-xs text-amber-600 dark:text-amber-400 font-semibold">
+                <span>🎁 Comp ({compCount} item{compCount !== 1 ? 's' : ''})</span>
+                <span>−€{compTotal.toFixed(2)}</span>
               </div>
             )}
             <div className="flex justify-between text-xs text-gray-400">
@@ -2715,6 +2836,75 @@ export function Billing({ orderContext }) {
 
       </div>
     </div>
+
+    {/* ── Comp (OTH) Reason Dialog ───────────────────────────────────────────── */}
+    {compDialog && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setCompDialog(null)}>
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
+          {/* Header */}
+          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700 bg-amber-50 dark:bg-amber-900/20">
+            <div className="flex items-center gap-2.5">
+              <span className="text-xl">🎁</span>
+              <div>
+                <h3 className="text-sm font-extrabold text-gray-900 dark:text-white">Mark as Comp</h3>
+                <p className="text-xs text-amber-600 dark:text-amber-400 font-medium truncate max-w-[200px]">{compDialog.itemName}</p>
+              </div>
+            </div>
+            <button onClick={() => setCompDialog(null)} className="w-8 h-8 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors font-bold">✕</button>
+          </div>
+
+          {/* Item summary */}
+          <div className="mx-5 mt-4 flex items-center justify-between bg-amber-50 dark:bg-amber-900/20 rounded-xl px-4 py-3">
+            <div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">Comp value</div>
+              <div className="text-lg font-extrabold text-amber-700 dark:text-amber-300">€{(compDialog.price * compDialog.qty).toFixed(2)}</div>
+            </div>
+            <div className="text-right">
+              <div className="text-xs text-gray-400">×{compDialog.qty} @ €{compDialog.price.toFixed(2)}</div>
+              <div className="text-xs font-semibold text-amber-600 dark:text-amber-400 mt-0.5">Will not be charged</div>
+            </div>
+          </div>
+
+          {/* Reason */}
+          <div className="px-5 pt-4">
+            <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-2">Reason <span className="text-rose-500">*</span></label>
+            <div className="grid grid-cols-2 gap-1.5 mb-3">
+              {COMP_REASONS.map(r => (
+                <button
+                  key={r}
+                  onClick={() => setCompReason(r)}
+                  className={`text-xs font-semibold px-2.5 py-2 rounded-xl border-2 text-left transition-all ${compReason === r ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-amber-300'}`}
+                >{r}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* Approved By */}
+          <div className="px-5 pb-4">
+            <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5">Approved By</label>
+            <input
+              value={compApprover}
+              onChange={e => setCompApprover(e.target.value)}
+              placeholder={`Default: ${user?.full_name || 'Current user'}`}
+              className="w-full text-xs px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-400"
+            />
+          </div>
+
+          {/* Actions */}
+          <div className="px-5 pb-5 grid grid-cols-2 gap-2">
+            <button
+              onClick={() => setCompDialog(null)}
+              className="py-3 rounded-xl text-sm font-bold border-2 border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
+            >Cancel</button>
+            <button
+              onClick={confirmComp}
+              disabled={!compReason}
+              className="py-3 rounded-xl text-sm font-bold bg-amber-500 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-all active:scale-[0.98]"
+            >Confirm Comp</button>
+          </div>
+        </div>
+      </div>
+    )}
 
     {/* ── Shop / Owner Account Confirmation Modal ── */}
     {showShopModal && (
@@ -4525,6 +4715,207 @@ export function History() {
                 )
               })}
             </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
+  )
+}
+
+export function OTH() {
+  const { othRecords, company } = useApp()
+  const [search, setSearch] = useState('')
+  const [dateFilter, setDateFilter] = useState('today')
+  const [reasonFilter, setReasonFilter] = useState('all')
+
+  const todayStr = new Date().toDateString()
+  const now = new Date()
+
+  function inRange(r) {
+    const d = new Date(r.created_at)
+    if (dateFilter === 'today')   return d.toDateString() === todayStr
+    if (dateFilter === 'week') {
+      const weekAgo = new Date(now); weekAgo.setDate(now.getDate() - 7)
+      return d >= weekAgo
+    }
+    if (dateFilter === 'month') {
+      const monthAgo = new Date(now); monthAgo.setDate(now.getDate() - 30)
+      return d >= monthAgo
+    }
+    return true // 'all'
+  }
+
+  const allReasons = [...new Set(othRecords.map(r => r.reason).filter(Boolean))]
+
+  const filtered = othRecords.filter(r => {
+    if (!inRange(r)) return false
+    if (reasonFilter !== 'all' && r.reason !== reasonFilter) return false
+    const q = search.trim().toLowerCase()
+    if (!q) return true
+    return (
+      r.item_name?.toLowerCase().includes(q) ||
+      String(r.order_number).includes(q) ||
+      r.table_label?.toLowerCase().includes(q) ||
+      r.approved_by?.toLowerCase().includes(q) ||
+      r.reason?.toLowerCase().includes(q)
+    )
+  })
+
+  const filteredTotal  = filtered.reduce((s, r) => s + Number(r.total_value || 0), 0)
+  const filteredCount  = filtered.length
+
+  const todayItems  = othRecords.filter(r => new Date(r.created_at).toDateString() === todayStr)
+  const todayTotal  = todayItems.reduce((s, r) => s + Number(r.total_value || 0), 0)
+  const allTotal    = othRecords.reduce((s, r) => s + Number(r.total_value || 0), 0)
+
+  // Group filtered by date for visual separation
+  const byDate = filtered.reduce((acc, r) => {
+    const d = new Date(r.created_at).toDateString()
+    if (!acc[d]) acc[d] = []
+    acc[d].push(r)
+    return acc
+  }, {})
+  const sortedDates = Object.keys(byDate).sort((a, b) => new Date(b) - new Date(a))
+
+  return (
+    <div className="space-y-4">
+      {/* ── Stat cards ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <Card>
+          <div className="text-xs text-gray-400 mb-1">Today's Comps</div>
+          <div className="text-2xl font-extrabold text-amber-600 dark:text-amber-400">{todayItems.length}</div>
+          <div className="text-xs text-gray-400 mt-1">items given free</div>
+        </Card>
+        <Card>
+          <div className="text-xs text-gray-400 mb-1">Today's Value</div>
+          <div className="text-2xl font-extrabold text-amber-600 dark:text-amber-400">€{todayTotal.toFixed(2)}</div>
+          <div className="text-xs text-gray-400 mt-1">comped today</div>
+        </Card>
+        <Card>
+          <div className="text-xs text-gray-400 mb-1">All-Time Records</div>
+          <div className="text-2xl font-extrabold text-gray-700 dark:text-gray-200">{othRecords.length}</div>
+          <div className="text-xs text-gray-400 mt-1">total comp items</div>
+        </Card>
+        <Card>
+          <div className="text-xs text-gray-400 mb-1">All-Time Value</div>
+          <div className="text-2xl font-extrabold text-gray-700 dark:text-gray-200">€{allTotal.toFixed(2)}</div>
+          <div className="text-xs text-gray-400 mt-1">total given free</div>
+        </Card>
+      </div>
+
+      <Card>
+        {/* ── Filters ── */}
+        <div className="flex flex-wrap gap-2 mb-4">
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search item, order #, table, approver…"
+            className="flex-1 min-w-[180px] text-sm px-3.5 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-400"
+          />
+          <select
+            value={dateFilter}
+            onChange={e => setDateFilter(e.target.value)}
+            className="text-sm px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-amber-400"
+          >
+            <option value="today">Today</option>
+            <option value="week">Last 7 Days</option>
+            <option value="month">Last 30 Days</option>
+            <option value="all">All Time</option>
+          </select>
+          {allReasons.length > 0 && (
+            <select
+              value={reasonFilter}
+              onChange={e => setReasonFilter(e.target.value)}
+              className="text-sm px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-amber-400"
+            >
+              <option value="all">All Reasons</option>
+              {allReasons.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+          )}
+        </div>
+
+        {/* ── Table ── */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 dark:border-gray-700">
+                {['Date & Time','Order #','Table','Item','Qty','Unit Price','Total Value','Reason','Approved By'].map(h => (
+                  <th key={h} className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wide pb-2 pr-4 last:pr-0 whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filteredCount === 0 && (
+                <tr>
+                  <td colSpan={9} className="text-center py-14">
+                    <div className="flex flex-col items-center gap-2">
+                      <span className="text-4xl opacity-30">🎁</span>
+                      <p className="text-sm font-semibold text-gray-400">No comp records found</p>
+                      <p className="text-xs text-gray-300 dark:text-gray-500">Try a different date range or search term</p>
+                    </div>
+                  </td>
+                </tr>
+              )}
+              {sortedDates.map(dateStr => (
+                <>
+                  {/* Date group header */}
+                  <tr key={`hdr-${dateStr}`}>
+                    <td colSpan={9} className="pt-4 pb-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">
+                          {dateStr === todayStr ? '📅 Today' : `📅 ${new Date(dateStr).toLocaleDateString('en-MT', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}`}
+                        </span>
+                        <div className="flex-1 h-px bg-amber-100 dark:bg-amber-900/30" />
+                        <span className="text-xs font-semibold text-amber-600 dark:text-amber-400">
+                          {byDate[dateStr].length} item{byDate[dateStr].length !== 1 ? 's' : ''} · €{byDate[dateStr].reduce((s,r)=>s+Number(r.total_value||0),0).toFixed(2)}
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                  {byDate[dateStr].map((r, i) => (
+                    <tr key={r.id ?? `${dateStr}-${i}`} className="border-b border-gray-50 dark:border-gray-700/50 hover:bg-amber-50/40 dark:hover:bg-amber-900/10 transition-colors">
+                      <td className="py-2.5 pr-4 whitespace-nowrap">
+                        <div className="text-xs font-medium text-gray-700 dark:text-gray-300">{new Date(r.created_at).toLocaleDateString()}</div>
+                        <div className="text-xs text-gray-400">{new Date(r.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                      </td>
+                      <td className="py-2.5 pr-4 font-bold text-gray-800 dark:text-gray-200 whitespace-nowrap">
+                        {r.order_number ? `#${r.order_number}` : '—'}
+                      </td>
+                      <td className="py-2.5 pr-4 text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                        {r.table_label || '—'}
+                      </td>
+                      <td className="py-2.5 pr-4">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-semibold text-gray-800 dark:text-gray-200">{r.item_name}</span>
+                          <span className="text-[9px] font-extrabold px-1 py-0.5 rounded bg-amber-500 text-white tracking-widest flex-shrink-0">COMP</span>
+                        </div>
+                      </td>
+                      <td className="py-2.5 pr-4 text-center font-bold text-gray-700 dark:text-gray-300">{r.quantity ?? 1}</td>
+                      <td className="py-2.5 pr-4 text-gray-600 dark:text-gray-400 whitespace-nowrap">€{Number(r.original_price || 0).toFixed(2)}</td>
+                      <td className="py-2.5 pr-4 font-extrabold text-amber-700 dark:text-amber-300 whitespace-nowrap">€{Number(r.total_value || 0).toFixed(2)}</td>
+                      <td className="py-2.5 pr-4">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-gray-100 dark:bg-gray-700 text-xs font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap">{r.reason || '—'}</span>
+                      </td>
+                      <td className="py-2.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400 whitespace-nowrap">✓ {r.approved_by || '—'}</td>
+                    </tr>
+                  ))}
+                </>
+              ))}
+            </tbody>
+            {filteredCount > 0 && (
+              <tfoot>
+                <tr className="border-t-2 border-amber-200 dark:border-amber-700/50 bg-amber-50/60 dark:bg-amber-900/10">
+                  <td colSpan={5} className="py-3 pl-1 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                    {filteredCount} record{filteredCount !== 1 ? 's' : ''} · filtered total
+                  </td>
+                  <td className="py-3 pr-4" />
+                  <td className="py-3 pr-4 font-extrabold text-amber-700 dark:text-amber-300 whitespace-nowrap text-base">
+                    €{filteredTotal.toFixed(2)}
+                  </td>
+                  <td colSpan={2} />
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       </Card>

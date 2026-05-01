@@ -18,9 +18,9 @@ export const ROLES = {
 
 export const ROLE_NAV = {
   superadmin: ['dashboard','company','users','customers','inventory','menu','reports','settings','audit','shifts','history','notifications'],
-  admin:      ['dashboard','users','waiters','customers','tables','billing','orderlist','inventory','menu','reports','kitchen','bar','settings','shifts','history','notifications'],
-  owner:      ['dashboard','reports','users','waiters','customers','billing','orderlist','inventory','menu','kitchen','bar','settings','shifts','history','notifications'],
-  manager:    ['dashboard','users','waiters','customers','orderlist','inventory','menu','kitchen','bar','shifts','history','notifications'],
+  admin:      ['dashboard','users','waiters','customers','tables','billing','orderlist','inventory','menu','reports','kitchen','bar','settings','shifts','history','oth','notifications'],
+  owner:      ['dashboard','reports','users','waiters','customers','billing','orderlist','inventory','menu','kitchen','bar','settings','shifts','history','oth','notifications'],
+  manager:    ['dashboard','users','waiters','customers','orderlist','inventory','menu','kitchen','bar','shifts','history','oth','notifications'],
   cashier:    ['billing','receipts','shifts','history','notifications'],
   supervisor: ['dashboard','supervisor','reports','shifts','history','notifications'],
   waiter:     ['tables','billing','orderlist','shifts','history','notifications'],
