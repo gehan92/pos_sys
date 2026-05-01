@@ -70,9 +70,12 @@ function TableLabel({ order }) {
 }
 
 // ── Item modifier / add modal ──────────────────────────────────────────────────
+const OTH_REASONS = ['Incorrect Order', 'Customer Complaint', 'VIP / Loyalty', 'Quality Issue', 'Manager Decision', 'Other']
+
 function OrderDetailModal({ order, onClose, navTo }) {
-  const { setLiveOrders, menuItems, menuCategories } = useApp()
+  const { setLiveOrders, menuItems, menuCategories, addOthRecords, user } = useApp()
   const [items, setItems] = useState(() => order ? [...order.items] : [])
+  const [newItems, setNewItems] = useState([])  // items added this session
   const [showAddModal, setShowAddModal] = useState(false)
   const [modalCat, setModalCat] = useState('all')
   const [modalSearch, setModalSearch] = useState('')
@@ -80,6 +83,8 @@ function OrderDetailModal({ order, onClose, navTo }) {
   const [itemModalQty, setItemModalQty] = useState(1)
   const [itemModalSelections, setItemModalSelections] = useState({})
   const [itemModalNote, setItemModalNote] = useState('')
+  const [itemModalOth, setItemModalOth] = useState(false)
+  const [itemModalOthReason, setItemModalOthReason] = useState('')
 
   if (!order) return null
 
@@ -103,18 +108,32 @@ function OrderDetailModal({ order, onClose, navTo }) {
     })
   }
 
-  function addNewItem(menuItem, qty, mods, note) {
+  function addNewItem(menuItem, qty, mods, note, comped, compReason) {
+    const newEntry = { id: menuItem.id, name: menuItem.name_en, price: menuItem.price, qty, mods, note, station: menuItem.station || 'kitchen', comped: !!comped, comped_reason: compReason || '' }
+    setNewItems(prev => [...prev, newEntry])
     setItems(prev => {
       const existing = prev.findIndex(i => i.id === menuItem.id)
       let updated
       if (existing >= 0 && mods.length === 0 && !note) {
         updated = prev.map((item, i) => i === existing ? { ...item, qty: item.qty + qty } : item)
       } else {
-        updated = [...prev, { id: menuItem.id, name: menuItem.name_en, price: menuItem.price, qty, mods, note }]
+        updated = [...prev, newEntry]
       }
       setLiveOrders(orders => orders.map(o => o.id === order.id ? { ...o, items: updated } : o))
       return updated
     })
+  }
+
+  function saveOrder() {
+    if (newItems.length === 0) { onClose(); return }
+    const round = (order.rounds ?? 1) + 1
+    const kitchenItems = newItems.filter(i => (i.station || 'kitchen') !== 'bar')
+    const barItems     = newItems.filter(i => i.station === 'bar')
+    const ticket = { ...order, rounds: round }
+    if (kitchenItems.length > 0) printStationTicket(ticket, kitchenItems, 'Kitchen')
+    if (barItems.length > 0)     setTimeout(() => printStationTicket(ticket, barItems, 'Bar'), 400)
+    setLiveOrders(prev => prev.map(o => o.id === order.id ? { ...o, rounds: round, status: 'cooking' } : o))
+    onClose()
   }
 
   function openItemModal(menuItem) {
@@ -122,7 +141,62 @@ function OrderDetailModal({ order, onClose, navTo }) {
     setItemModalQty(1)
     setItemModalSelections({})
     setItemModalNote('')
+    setItemModalOth(false)
+    setItemModalOthReason('')
   }
+
+  const [compDialog, setCompDialog] = useState(null)   // { index, item }
+  const [compReason, setCompReason] = useState('')
+  const [compApprover, setCompApprover] = useState('')
+
+  function openCompDialog(index) {
+    const item = items[index]
+    if (item.comped) {
+      // un-comp immediately
+      setItems(prev => {
+        const updated = prev.map((it, i) => i === index ? { ...it, comped: false, comped_reason: '' } : it)
+        setLiveOrders(orders => orders.map(o => o.id === order.id ? { ...o, items: updated } : o))
+        return updated
+      })
+    } else {
+      setCompDialog({ index, item })
+      setCompReason('')
+      setCompApprover('')
+    }
+  }
+
+  function confirmComp() {
+    if (!compReason || !compDialog) return
+    const { index, item } = compDialog
+    // index === -1 means this is a new item being added via the item modifier modal
+    if (index === -1) {
+      setItemModalOth(true)
+      setItemModalOthReason(compReason)
+      setCompDialog(null)
+      return
+    }
+    setItems(prev => {
+      const updated = prev.map((it, i) => i === index ? { ...it, comped: true, comped_reason: compReason } : it)
+      setLiveOrders(orders => orders.map(o => o.id === order.id ? { ...o, items: updated } : o))
+      return updated
+    })
+    addOthRecords([{
+      id: `oth_${Date.now()}_${index}`,
+      order_number: order.order_number,
+      invoice_ref: `INV-${order.order_number}`,
+      item_name: item.name || item.name_en,
+      quantity: item.qty,
+      original_price: item.price,
+      total_value: item.price * item.qty,
+      approved_by: compApprover.trim() || user?.full_name || '—',
+      reason: compReason,
+      table_label: order.order_type === 'takeaway' ? 'Takeaway' : `Table ${order.table_number}`,
+      created_at: new Date().toISOString(),
+    }])
+    setCompDialog(null)
+  }
+
+  const updatedOrder = { ...order, items }
 
   function toggleMod(group, choice) {
     setItemModalSelections(prev => {
@@ -133,11 +207,25 @@ function OrderDetailModal({ order, onClose, navTo }) {
   }
 
   function confirmAddItem() {
-    addNewItem(itemModal, itemModalQty, Object.values(itemModalSelections).flat().filter(Boolean), itemModalNote.trim())
+    const mods = Object.values(itemModalSelections).flat().filter(Boolean)
+    addNewItem(itemModal, itemModalQty, mods, itemModalNote.trim(), itemModalOth, itemModalOthReason)
+    if (itemModalOth && itemModalOthReason) {
+      addOthRecords([{
+        id: `oth_${Date.now()}_${itemModal.id}`,
+        order_number: order.order_number,
+        invoice_ref: `INV-${order.order_number}`,
+        item_name: itemModal.name_en,
+        quantity: itemModalQty,
+        original_price: itemModal.price,
+        total_value: itemModal.price * itemModalQty,
+        approved_by: user?.full_name || '—',
+        reason: itemModalOthReason,
+        table_label: order.order_type === 'takeaway' ? 'Takeaway' : `Table ${order.table_number}`,
+        created_at: new Date().toISOString(),
+      }])
+    }
     setItemModal(null)
   }
-
-  const updatedOrder = { ...order, items }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onClose}>
@@ -192,25 +280,36 @@ function OrderDetailModal({ order, onClose, navTo }) {
             ) : (
               <div className="rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
                 {items.map((item, i) => (
-                  <div key={i} className="flex items-center gap-2 px-3 py-2 border-b border-gray-100 dark:border-gray-700 last:border-0">
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs font-semibold text-gray-800 dark:text-gray-200 truncate">{item.name || item.name_en}</div>
-                      {item.mods?.length > 0 && <div className="text-[11px] text-indigo-500 mt-0.5">+ {item.mods.join(' · ')}</div>}
-                      {item.note && (
-                        <div className="flex items-center gap-1 text-[11px] text-amber-600 dark:text-amber-400 mt-0.5">
-                          <MessageSquare size={10} />{item.note}
+                  <div key={i} className="border-b border-gray-100 dark:border-gray-700 last:border-0">
+                    <div className="flex items-center gap-2 px-3 py-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-semibold text-gray-800 dark:text-gray-200 truncate flex items-center gap-1.5">
+                          {item.name || item.name_en}
+                          {item.comped && <span className="text-[9px] font-bold bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded-full">🎁 OTH</span>}
                         </div>
-                      )}
+                        {item.mods?.length > 0 && <div className="text-[11px] text-indigo-500 mt-0.5">+ {item.mods.join(' · ')}</div>}
+                        {item.note && (
+                          <div className="flex items-center gap-1 text-[11px] text-amber-600 dark:text-amber-400 mt-0.5">
+                            <MessageSquare size={10} />{item.note}
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => openCompDialog(i)}
+                        title={item.comped ? 'Remove OTH' : 'Pre-flag as Comp'}
+                        className={`flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-base transition-colors ${item.comped ? 'bg-amber-100 dark:bg-amber-900/40' : 'hover:bg-amber-50 dark:hover:bg-amber-900/20 text-gray-300 hover:text-amber-500'}`}
+                      >🎁</button>
+                      <div className="flex items-center bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden flex-shrink-0">
+                        <button onClick={() => changeQty(i, -1)} className="w-7 h-7 flex items-center justify-center text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 font-bold transition-colors">−</button>
+                        <span className="text-xs font-extrabold px-2 text-gray-800 dark:text-gray-200">{item.qty}</span>
+                        <button onClick={() => changeQty(i, 1)} className="w-7 h-7 flex items-center justify-center text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 font-bold transition-colors">+</button>
+                      </div>
+                      <span className="text-xs font-bold text-gray-700 dark:text-gray-300 w-14 text-right flex-shrink-0">€{(item.price * item.qty).toFixed(2)}</span>
+                      <button onClick={() => removeItem(i)} className="w-6 h-6 flex items-center justify-center rounded-lg text-gray-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors">
+                        <X size={12} />
+                      </button>
                     </div>
-                    <div className="flex items-center bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden flex-shrink-0">
-                      <button onClick={() => changeQty(i, -1)} className="w-7 h-7 flex items-center justify-center text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 font-bold transition-colors">−</button>
-                      <span className="text-xs font-extrabold px-2 text-gray-800 dark:text-gray-200">{item.qty}</span>
-                      <button onClick={() => changeQty(i, 1)} className="w-7 h-7 flex items-center justify-center text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 font-bold transition-colors">+</button>
-                    </div>
-                    <span className="text-xs font-bold text-gray-700 dark:text-gray-300 w-14 text-right flex-shrink-0">€{(item.price * item.qty).toFixed(2)}</span>
-                    <button onClick={() => removeItem(i)} className="w-6 h-6 flex items-center justify-center rounded-lg text-gray-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors">
-                      <X size={12} />
-                    </button>
+
                   </div>
                 ))}
               </div>
@@ -326,10 +425,82 @@ function OrderDetailModal({ order, onClose, navTo }) {
                   <div className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Additional note</div>
                   <textarea value={itemModalNote} onChange={e => setItemModalNote(e.target.value)} placeholder="e.g. No onion, allergen request…" rows={2} className="w-full text-sm px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
                 </div>
+
+                {/* OTH button */}
+                <button
+                  type="button"
+                  onClick={() => { setItemModalOth(false); setItemModalOthReason(''); setCompDialog({ index: -1, item: { ...itemModal, qty: itemModalQty } }) }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all text-left ${itemModalOth ? 'border-amber-400 bg-amber-50 dark:bg-amber-900/20' : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/30 hover:border-amber-300'}`}
+                >
+                  <span className="text-xl">🎁</span>
+                  <div className="flex-1">
+                    <div className="text-sm font-bold text-gray-800 dark:text-gray-100">Pre-flag as Comp</div>
+                    {itemModalOth
+                      ? <div className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">{itemModalOthReason} — will be comped at billing</div>
+                      : <div className="text-xs text-gray-400 mt-0.5">Mark this item as On the House</div>
+                    }
+                  </div>
+                  {itemModalOth && <span className="text-xs font-bold bg-amber-500 text-white px-2 py-0.5 rounded-full">ON</span>}
+                </button>
               </div>
               <div className="flex gap-2 px-5 pb-5">
                 <Btn fullWidth onClick={() => setItemModal(null)}>Cancel</Btn>
-                <Btn variant="success" fullWidth onClick={confirmAddItem}>Add {itemModalQty > 1 ? `×${itemModalQty}` : ''} — €{(itemModal.price * itemModalQty).toFixed(2)}</Btn>
+                <Btn variant="success" fullWidth onClick={confirmAddItem}>
+                  Save{itemModalOth ? ' 🎁' : ''} — €{(itemModal.price * itemModalQty).toFixed(2)}
+                </Btn>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Pre-flag as Comp dialog */}
+        {compDialog && (
+          <div className={`fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 ${compDialog.index === -1 ? 'z-[80]' : 'z-[60]'}`} onClick={() => setCompDialog(null)}>
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700 bg-amber-50 dark:bg-amber-900/20">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-xl">🎁</span>
+                  <div>
+                    <h3 className="text-sm font-extrabold text-gray-900 dark:text-white">Pre-flag as Comp</h3>
+                    <p className="text-xs text-amber-600 dark:text-amber-400 font-medium truncate max-w-[200px]">{compDialog.item.name || compDialog.item.name_en}</p>
+                  </div>
+                </div>
+                <button onClick={() => setCompDialog(null)} className="w-8 h-8 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors font-bold">✕</button>
+              </div>
+              <div className="mx-5 mt-4 flex items-center justify-between bg-amber-50 dark:bg-amber-900/20 rounded-xl px-4 py-3">
+                <div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400">Will be comped at billing</div>
+                  <div className="text-lg font-extrabold text-amber-700 dark:text-amber-300">€{(compDialog.item.price * compDialog.item.qty).toFixed(2)}</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-xs text-gray-400">×{compDialog.item.qty} @ €{compDialog.item.price.toFixed(2)}</div>
+                  <div className="text-xs font-semibold text-amber-600 dark:text-amber-400 mt-0.5">Applied automatically</div>
+                </div>
+              </div>
+              <div className="px-5 pt-4">
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-2">Reason <span className="text-rose-500">*</span></label>
+                <div className="grid grid-cols-2 gap-1.5 mb-3">
+                  {OTH_REASONS.map(r => (
+                    <button key={r} onClick={() => setCompReason(r)}
+                      className={`text-xs font-semibold px-2.5 py-2 rounded-xl border-2 text-left transition-all ${compReason === r ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-amber-300'}`}
+                    >{r}</button>
+                  ))}
+                </div>
+              </div>
+              <div className="px-5 pb-4">
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5">Approved By</label>
+                <input value={compApprover} onChange={e => setCompApprover(e.target.value)}
+                  placeholder={`Default: ${user?.full_name || 'Current user'}`}
+                  className="w-full text-xs px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                />
+              </div>
+              <div className="px-5 pb-5 grid grid-cols-2 gap-2">
+                <button onClick={() => setCompDialog(null)}
+                  className="py-3 rounded-xl text-sm font-bold border-2 border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
+                >Cancel</button>
+                <button onClick={confirmComp} disabled={!compReason}
+                  className="py-3 rounded-xl text-sm font-bold bg-amber-500 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-all active:scale-[0.98]"
+                >Flag as Comp</button>
               </div>
             </div>
           </div>
@@ -337,7 +508,10 @@ function OrderDetailModal({ order, onClose, navTo }) {
 
         {/* Footer actions */}
         <div className="px-5 pb-5 pt-3 flex gap-2">
-          <Btn fullWidth onClick={onClose}>Close</Btn>
+          <Btn onClick={onClose}>Close</Btn>
+          <Btn variant="primary" fullWidth disabled={newItems.length === 0} onClick={saveOrder}>
+            Save{newItems.length > 0 ? ` (${newItems.length} new)` : ''}
+          </Btn>
           <Btn variant="success" fullWidth disabled={items.length === 0} onClick={() => { onClose(); navTo('billing', { preloadOrder: updatedOrder }) }}>
             Go to Billing
           </Btn>

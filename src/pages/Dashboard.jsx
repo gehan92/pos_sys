@@ -650,10 +650,6 @@ function ActiveOrdersCard({ liveOrders, setLiveOrders, setReprintModal, setOrder
                         className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                       ><Printer size={11} />Print</button>
                       <button
-                        onClick={() => { setOrderContext({ tableId: o.table_id, tableNumber: o.table_number, isTakeaway: o.order_type === 'takeaway', existingOrder: o }); navTo('orders') }}
-                        className="flex-1 flex items-center justify-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-indigo-200 dark:border-indigo-700 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
-                      >Add Items</button>
-                      <button
                         onClick={() => navTo('billing', { preloadOrder: o })}
                         className="flex-1 flex items-center justify-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
                       >Go to Bill</button>
