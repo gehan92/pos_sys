@@ -79,6 +79,11 @@ export function AppProvider({ children }) {
     // seed: Tony Cook clocked in today as example
     { id:'cr1', userId:'8', userName:'Tony Cook', role:'cook', clockIn: new Date(new Date().setHours(8,30,0,0)), clockOut: null },
   ])
+  const [othRecords, setOthRecords] = useState([])
+
+  function addOthRecords(records) {
+    setOthRecords(p => [...records, ...p])
+  }
   const [notifications, setNotifications] = useState([
     { id:1, message_en:'Low stock: Olive Oil below minimum', type:'warning', module:'Inventory', is_read:false, created_at: new Date() },
     { id:2, message_en:'New user request: Maria Galea', type:'info', module:'Users', is_read:false, created_at: new Date() },
@@ -319,7 +324,7 @@ export function AppProvider({ children }) {
     : false
 
   return (
-    <AppContext.Provider value={{ user, login, logout, lang, setLang, theme, setTheme, company, setCompany, users, createUser, approveUser, deactivateUser, updateUser, deleteUser, notifications, markAllRead, unreadCount, liveOrders, setLiveOrders, nextOrderNum, setNextOrderNum, openBills, markOrderServed, completeProcess, finalizeBill, orderHistory, addToHistory, transferOrder, mergeOrder, unmergeOrder, menuItems, setMenuItems, menuCategories, setMenuCategories, inventoryItems, setInventoryItems, customers, createCustomer, updateCustomer, deleteCustomer, recordCustomerSale, clockRecords, clockIn, clockOut, isClockedIn }}>
+    <AppContext.Provider value={{ user, login, logout, lang, setLang, theme, setTheme, company, setCompany, users, createUser, approveUser, deactivateUser, updateUser, deleteUser, notifications, markAllRead, unreadCount, liveOrders, setLiveOrders, nextOrderNum, setNextOrderNum, openBills, markOrderServed, completeProcess, finalizeBill, orderHistory, addToHistory, transferOrder, mergeOrder, unmergeOrder, menuItems, setMenuItems, menuCategories, setMenuCategories, inventoryItems, setInventoryItems, customers, createCustomer, updateCustomer, deleteCustomer, recordCustomerSale, clockRecords, clockIn, clockOut, isClockedIn, othRecords, addOthRecords }}>
       {children}
     </AppContext.Provider>
   )

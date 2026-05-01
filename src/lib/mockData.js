@@ -213,11 +213,15 @@ export const MENU_ITEMS = [
   },
 ]
 
-export const TABLES = Array.from({ length: 12 }, (_, i) => ({
-  id: `t${i + 1}`, number: i + 1, capacity: 4,
-  status: [3, 4, 6, 9, 12].includes(i + 1) ? 'occupied' : 'free',
-  floor: 'Ground',
-}))
+export const TABLES = [
+  // Special OTH (On the House) table — always available, not a real dining table
+  { id: 't0', number: 0, label: 'OTH', capacity: 0, status: 'oth', floor: 'Special', isOTH: true },
+  ...Array.from({ length: 12 }, (_, i) => ({
+    id: `t${i + 1}`, number: i + 1, capacity: 4,
+    status: [3, 4, 6, 9, 12].includes(i + 1) ? 'occupied' : 'free',
+    floor: 'Ground',
+  })),
+]
 
 export const SAMPLE_ORDERS = [
   { id:'o1', order_number:47, table_id:'t3', table_number:3, order_type:'dinein',  status:'cooking', kitchenStatus:'cooking', barStatus:'pending', waiter:'Maria G.', notes:'Nut allergy. Extra napkins.', created_at:'14:32', items:[{name:'Pasta Carbonara',qty:2,price:14.50,station:'kitchen'},{name:'House Wine',qty:1,price:6.00,station:'bar'},{name:'Tiramisu',qty:1,price:7.00,station:'kitchen'}] },
