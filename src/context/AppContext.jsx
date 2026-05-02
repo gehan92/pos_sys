@@ -96,13 +96,19 @@ export function AppProvider({ children }) {
     else root.classList.remove('dark')
   }, [theme])
 
-  function login(username, password) {
+  function login(username, password, { usePin = false } = {}) {
     const found = users.find(u =>
       u.username === username &&
-      u.password === password &&
+      (usePin ? u.pin === password : u.password === password) &&
       u.status === 'active'
     )
-    if (found) { setUser(found); return { success: true } }
+    if (usePin && found && !found.pin) return { success: false, error: 'No PIN set for this account' }
+    if (found) {
+      const u = { ...found, last_login: new Date().toISOString() }
+      setUser(u)
+      setUsers(prev => prev.map(x => x.id === found.id ? u : x))
+      return { success: true }
+    }
     const exists = users.find(u => u.username === username)
     if (exists && exists.status === 'pending') return { success: false, error: 'Account pending approval' }
     if (exists && exists.status === 'inactive') return { success: false, error: 'Account deactivated' }
@@ -144,6 +150,7 @@ export function AppProvider({ children }) {
 
   function updateUser(id, changes) {
     setUsers(p => p.map(u => u.id === id ? { ...u, ...changes } : u))
+    if (user?.id === id) setUser(prev => ({ ...prev, ...changes }))
   }
 
   function deleteUser(id) {

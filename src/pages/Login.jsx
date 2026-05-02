@@ -2,25 +2,41 @@ import { useState } from 'react'
 import { useApp } from '../context/AppContext'
 import { t } from '../i18n/translations'
 import { Btn, Input } from '../components/UI'
-import { ShieldCheck, UtensilsCrossed } from 'lucide-react'
+import { ShieldCheck, UtensilsCrossed, Hash, KeyRound } from 'lucide-react'
 
 export default function Login() {
   const { login, lang, setLang, company } = useApp()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [pin, setPin] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [pinMode, setPinMode] = useState(false)
 
   function handleLogin(e) {
     if (e) e.preventDefault()
-    if (!username.trim() || !password.trim()) { setError('Please enter username and password'); return }
+    if (!username.trim()) { setError('Please enter your username'); return }
+    if (pinMode) {
+      if (pin.length !== 4) { setError('Enter your 4-digit PIN'); return }
+    } else {
+      if (!password.trim()) { setError('Please enter your password'); return }
+    }
     setLoading(true)
     setTimeout(() => {
-      const result = login(username.trim(), password)
+      const result = pinMode
+        ? login(username.trim(), pin, { usePin: true })
+        : login(username.trim(), password)
       if (!result.success) setError(result.error || 'Invalid credentials')
       else setError('')
       setLoading(false)
     }, 300)
+  }
+
+  function toggleMode() {
+    setPinMode(v => !v)
+    setPin('')
+    setPassword('')
+    setError('')
   }
 
   const initials = company.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
@@ -80,15 +96,39 @@ export default function Login() {
               placeholder="Enter your username"
               autoComplete="username"
             />
-            <Input
-              label={t('password', lang)}
-              type="password"
-              value={password}
-              onChange={e => { setPassword(e.target.value); setError('') }}
-              placeholder="Enter your password"
-              autoComplete="current-password"
-            />
+            {!pinMode ? (
+              <Input
+                label={t('password', lang)}
+                type="password"
+                value={password}
+                onChange={e => { setPassword(e.target.value); setError('') }}
+                placeholder="Enter your password"
+                autoComplete="current-password"
+              />
+            ) : (
+              <div className="mb-4">
+                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5">PIN</label>
+                <input
+                  type="password"
+                  maxLength={4}
+                  value={pin}
+                  onChange={e => { setPin(e.target.value.replace(/\D/g, '').slice(0, 4)); setError('') }}
+                  placeholder="••••"
+                  autoComplete="off"
+                  className="w-full text-center text-2xl font-bold tracking-[0.5em] px-3 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+            )}
           </form>
+
+          {/* PIN / Password toggle */}
+          <button
+            type="button"
+            onClick={toggleMode}
+            className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-indigo-500 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors mb-3"
+          >
+            {pinMode ? <><KeyRound size={12} /> Use password instead</> : <><Hash size={12} /> Login with PIN</>}
+          </button>
 
           {error && (
             <div className="mb-4 p-3 bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 text-xs rounded-xl border border-rose-100 dark:border-rose-800 font-medium">

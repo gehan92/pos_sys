@@ -4,17 +4,16 @@ import { Btn } from '../components/UI'
 import {
   ClipboardList, ChefHat, Wine, Search, Utensils,
   AlertTriangle, MessageSquare, X, Check, Eye, Printer,
-  Timer, GitMerge, ArrowRight, CheckCircle2, Flame,
-  Coffee, Activity, Play
+  Timer, GitMerge, ArrowRight, CheckCircle2
 } from 'lucide-react'
 
-const ACTIVE_STATUSES = ['pending', 'cooking', 'ready']
+const ACTIVE_STATUSES = ['pending', 'cooking', 'ready', 'paid']
 
-const STATUS_CFG = {
-  pending: { label: 'Pending', bg: 'bg-amber-100 dark:bg-amber-900/30', text: 'text-amber-700 dark:text-amber-400', dot: 'bg-amber-400', ring: 'ring-amber-200 dark:ring-amber-800' },
-  cooking: { label: 'Cooking', bg: 'bg-blue-100 dark:bg-blue-900/30',   text: 'text-blue-700 dark:text-blue-400',   dot: 'bg-blue-400',  ring: 'ring-blue-200 dark:ring-blue-800' },
-  ready:   { label: 'Ready',   bg: 'bg-green-100 dark:bg-green-900/30', text: 'text-green-700 dark:text-green-400', dot: 'bg-green-400', ring: 'ring-green-200 dark:ring-green-800' },
+const PAYMENT_STATUS_CFG = {
+  paid:   { label: 'Paid',     bg: 'bg-green-100 dark:bg-green-900/30', text: 'text-green-700 dark:text-green-400', dot: 'bg-green-400' },
+  unpaid: { label: 'Not Paid', bg: 'bg-red-100 dark:bg-red-900/30',     text: 'text-red-700 dark:text-red-400',     dot: 'bg-red-400' },
 }
+const getPayCfg = (order) => PAYMENT_STATUS_CFG[order.status === 'paid' ? 'paid' : 'unpaid']
 
 const SUB_TABS = [
   { key: 'all',     label: 'All',     Icon: ClipboardList },
@@ -90,7 +89,7 @@ function OrderDetailModal({ order, onClose, navTo }) {
 
   const total  = items.reduce((s, i) => s + i.price * i.qty, 0)
   const guests = order.guests ? order.guests.adults + order.guests.children : null
-  const cfg    = STATUS_CFG[order.status] || {}
+  const cfg    = getPayCfg(order)
 
   function changeQty(index, delta) {
     setItems(prev => {
@@ -580,6 +579,7 @@ export default function OrderList({ navTo }) {
 
   const [search, setSearch] = useState('')
   const [viewOrder, setViewOrder] = useState(null)
+  const [showAllPaid, setShowAllPaid] = useState(false)
   const [tab, setTab] = useState(() => {
     if (isCook)      return 'kitchen'
     if (isBartender) return 'bar'
@@ -617,16 +617,18 @@ export default function OrderList({ navTo }) {
 
   const filtered = tabOrders.filter(o => {
     const q = search.trim().toLowerCase()
-    return !q || String(o.order_number).includes(q) || String(o.table_number).includes(q) || o.waiter?.toLowerCase().includes(q) || o.items.some(i => (i.name || i.name_en || '').toLowerCase().includes(q))
+    return o.status !== 'paid' && (!q || String(o.order_number).includes(q) || String(o.table_number).includes(q) || o.waiter?.toLowerCase().includes(q) || o.items.some(i => (i.name || i.name_en || '').toLowerCase().includes(q)))
   }).sort((a, b) => {
     // kitchen/bar: oldest first (most urgent at top)
     if (tab !== 'all') return (a.order_number || 0) - (b.order_number || 0)
     return (b.order_number || 0) - (a.order_number || 0)
   })
 
+  const paidOrders = baseOrders.filter(o => o.status === 'paid').sort((a, b) => (b.order_number || 0) - (a.order_number || 0))
+
   // Stats
-  const counts = { pending: 0, cooking: 0, ready: 0 }
-  baseOrders.forEach(o => { if (counts[o.status] !== undefined) counts[o.status]++ })
+  const counts = { paid: 0, unpaid: 0 }
+  baseOrders.forEach(o => { if (o.status === 'paid') counts.paid++; else counts.unpaid++ })
 
   const tabCounts = {
     all:     baseOrders.length,
@@ -639,11 +641,10 @@ export default function OrderList({ navTo }) {
       {viewOrder && <OrderDetailModal order={viewOrder} onClose={() => setViewOrder(null)} navTo={navTo} />}
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         {[
-          { key:'pending', label:'Pending',    Icon: Activity, iconColor:'text-amber-500',  bg:'bg-amber-50 dark:bg-amber-900/20',  border:'border-amber-200 dark:border-amber-800/40' },
-          { key:'cooking', label:'Cooking',    Icon: Flame,    iconColor:'text-blue-500',   bg:'bg-blue-50 dark:bg-blue-900/20',    border:'border-blue-200 dark:border-blue-800/40' },
-          { key:'ready',   label:'Ready',      Icon: CheckCircle2, iconColor:'text-green-500', bg:'bg-green-50 dark:bg-green-900/20', border:'border-green-200 dark:border-green-800/40' },
+          { key:'unpaid', label:'Not Paid', Icon: AlertTriangle, iconColor:'text-red-500',   bg:'bg-red-50 dark:bg-red-900/20',     border:'border-red-200 dark:border-red-800/40' },
+          { key:'paid',   label:'Paid',     Icon: CheckCircle2,  iconColor:'text-green-500', bg:'bg-green-50 dark:bg-green-900/20', border:'border-green-200 dark:border-green-800/40' },
         ].map(({ key, label, Icon, iconColor, bg, border }) => (
           <div key={key} className={`${bg} border ${border} rounded-2xl px-4 py-3 flex items-center gap-3`}>
             <div className={`flex-shrink-0 ${iconColor}`}><Icon size={20} /></div>
@@ -699,16 +700,16 @@ export default function OrderList({ navTo }) {
               const kitchenItems = order.items.filter(i => (i.station || 'kitchen') !== 'bar')
               const barItems     = order.items.filter(i => i.station === 'bar')
               const stationItems = tab === 'kitchen' ? kitchenItems : tab === 'bar' ? barItems : order.items
-              const cfg          = STATUS_CFG[order.status] || {}
+              const cfg          = getPayCfg(order)
               const isUrgent     = (getElapsedMin(order.created_at) || 0) > 20
 
               return (
                 <div
                   key={order.id}
-                  className={`bg-white dark:bg-gray-800 rounded-2xl border overflow-hidden transition-all ${isUrgent && order.status === 'pending' ? 'border-red-300 dark:border-red-700 shadow-md shadow-red-100 dark:shadow-red-900/20' : 'border-gray-100 dark:border-gray-700/60'}`}
+                  className={`bg-white dark:bg-gray-800 rounded-2xl border overflow-hidden transition-all border-gray-100 dark:border-gray-700/60`}
                 >
                   {/* Card top bar */}
-                  <div className={`h-1 w-full ${order.status === 'pending' ? 'bg-amber-400' : order.status === 'cooking' ? 'bg-blue-500' : 'bg-green-500'}`} />
+                  <div className={`h-1 w-full ${order.status === 'paid' ? 'bg-green-500' : 'bg-red-400'}`} />
 
                   <div className="p-4 space-y-3">
                     {/* Header row */}
@@ -750,20 +751,10 @@ export default function OrderList({ navTo }) {
                       <button onClick={() => setViewOrder(order)} className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 hover:border-indigo-300 transition-all">
                         <Eye size={13} />View
                       </button>
-                      {order.status === 'pending' && (
-                        <button onClick={() => startOrder(order)} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60 hover:bg-emerald-100 transition-all">
-                          <Play size={13} />Start Cooking
+                      {order.status !== 'paid' && (
+                        <button onClick={() => { navTo('billing', { preloadOrder: order }) }} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/60 hover:bg-indigo-100 transition-all">
+                          Go to Billing
                         </button>
-                      )}
-                      {order.status === 'cooking' && (
-                        <button onClick={() => markReady(order.id)} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800/60 hover:bg-blue-100 transition-all">
-                          <CheckCircle2 size={13} />Mark Ready
-                        </button>
-                      )}
-                      {order.status === 'ready' && (
-                        <div className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800/60">
-                          <CheckCircle2 size={13} />Ready for pickup
-                        </div>
                       )}
                       {tab === 'kitchen' && (
                         <button onClick={() => printStationTicket(order, order.items, 'Kitchen')} className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-800/60 transition-all">
@@ -801,9 +792,9 @@ export default function OrderList({ navTo }) {
                   const kitchenItems = order.items.filter(i => (i.station || 'kitchen') !== 'bar')
                   const barItems     = order.items.filter(i => i.station === 'bar')
                   const stationItems = tab === 'kitchen' ? kitchenItems : tab === 'bar' ? barItems : order.items
-                  const cfg          = STATUS_CFG[order.status] || {}
+                  const cfg          = getPayCfg(order)
                   const elapsed      = getElapsedMin(order.created_at) || 0
-                  const isUrgent     = elapsed > 20 && order.status === 'pending'
+                  const isUrgent     = elapsed > 20 && order.status !== 'paid'
 
                   return (
                     <tr key={order.id} className={`transition-colors ${isUrgent ? 'bg-red-50/50 dark:bg-red-900/5 hover:bg-red-50 dark:hover:bg-red-900/10' : 'hover:bg-gray-50/80 dark:hover:bg-gray-700/20'}`}>
@@ -853,21 +844,6 @@ export default function OrderList({ navTo }) {
                           <button onClick={() => setViewOrder(order)} title="View detail" className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 hover:border-indigo-300 hover:text-indigo-600 transition-all">
                             <Eye size={12} />View
                           </button>
-                          {order.status === 'pending' && (
-                            <button onClick={() => startOrder(order)} title="Start cooking + print" className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60 hover:bg-emerald-100 transition-all">
-                              <Play size={12} />Start
-                            </button>
-                          )}
-                          {order.status === 'cooking' && (
-                            <button onClick={() => markReady(order.id)} title="Mark as ready" className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800/60 hover:bg-blue-100 transition-all">
-                              <CheckCircle2 size={12} />Ready
-                            </button>
-                          )}
-                          {order.status === 'ready' && (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800/60">
-                              <CheckCircle2 size={12} />Pickup
-                            </span>
-                          )}
                           {tab === 'kitchen' && (
                             <button onClick={() => printStationTicket(order, order.items, 'Kitchen')} title="Reprint kitchen chit" className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-800/60 hover:bg-orange-100 transition-all">
                               <Printer size={12} />Print
@@ -876,6 +852,11 @@ export default function OrderList({ navTo }) {
                           {tab === 'bar' && (
                             <button onClick={() => printStationTicket(order, order.items, 'Bar')} title="Reprint bar chit" className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-800/60 hover:bg-purple-100 transition-all">
                               <Printer size={12} />Print
+                            </button>
+                          )}
+                          {order.status !== 'paid' && (
+                            <button onClick={() => navTo('billing', { preloadOrder: order })} title="Go to Billing" className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/60 hover:bg-indigo-100 transition-all">
+                              Go to Billing
                             </button>
                           )}
                         </div>
@@ -887,6 +868,66 @@ export default function OrderList({ navTo }) {
             </table>
           </div>
         </>
+      )}
+
+      {/* Paid Orders */}
+      {paidOrders.length > 0 && (
+        <div className="mt-2">
+          <div className="flex items-center gap-2 mb-3">
+            <CheckCircle2 size={16} className="text-green-500" />
+            <span className="text-sm font-bold text-gray-700 dark:text-gray-300">Paid Orders</span>
+            <span className="text-xs font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full">{paidOrders.length}</span>
+          </div>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700/60 overflow-hidden">
+            <div className={`overflow-y-auto ${showAllPaid ? 'max-h-none' : 'max-h-[320px]'}`}>
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 z-10">
+                  <tr className="border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/80">
+                    <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider w-16">#</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Table</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden sm:table-cell">Items</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden md:table-cell">Waiter</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                    <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50 dark:divide-gray-700/40">
+                  {(showAllPaid ? paidOrders : paidOrders.slice(0, 5)).map(order => (
+                    <tr key={order.id} className="hover:bg-gray-50/80 dark:hover:bg-gray-700/20 transition-colors opacity-75">
+                      <td className="px-5 py-3">
+                        <span className="font-extrabold text-indigo-600 dark:text-indigo-400">#{order.order_number}</span>
+                      </td>
+                      <td className="px-4 py-3"><TableLabel order={order} /></td>
+                      <td className="px-4 py-3 hidden sm:table-cell">
+                        <span className="text-xs text-gray-500 dark:text-gray-400">{order.items.length} item{order.items.length !== 1 ? 's' : ''}</span>
+                      </td>
+                      <td className="px-4 py-3 hidden md:table-cell">
+                        <span className="text-xs text-gray-500 dark:text-gray-400">{order.waiter || '—'}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
+                          <span className="w-1.5 h-1.5 rounded-full bg-green-400" />Paid
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <button onClick={() => setViewOrder(order)} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 hover:border-indigo-300 hover:text-indigo-600 transition-all">
+                          <Eye size={12} />View
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {paidOrders.length > 5 && (
+              <div className="border-t border-gray-100 dark:border-gray-700 px-4 py-2.5 text-center">
+                <button onClick={() => setShowAllPaid(v => !v)} className="text-xs font-bold text-indigo-500 dark:text-indigo-400 hover:underline">
+                  {showAllPaid ? 'Show less' : `Show all ${paidOrders.length} paid orders`}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   )

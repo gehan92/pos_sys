@@ -33,6 +33,7 @@ import OrderList from './OrderList'
 import Bar from './Bar'
 import History from './History'
 import OTH from './OTH'
+import Profile from './Profile'
 
 const PAGE_MAP = {
   dashboard: Dashboard, tables: Tables, orders: Orders, kitchen: Kitchen,
@@ -44,6 +45,7 @@ const PAGE_MAP = {
   orderlist: OrderList,
   history: History,
   oth: OTH,
+  profile: Profile,
 }
 
 const NAV_ICONS_LUCIDE = {
@@ -70,6 +72,7 @@ const NAV_ICONS_LUCIDE = {
   orderlist: ClipboardList,
   history: HistoryIcon,
   oth: Gift,
+  profile: UsersIcon,
 }
 
 export default function Layout() {
@@ -130,13 +133,13 @@ export default function Layout() {
 
         {/* User Profile */}
         <div className="px-4 py-3 border-b border-white/10">
-          <div className="flex items-center gap-2.5 bg-white/5 rounded-xl px-3 py-2.5">
+          <button onClick={() => navTo('profile')} className="w-full flex items-center gap-2.5 bg-white/5 hover:bg-white/10 rounded-xl px-3 py-2.5 transition-colors text-left">
             <Avatar name={user?.full_name} size="sm" />
             <div className="min-w-0 flex-1">
               <div className="text-xs font-semibold text-white truncate">{user?.full_name}</div>
               <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${roleInfo?.color || 'bg-gray-700 text-gray-300'}`}>{roleInfo?.label}</span>
             </div>
-          </div>
+          </button>
         </div>
 
         {/* Navigation */}
@@ -255,7 +258,9 @@ export default function Layout() {
               </button>
             )}
             <div className="w-px h-6 bg-gray-100 dark:bg-gray-700 mx-1 hidden sm:block" />
-            <Avatar name={user?.full_name} size="sm" />
+            <button onClick={() => navTo('profile')} title="My Profile" className="flex-shrink-0">
+              <Avatar name={user?.full_name} size="sm" />
+            </button>
           </div>
         </header>
 
