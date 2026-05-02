@@ -294,6 +294,50 @@ export function Waiters() {
 
   const canManage = ['superadmin', 'admin', 'owner', 'manager'].includes(currentUser?.role)
 
+  // ── Waiter sees only their own record ─────────────────────────────────────
+  if (currentUser?.role === 'waiter') {
+    const me = users.find(u => u.id === currentUser.id) || currentUser
+    return (
+      <div className="max-w-sm mx-auto">
+        <Card>
+          <div className="flex items-center gap-4 mb-5">
+            <Avatar name={me.full_name} size="lg" />
+            <div>
+              <div className="text-base font-extrabold text-gray-900 dark:text-white">{me.full_name}</div>
+              <div className="text-xs text-gray-400 font-mono mt-0.5">@{me.username}</div>
+              <div className="mt-1.5">
+                <Badge color={me.status === 'active' ? 'green' : me.status === 'pending' ? 'yellow' : 'red'}>
+                  {me.status === 'active' ? '✓ Active' : me.status === 'pending' ? '⏳ Pending' : '✗ Inactive'}
+                </Badge>
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-gray-50 dark:bg-gray-700/40 rounded-xl px-4 py-3">
+              <div className="text-xs text-gray-400 mb-0.5">Role</div>
+              <div className="text-sm font-bold text-gray-800 dark:text-gray-100">Waiter</div>
+            </div>
+            <div className="bg-gray-50 dark:bg-gray-700/40 rounded-xl px-4 py-3">
+              <div className="text-xs text-gray-400 mb-0.5">PIN</div>
+              <div className="text-sm font-bold text-gray-800 dark:text-gray-100">
+                {me.pin ? <span className="font-mono tracking-widest">{'•'.repeat(me.pin.length)}</span> : <span className="text-gray-400 text-xs">Not set</span>}
+              </div>
+            </div>
+            <div className="bg-gray-50 dark:bg-gray-700/40 rounded-xl px-4 py-3">
+              <div className="text-xs text-gray-400 mb-0.5">Username</div>
+              <div className="text-sm font-bold text-gray-800 dark:text-gray-100 font-mono">@{me.username}</div>
+            </div>
+            <div className="bg-gray-50 dark:bg-gray-700/40 rounded-xl px-4 py-3">
+              <div className="text-xs text-gray-400 mb-0.5">Created By</div>
+              <div className="text-sm font-bold text-gray-800 dark:text-gray-100">{me.created_by || '—'}</div>
+            </div>
+          </div>
+          <p className="text-xs text-gray-400 text-center mt-4">Contact a manager to update your account details.</p>
+        </Card>
+      </div>
+    )
+  }
+
   return (
     <div>
       {/* Confirm delete dialog */}
@@ -2611,6 +2655,7 @@ export function Billing({ orderContext }) {
       qty: i.qty,
       discount_pct: 0,
       fromBill: true,
+      round: i.round || 1,
     })))
     // Auto-apply any pre-flagged comps from the order into billing
     const preComps = {}
@@ -3003,49 +3048,57 @@ export function Billing({ orderContext }) {
               </div>
             ) : (
             <>
-                {/* --- From Order section (editable) --- */}
-                {billItems.length > 0 && (
-                  <>
-                    <div className="flex items-center gap-2 pt-1 pb-1.5">
-                      <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">From Order</div>
-                      <div className="flex-1 h-px bg-gray-100 dark:bg-gray-700"></div>
-                      <span className="text-xs text-gray-400">{billItems.reduce((s,i)=>s+i.qty,0)} items</span>
-                    </div>
-                    {billItems.map((item, i) => {
-                      const key = itemKey('bill', i)
-                      const comped = isComped(key)
-                      return (
-                      <div key={`bill-${i}`} className={`flex items-center gap-2 px-3 py-2 rounded-xl transition-colors ${comped ? 'bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50' : 'bg-gray-50 dark:bg-gray-700/30'}`}>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <div className={`text-xs font-semibold truncate ${comped ? 'line-through text-gray-400' : 'text-gray-700 dark:text-gray-300'}`}>{item.name_en}</div>
-                            {comped && <span className="text-[9px] font-extrabold px-1 py-0.5 rounded bg-amber-500 text-white tracking-widest">COMP</span>}
+                {/* --- From Order section (grouped by round) --- */}
+                {billItems.length > 0 && (() => {
+                  const rounds = [...new Set(billItems.map(i => i.round || 1))].sort((a,b) => a-b)
+                  return rounds.map(roundNum => {
+                    const roundItems = billItems.map((item, idx) => ({ item, idx })).filter(({ item }) => (item.round || 1) === roundNum)
+                    const roundLabel = roundNum === 1 ? 'Round 1' : `Round ${roundNum}`
+                    const roundColor = roundNum === 1 ? 'text-gray-400' : 'text-indigo-500'
+                    const lineColor  = roundNum === 1 ? 'bg-gray-100 dark:bg-gray-700' : 'bg-indigo-100 dark:bg-indigo-900/30'
+                    return (
+                      <div key={roundNum}>
+                        <div className="flex items-center gap-2 pt-1 pb-1.5">
+                          <div className={`text-xs font-bold uppercase tracking-wider ${roundColor}`}>{roundLabel}</div>
+                          <div className={`flex-1 h-px ${lineColor}`}></div>
+                          <span className="text-xs text-gray-400">{roundItems.reduce((s,{item})=>s+item.qty,0)} items</span>
+                        </div>
+                        {roundItems.map(({ item, idx: i }) => {
+                          const key = itemKey('bill', i)
+                          const comped = isComped(key)
+                          return (
+                          <div key={`bill-${i}`} className={`flex items-center gap-2 px-3 py-2 rounded-xl transition-colors ${comped ? 'bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50' : roundNum === 1 ? 'bg-gray-50 dark:bg-gray-700/30' : 'bg-indigo-50/50 dark:bg-indigo-900/10'}`}>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <div className={`text-xs font-semibold truncate ${comped ? 'line-through text-gray-400' : 'text-gray-700 dark:text-gray-300'}`}>{item.name_en}</div>
+                                {comped && <span className="text-[9px] font-extrabold px-1 py-0.5 rounded bg-amber-500 text-white tracking-widest">COMP</span>}
+                              </div>
+                              {comped
+                                ? <div className="text-[10px] text-amber-600 dark:text-amber-400 font-medium mt-0.5 truncate">✓ {compItems[key]?.reason} · {compItems[key]?.approvedBy}</div>
+                                : <div className="text-xs text-gray-400 mt-0.5">€{item.price.toFixed(2)} each</div>
+                              }
+                            </div>
+                            <div className="flex items-center bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden flex-shrink-0">
+                              <button onClick={() => changeBillItemQty(i, -1)} className="w-7 h-7 flex items-center justify-center text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 font-bold text-sm transition-colors">−</button>
+                              <span className="text-xs font-extrabold px-2 text-gray-800 dark:text-gray-200">{item.qty}</span>
+                              <button onClick={() => changeBillItemQty(i, 1)} className="w-7 h-7 flex items-center justify-center text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 font-bold text-sm transition-colors">+</button>
+                            </div>
+                            <span className={`text-xs font-bold w-14 text-right flex-shrink-0 ${comped ? 'line-through text-gray-400' : 'text-gray-800 dark:text-gray-200'}`}>
+                              €{(item.price * (1 - Number(item.discount_pct || 0) / 100) * item.qty).toFixed(2)}
+                            </span>
+                            <button
+                              onClick={() => comped ? openReverseDialog(key, item.name_en, item.price, item.qty) : openCompDialog(key, item.name_en, item.price, item.qty)}
+                              title={comped ? 'Reverse Comp' : 'Mark as Comp (On the House)'}
+                              className={`w-6 h-6 flex items-center justify-center rounded-lg text-xs flex-shrink-0 transition-colors font-bold ${comped ? 'bg-amber-400 text-white hover:bg-rose-500' : 'text-gray-300 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20'}`}
+                            >🎁</button>
+                            <button onClick={() => removeBillItem(i)} className="w-6 h-6 flex items-center justify-center rounded-lg text-gray-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors text-xs flex-shrink-0">✕</button>
                           </div>
-                          {comped
-                            ? <div className="text-[10px] text-amber-600 dark:text-amber-400 font-medium mt-0.5 truncate">✓ {compItems[key]?.reason} · {compItems[key]?.approvedBy}</div>
-                            : <div className="text-xs text-gray-400 mt-0.5">€{item.price.toFixed(2)} each</div>
-                          }
-                        </div>
-                        <div className="flex items-center bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden flex-shrink-0">
-                          <button onClick={() => changeBillItemQty(i, -1)} className="w-7 h-7 flex items-center justify-center text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 font-bold text-sm transition-colors">−</button>
-                          <span className="text-xs font-extrabold px-2 text-gray-800 dark:text-gray-200">{item.qty}</span>
-                          <button onClick={() => changeBillItemQty(i, 1)} className="w-7 h-7 flex items-center justify-center text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 font-bold text-sm transition-colors">+</button>
-                        </div>
-                        <span className={`text-xs font-bold w-14 text-right flex-shrink-0 ${comped ? 'line-through text-gray-400' : 'text-gray-800 dark:text-gray-200'}`}>
-                          €{(item.price * (1 - Number(item.discount_pct || 0) / 100) * item.qty).toFixed(2)}
-                        </span>
-                        {/* Comp toggle */}
-                        <button
-                          onClick={() => comped ? openReverseDialog(key, item.name_en, item.price, item.qty) : openCompDialog(key, item.name_en, item.price, item.qty)}
-                          title={comped ? 'Reverse Comp' : 'Mark as Comp (On the House)'}
-                          className={`w-6 h-6 flex items-center justify-center rounded-lg text-xs flex-shrink-0 transition-colors font-bold ${comped ? 'bg-amber-400 text-white hover:bg-rose-500' : 'text-gray-300 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20'}`}
-                        >🎁</button>
-                        <button onClick={() => removeBillItem(i)} className="w-6 h-6 flex items-center justify-center rounded-lg text-gray-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors text-xs flex-shrink-0">✕</button>
+                          )
+                        })}
                       </div>
-                      )
-                    })}
-                  </>
-                )}
+                    )
+                  })
+                })()}
 
                 {/* --- Cashier Additions section (editable) --- */}
                 {cart.length > 0 && (

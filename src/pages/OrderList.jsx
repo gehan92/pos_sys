@@ -71,7 +71,7 @@ function TableLabel({ order }) {
 // ── Item modifier / add modal ──────────────────────────────────────────────────
 const OTH_REASONS = ['Incorrect Order', 'Customer Complaint', 'VIP / Loyalty', 'Quality Issue', 'Manager Decision', 'Other']
 
-function OrderDetailModal({ order, onClose, navTo }) {
+function OrderDetailModal({ order, onClose, navTo, tab }) {
   const { setLiveOrders, menuItems, menuCategories, addOthRecords, user, users } = useApp()
   const [items, setItems] = useState(() => order ? [...order.items] : [])
   const [newItems, setNewItems] = useState([])  // items added this session
@@ -108,10 +108,12 @@ function OrderDetailModal({ order, onClose, navTo }) {
   }
 
   function addNewItem(menuItem, qty, mods, note, comped, compReason) {
-    const newEntry = { id: menuItem.id, name: menuItem.name_en, price: menuItem.price, qty, mods, note, station: menuItem.station || 'kitchen', comped: !!comped, comped_reason: compReason || '' }
+    const thisRound = (order.rounds ?? 1) + 1
+    const newEntry = { id: menuItem.id, name: menuItem.name_en, price: menuItem.price, qty, mods, note, station: menuItem.station || 'kitchen', comped: !!comped, comped_reason: compReason || '', round: thisRound }
     setNewItems(prev => [...prev, newEntry])
     setItems(prev => {
-      const existing = prev.findIndex(i => i.id === menuItem.id)
+      // Only merge with an existing item if it belongs to the same round and has no mods/note
+      const existing = prev.findIndex(i => i.id === menuItem.id && (i.round ?? 1) === thisRound)
       let updated
       if (existing >= 0 && mods.length === 0 && !note) {
         updated = prev.map((item, i) => i === existing ? { ...item, qty: item.qty + qty } : item)
@@ -448,6 +450,8 @@ function OrderDetailModal({ order, onClose, navTo }) {
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {menuItems.filter(item => {
                     if (!item.available) return false
+                    if (tab === 'kitchen' && item.station === 'bar') return false
+                    if (tab === 'bar' && (item.station || 'kitchen') !== 'bar') return false
                     const q = modalSearch.trim().toLowerCase()
                     return (modalCat === 'all' || item.category_id === modalCat) && (!q || item.name_en.toLowerCase().includes(q) || item.code?.toLowerCase().includes(q))
                   }).map(item => {
@@ -722,7 +726,7 @@ export default function OrderList({ navTo }) {
 
   return (
     <div className="flex flex-col gap-4">
-      {viewOrder && <OrderDetailModal order={viewOrder} onClose={() => setViewOrder(null)} navTo={navTo} />}
+      {viewOrder && <OrderDetailModal order={viewOrder} onClose={() => setViewOrder(null)} navTo={navTo} tab={tab} />}
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3">
