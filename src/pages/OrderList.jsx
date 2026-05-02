@@ -72,7 +72,7 @@ function TableLabel({ order }) {
 const OTH_REASONS = ['Incorrect Order', 'Customer Complaint', 'VIP / Loyalty', 'Quality Issue', 'Manager Decision', 'Other']
 
 function OrderDetailModal({ order, onClose, navTo }) {
-  const { setLiveOrders, menuItems, menuCategories, addOthRecords, user } = useApp()
+  const { setLiveOrders, menuItems, menuCategories, addOthRecords, user, users } = useApp()
   const [items, setItems] = useState(() => order ? [...order.items] : [])
   const [newItems, setNewItems] = useState([])  // items added this session
   const [showAddModal, setShowAddModal] = useState(false)
@@ -147,6 +147,33 @@ function OrderDetailModal({ order, onClose, navTo }) {
   const [compDialog, setCompDialog] = useState(null)   // { index, item }
   const [compReason, setCompReason] = useState('')
   const [compApprover, setCompApprover] = useState('')
+
+  // ── Delete auth dialog ───────────────────────────────────────────
+  const [deleteDialog, setDeleteDialog] = useState(null) // { index, item }
+  const [deleteAuthVal, setDeleteAuthVal] = useState('')
+  const [deleteAuthErr, setDeleteAuthErr] = useState('')
+
+  const ALLOWED_DELETE_ROLES = ['superadmin', 'admin', 'owner', 'manager']
+
+  function openDeleteDialog(index) {
+    setDeleteDialog({ index, item: items[index] })
+    setDeleteAuthVal('')
+    setDeleteAuthErr('')
+  }
+
+  function confirmDelete() {
+    const val = deleteAuthVal.trim()
+    if (!val) { setDeleteAuthErr('Enter a password or PIN.'); return }
+    // check against all authorized users: password match or PIN match
+    const authorized = (users || []).find(u =>
+      ALLOWED_DELETE_ROLES.includes(u.role) &&
+      u.status === 'active' &&
+      (u.password === val || (u.pin && u.pin === val))
+    )
+    if (!authorized) { setDeleteAuthErr('Incorrect password or PIN. Access denied.'); return }
+    removeItem(deleteDialog.index)
+    setDeleteDialog(null)
+  }
 
   function openCompDialog(index) {
     const item = items[index]
@@ -304,7 +331,7 @@ function OrderDetailModal({ order, onClose, navTo }) {
                         <button onClick={() => changeQty(i, 1)} className="w-7 h-7 flex items-center justify-center text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 font-bold transition-colors">+</button>
                       </div>
                       <span className="text-xs font-bold text-gray-700 dark:text-gray-300 w-14 text-right flex-shrink-0">€{(item.price * item.qty).toFixed(2)}</span>
-                      <button onClick={() => removeItem(i)} className="w-6 h-6 flex items-center justify-center rounded-lg text-gray-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors">
+                      <button onClick={() => openDeleteDialog(i)} title="Remove item" className="w-6 h-6 flex items-center justify-center rounded-lg text-gray-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors">
                         <X size={12} />
                       </button>
                     </div>
@@ -336,6 +363,66 @@ function OrderDetailModal({ order, onClose, navTo }) {
           <span className="text-sm font-bold text-gray-500 dark:text-gray-400">Total</span>
           <span className="text-xl font-extrabold text-indigo-600 dark:text-indigo-400">€{total.toFixed(2)}</span>
         </div>
+
+        {/* ── Delete Auth Dialog ── */}
+        {deleteDialog && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setDeleteDialog(null)}>
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-xs p-5" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-rose-100 dark:bg-rose-900/40 flex items-center justify-center flex-shrink-0">
+                  <X size={18} className="text-rose-600 dark:text-rose-400" />
+                </div>
+                <div>
+                  <div className="text-sm font-extrabold text-gray-900 dark:text-white">Remove Item</div>
+                  <div className="text-xs text-gray-400 mt-0.5">Requires manager permission</div>
+                </div>
+              </div>
+
+              <div className="bg-gray-50 dark:bg-gray-700/40 rounded-xl px-3 py-2.5 mb-4">
+                <div className="text-xs text-gray-400 mb-0.5">Item</div>
+                <div className="text-sm font-bold text-gray-800 dark:text-gray-100">
+                  {deleteDialog.item?.name || deleteDialog.item?.name_en}
+                </div>
+                <div className="text-xs text-gray-400 mt-0.5">
+                  x{deleteDialog.item?.qty} · €{((deleteDialog.item?.price || 0) * (deleteDialog.item?.qty || 1)).toFixed(2)}
+                </div>
+              </div>
+
+              <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5">
+                Manager / Admin / Owner password or PIN
+              </label>
+              <input
+                autoFocus
+                type="password"
+                value={deleteAuthVal}
+                onChange={e => { setDeleteAuthVal(e.target.value); setDeleteAuthErr('') }}
+                onKeyDown={e => e.key === 'Enter' && confirmDelete()}
+                placeholder="Enter password or PIN"
+                className="w-full text-sm px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-rose-500 mb-2"
+              />
+              {deleteAuthErr && (
+                <div className="text-xs font-semibold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800/40 rounded-xl px-3 py-2 mb-3">
+                  {deleteAuthErr}
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-2 mt-1">
+                <button
+                  onClick={() => setDeleteDialog(null)}
+                  className="py-2.5 rounded-xl text-sm font-bold border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmDelete}
+                  className="py-2.5 rounded-xl text-sm font-bold bg-rose-600 text-white hover:bg-rose-700 transition-all"
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Add Item modal */}
         {showAddModal && (
@@ -510,9 +597,6 @@ function OrderDetailModal({ order, onClose, navTo }) {
           <Btn onClick={onClose}>Close</Btn>
           <Btn variant="primary" fullWidth disabled={newItems.length === 0} onClick={saveOrder}>
             Save{newItems.length > 0 ? ` (${newItems.length} new)` : ''}
-          </Btn>
-          <Btn variant="success" fullWidth disabled={items.length === 0} onClick={() => { onClose(); navTo('billing', { preloadOrder: updatedOrder }) }}>
-            Go to Billing
           </Btn>
         </div>
       </div>
