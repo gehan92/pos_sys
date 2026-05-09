@@ -4,6 +4,7 @@ import { useApp, ROLES } from '../context/AppContext'
 import { t } from '../i18n/translations'
 import { Card, StatCard, Badge, Table, TR, TD, Btn, Avatar, Divider, SectionLabel, statusColor, Input, Select, Textarea } from '../components/UI'
 import { SAMPLE_USERS, SAMPLE_ORDERS, INVENTORY_ITEMS, TABLES, MENU_CATEGORIES, MENU_ITEMS, SAMPLE_INVOICES, SUPPLIER_INVOICES } from '../lib/mockData'
+import { can } from '../lib/permissions'
 import { AlertTriangle, Timer, GitMerge, ArrowRight, CheckCircle2, Flame, Activity, Printer, Play, AlertCircle, Wine, ChefHat } from 'lucide-react'
 
 export function Dashboard({ navTo }) {
@@ -586,12 +587,6 @@ function ActiveOrdersCard({ liveOrders, setLiveOrders, setReprintModal, setOrder
                     </div>
                   </div>
 
-                  {/* Status */}
-                  <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${cfg.bg} ${cfg.text}`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
-                    {cfg.label}
-                  </span>
-
                   {/* Chevron */}
                   <span className={`text-gray-400 flex-shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 12 15 18 9" /></svg>
@@ -765,7 +760,7 @@ function ActiveOrdersCard({ liveOrders, setLiveOrders, setReprintModal, setOrder
 
 // ─── Tables ───────────────────────────────────────────────────────────────────
 export function Tables({ navTo, setOrderContext }) {
-  const { user, liveOrders, setLiveOrders, users, company, openBills, transferOrder, mergeOrder, unmergeOrder, othRecords } = useApp()
+  const { user, liveOrders, setLiveOrders, users, company, openBills, transferOrder, mergeOrder, unmergeOrder, othRecords, pushNotif } = useApp()
   const [tables, setTables] = useState(TABLES)
   const [assignModal, setAssignModal] = useState(null)    // table object
   const [guestModal, setGuestModal] = useState(null)      // { table, mode: 'open'|'edit' }
@@ -780,12 +775,33 @@ export function Tables({ navTo, setOrderContext }) {
   const [othLoading, setOthLoading] = useState(false)
   const [reservations, setReservations] = useState({})   // { tableId: { name, phone, guests, date, time, notes } }
   const [reserveModal, setReserveModal] = useState(null) // { table, mode: 'create'|'view' }
+  const [reservationHistory, setReservationHistory] = useState([])
+  const [showHistoryModal, setShowHistoryModal] = useState(false)
   const [resName, setResName] = useState('')
   const [resPhone, setResPhone] = useState('')
   const [resGuests, setResGuests] = useState(2)
   const [resDate, setResDate] = useState('')
   const [resTime, setResTime] = useState('')
   const [resNotes, setResNotes] = useState('')
+  // ── Add Table ──────────────────────────────────────────────────────────────
+  const [showAddTableModal, setShowAddTableModal] = useState(false)
+  const [addTableChairs, setAddTableChairs] = useState(4)
+  const [addTableFloor, setAddTableFloor] = useState('Ground')
+  const [addTableLabel, setAddTableLabel] = useState('')
+  // ── Edit / Delete Table ────────────────────────────────────────────────────
+  const [editTableModal, setEditTableModal] = useState(null)   // table object being edited
+  const [editTableChairs, setEditTableChairs] = useState(4)
+  const [editTableFloor, setEditTableFloor] = useState('Ground')
+  const [editTableLabel, setEditTableLabel] = useState('')
+  const [deleteTableConfirm, setDeleteTableConfirm] = useState(null) // table to delete
+  const [deleteReason, setDeleteReason] = useState('')
+  const [showArchivedModal, setShowArchivedModal] = useState(false)
+  // ── Table Records & History ────────────────────────────────────────────────
+  const [tableRecords, setTableRecords] = useState([])
+  const [tableHistory, setTableHistory] = useState([])
+  const [showTableRecordsModal, setShowTableRecordsModal] = useState(false)
+  const [recordsFilter, setRecordsFilter] = useState('all')
+  const [recordsTab, setRecordsTab] = useState('seatings') // 'seatings' | 'history'
   const todayStr = new Date().toDateString()
   const todayOthRecords = othRecords.filter(r => new Date(r.created_at).toDateString() === todayStr)
   const todayOthTotal = todayOthRecords.reduce((s, r) => s + Number(r.total_value || 0), 0)
@@ -852,22 +868,42 @@ export function Tables({ navTo, setOrderContext }) {
     const table = reserveModal.table
     const isEdit = reserveModal.mode === 'edit'
     const existing = reservations[table.id] || {}
+    const performer = user?.full_name || user?.username || 'Staff'
+    const now = new Date()
     setReservations(prev => ({
       ...prev,
       [table.id]: {
         ...existing,
         name: resName.trim(), phone: resPhone.trim(), guests: resGuests, date: resDate, time: resTime, notes: resNotes.trim(),
-        createdAt: isEdit ? existing.createdAt : new Date(),
-        createdBy: isEdit ? existing.createdBy : (user?.full_name || user?.username || 'Staff'),
-        editedAt: isEdit ? new Date() : undefined,
-        editedBy: isEdit ? (user?.full_name || user?.username || 'Staff') : undefined,
+        createdAt: isEdit ? existing.createdAt : now,
+        createdBy: isEdit ? existing.createdBy : performer,
+        editedAt: isEdit ? now : undefined,
+        editedBy: isEdit ? performer : undefined,
       },
     }))
+    setReservationHistory(prev => [{
+      id: Date.now(), type: isEdit ? 'edited' : 'created',
+      tableId: table.id, tableNumber: table.number,
+      name: resName.trim(), phone: resPhone.trim(), guests: resGuests,
+      date: resDate, time: resTime, notes: resNotes.trim(),
+      performedBy: performer, performedAt: now,
+    }, ...prev])
     setTables(prev => prev.map(t => t.id === table.id ? { ...t, status: 'reserved' } : t))
+    pushNotif(`Table ${table.number} ${isEdit ? 'reservation updated' : 'reserved'} for ${resName.trim()} at ${resTime} by ${performer}`, 'info', 'Reservations')
     setReserveModal(null)
   }
 
   function cancelReservation(tableId) {
+    const res = reservations[tableId]
+    const performer = user?.full_name || user?.username || 'Staff'
+    const tbl = tables.find(t => t.id === tableId)
+    setReservationHistory(prev => [{
+      id: Date.now(), type: 'cancelled',
+      tableId, tableNumber: tbl?.number,
+      name: res?.name, phone: res?.phone, guests: res?.guests,
+      date: res?.date, time: res?.time, notes: res?.notes,
+      performedBy: performer, performedAt: new Date(),
+    }, ...prev])
     setReservations(prev => { const n = { ...prev }; delete n[tableId]; return n })
     setTables(prev => prev.map(t => t.id === tableId ? { ...t, status: 'free' } : t))
     setReserveModal(null)
@@ -875,12 +911,21 @@ export function Tables({ navTo, setOrderContext }) {
 
   function seatReservation(table) {
     const res = reservations[table.id]
+    const performer = user?.full_name || user?.username || 'Staff'
+    setReservationHistory(prev => [{
+      id: Date.now(), type: 'seated',
+      tableId: table.id, tableNumber: table.number,
+      name: res?.name, phone: res?.phone, guests: res?.guests,
+      date: res?.date, time: res?.time, notes: res?.notes,
+      performedBy: performer, performedAt: new Date(),
+    }, ...prev])
     setReservations(prev => { const n = { ...prev }; delete n[table.id]; return n })
     setTables(prev => prev.map(t => t.id === table.id ? { ...t, status: 'free' } : t))
-    setGuestAdults(Math.max(1, res?.guests || 1))
-    setGuestChildren(0)
-    setGuestModal({ table: { ...table, status: 'free' }, mode: 'open' })
     setReserveModal(null)
+    const guests = Math.max(1, res?.guests || 1)
+    pushTableRecord(table, { adults: guests, children: 0 }, true, res?.name)
+    setOrderContext({ tableId: table.id, tableNumber: table.number, isTakeaway: false, existingOrder: null, guests: { adults: guests, children: 0 } })
+    navTo('orders')
   }
 
 
@@ -933,6 +978,102 @@ export function Tables({ navTo, setOrderContext }) {
     navTo('orders')
   }
 
+  function pushTableHistory(action, table, details = {}) {
+    setTableHistory(prev => [{
+      id: `th_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
+      action,
+      tableId: table.id,
+      tableNumber: table.number,
+      tableLabel: table.label || `Table ${table.number}`,
+      performedBy: user?.full_name || user?.username || 'Staff',
+      performedByRole: user?.role || 'unknown',
+      performedAt: new Date(),
+      details,
+    }, ...prev])
+  }
+
+  function pushTableRecord(table, covers, fromReservation = false, reservationName = null) {
+    const entry = {
+      id: `rec_${Date.now()}`,
+      tableId: table.id,
+      tableNumber: table.number,
+      tableLabel: table.label || `Table ${table.number}`,
+      openedAt: new Date(),
+      covers,
+      openedBy: user?.full_name || user?.username || 'Staff',
+      openedByRole: user?.role || 'unknown',
+      fromReservation,
+      reservationName: reservationName || null,
+    }
+    setTableRecords(prev => [entry, ...prev])
+    pushTableHistory('seated', table, { covers, fromReservation, reservationName })
+  }
+
+  function confirmAddTable() {
+    const existingNums = tables.filter(t => !t.isOTH).map(t => t.number)
+    const nextNum = existingNums.length > 0 ? Math.max(...existingNums) + 1 : 1
+    const tableNum = nextNum
+    const newTable = {
+      id: `t_${Date.now()}`,
+      number: tableNum,
+      label: addTableLabel.trim() || `Table ${tableNum}`,
+      capacity: addTableChairs,
+      status: 'free',
+      floor: addTableFloor,
+      isOTH: false,
+      addedBy: user?.full_name || user?.username || 'Staff',
+      addedAt: new Date(),
+    }
+    setTables(prev => [...prev, newTable])
+    pushTableHistory('added', newTable, { chairs: addTableChairs, floor: addTableFloor, label: newTable.label })
+    pushNotif(`Table ${tableNum} added (${addTableChairs} chairs, ${addTableFloor}) by ${newTable.addedBy}`, 'info', 'Tables')
+    setShowAddTableModal(false)
+    setAddTableLabel('')
+    setAddTableChairs(4)
+    setAddTableFloor('Ground')
+  }
+
+  function openEditTable(table) {
+    setEditTableChairs(table.capacity || 4)
+    setEditTableFloor(table.floor || 'Ground')
+    setEditTableLabel(table.label && table.label !== `Table ${table.number}` ? table.label : '')
+    setEditTableModal(table)
+  }
+
+  function confirmEditTable() {
+    const table = editTableModal
+    const actor = user?.full_name || user?.username || 'Staff'
+    const updatedTable = { ...table, capacity: editTableChairs, floor: editTableFloor, label: editTableLabel.trim() || `Table ${table.number}` }
+    setTables(prev => prev.map(t => t.id === table.id ? { ...updatedTable, updatedBy: actor, updatedAt: new Date() } : t))
+    pushTableHistory('edited', updatedTable, {
+      chairs: editTableChairs, floor: editTableFloor, label: updatedTable.label,
+      prevChairs: table.capacity, prevFloor: table.floor, prevLabel: table.label,
+    })
+    pushNotif(`Table ${table.number} updated (${editTableChairs} chairs, ${editTableFloor}) by ${actor}`, 'info', 'Tables')
+    setEditTableModal(null)
+  }
+
+  function confirmDeleteTable(table) {
+    const actor = user?.full_name || user?.username || 'Staff'
+    const reason = deleteReason.trim() || 'No reason given'
+    setTables(prev => prev.map(t => t.id === table.id ? { ...t, status: 'archived', archivedBy: actor, archivedAt: new Date(), archiveReason: reason } : t))
+    pushTableHistory('archived', table, { reason })
+    pushNotif(`Table ${table.number} archived by ${actor}${deleteReason.trim() ? ` — "${deleteReason.trim()}"` : ''}`, 'warning', 'Tables')
+    setDeleteTableConfirm(null)
+    setDeleteReason('')
+  }
+
+  function restoreTable(table) {
+    const actor = user?.full_name || user?.username || 'Staff'
+    setTables(prev => prev.map(t => t.id === table.id ? {
+      ...t, status: 'free',
+      archivedBy: undefined, archivedAt: undefined, archiveReason: undefined,
+      restoredBy: actor, restoredAt: new Date(),
+    } : t))
+    pushTableHistory('restored', table, { previousReason: table.archiveReason })
+    pushNotif(`Table ${table.number} restored by ${actor}`, 'info', 'Tables')
+  }
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
@@ -940,9 +1081,9 @@ export function Tables({ navTo, setOrderContext }) {
       {(reserveModal?.mode === 'create' || reserveModal?.mode === 'edit') && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setReserveModal(null)}>
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700 bg-violet-50 dark:bg-violet-900/20">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700 bg-sky-50 dark:bg-sky-900/20">
               <div>
-                <div className="text-xs font-semibold text-violet-400 uppercase tracking-widest mb-0.5">Table {reserveModal.table.number}</div>
+                <div className="text-xs font-semibold text-sky-400 uppercase tracking-widest mb-0.5">Table {reserveModal.table.number}</div>
                 <div className="text-base font-extrabold text-gray-900 dark:text-white">{reserveModal.mode === 'edit' ? 'Edit Reservation' : 'Reserve Table'}</div>
               </div>
               <button onClick={() => setReserveModal(null)} className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors font-bold text-base">✕</button>
@@ -956,7 +1097,7 @@ export function Tables({ navTo, setOrderContext }) {
                   value={resName}
                   onChange={e => setResName(e.target.value)}
                   placeholder="e.g. Anna Borg"
-                  className="w-full px-3 py-2.5 rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-semibold text-gray-800 dark:text-gray-200 placeholder-gray-300 focus:outline-none focus:border-violet-500 transition-colors"
+                  className="w-full px-3 py-2.5 rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-semibold text-gray-800 dark:text-gray-200 placeholder-gray-300 focus:outline-none focus:border-sky-500 transition-colors"
                 />
               </div>
               {/* Phone */}
@@ -967,19 +1108,19 @@ export function Tables({ navTo, setOrderContext }) {
                   value={resPhone}
                   onChange={e => setResPhone(e.target.value)}
                   placeholder="+356 9900 0000"
-                  className="w-full px-3 py-2.5 rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-semibold text-gray-800 dark:text-gray-200 placeholder-gray-300 focus:outline-none focus:border-violet-500 transition-colors"
+                  className="w-full px-3 py-2.5 rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-semibold text-gray-800 dark:text-gray-200 placeholder-gray-300 focus:outline-none focus:border-sky-500 transition-colors"
                 />
               </div>
               {/* Guests */}
               <div>
                 <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wide">Number of Guests *</label>
                 <div className="flex items-center gap-3">
-                  <button onClick={() => setResGuests(n => Math.max(1, n - 1))} className="w-9 h-9 rounded-xl border-2 border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 font-bold text-lg flex items-center justify-center hover:border-violet-400 hover:text-violet-600 transition-all disabled:opacity-30" disabled={resGuests <= 1}>−</button>
+                  <button onClick={() => setResGuests(n => Math.max(1, n - 1))} className="w-9 h-9 rounded-xl border-2 border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 font-bold text-lg flex items-center justify-center hover:border-sky-400 hover:text-sky-600 transition-all disabled:opacity-30" disabled={resGuests <= 1}>−</button>
                   <span className="text-2xl font-extrabold text-gray-900 dark:text-white w-8 text-center tabular-nums">{resGuests}</span>
-                  <button onClick={() => setResGuests(n => n + 1)} className="w-9 h-9 rounded-xl border-2 border-violet-500 bg-violet-600 text-white font-bold text-lg flex items-center justify-center hover:bg-violet-700 transition-all">+</button>
+                  <button onClick={() => setResGuests(n => n + 1)} className="w-9 h-9 rounded-xl border-2 border-sky-500 bg-sky-600 text-white font-bold text-lg flex items-center justify-center hover:bg-sky-700 transition-all">+</button>
                   <div className="flex gap-1.5 flex-1">
                     {[1,2,3,4,5,6].map(n => (
-                      <button key={n} onClick={() => setResGuests(n)} className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all ${resGuests === n ? 'bg-violet-600 text-white border-violet-600' : 'border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-violet-300 bg-white dark:bg-gray-700'}`}>{n}</button>
+                      <button key={n} onClick={() => setResGuests(n)} className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all ${resGuests === n ? 'bg-sky-600 text-white border-sky-600' : 'border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-sky-300 bg-white dark:bg-gray-700'}`}>{n}</button>
                     ))}
                   </div>
                 </div>
@@ -992,7 +1133,7 @@ export function Tables({ navTo, setOrderContext }) {
                     type="date"
                     value={resDate}
                     onChange={e => setResDate(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-semibold text-gray-800 dark:text-gray-200 focus:outline-none focus:border-violet-500 transition-colors"
+                    className="w-full px-3 py-2.5 rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-semibold text-gray-800 dark:text-gray-200 focus:outline-none focus:border-sky-500 transition-colors"
                   />
                 </div>
                 <div className="flex-1">
@@ -1001,7 +1142,7 @@ export function Tables({ navTo, setOrderContext }) {
                     type="time"
                     value={resTime}
                     onChange={e => setResTime(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-semibold text-gray-800 dark:text-gray-200 focus:outline-none focus:border-violet-500 transition-colors"
+                    className="w-full px-3 py-2.5 rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-semibold text-gray-800 dark:text-gray-200 focus:outline-none focus:border-sky-500 transition-colors"
                   />
                 </div>
               </div>
@@ -1013,7 +1154,7 @@ export function Tables({ navTo, setOrderContext }) {
                   onChange={e => setResNotes(e.target.value)}
                   placeholder="e.g. Birthday dinner, window seat preferred"
                   rows={2}
-                  className="w-full px-3 py-2.5 rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-semibold text-gray-800 dark:text-gray-200 placeholder-gray-300 focus:outline-none focus:border-violet-500 transition-colors resize-none"
+                  className="w-full px-3 py-2.5 rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-semibold text-gray-800 dark:text-gray-200 placeholder-gray-300 focus:outline-none focus:border-sky-500 transition-colors resize-none"
                 />
               </div>
             </div>
@@ -1022,11 +1163,74 @@ export function Tables({ navTo, setOrderContext }) {
               <button
                 disabled={!resName.trim() || !resTime}
                 onClick={confirmReservation}
-                className="flex-1 py-3 rounded-xl text-sm font-extrabold bg-violet-600 hover:bg-violet-700 active:scale-[0.98] text-white transition-all disabled:bg-gray-200 dark:disabled:bg-gray-700 disabled:text-gray-400 dark:disabled:text-gray-500 disabled:cursor-not-allowed"
+                className="flex-1 py-3 rounded-xl text-sm font-extrabold bg-sky-600 hover:bg-sky-700 active:scale-[0.98] text-white transition-all disabled:bg-gray-200 dark:disabled:bg-gray-700 disabled:text-gray-400 dark:disabled:text-gray-500 disabled:cursor-not-allowed"
               >
                 {reserveModal.mode === 'edit' ? 'Save Changes' : 'Confirm Reservation'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Reservation History Modal ───────────────────────────────── */}
+      {showHistoryModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowHistoryModal(false)}>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40">
+              <div>
+                <div className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-0.5">Management View</div>
+                <div className="text-base font-extrabold text-gray-900 dark:text-white">Reservation History</div>
+              </div>
+              <button onClick={() => setShowHistoryModal(false)} className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors font-bold text-base">✕</button>
+            </div>
+            <div className="overflow-y-auto flex-1 px-4 py-3 space-y-2">
+              {reservationHistory.length === 0 ? (
+                <div className="text-center py-10 text-gray-400 text-sm">No reservation activity yet</div>
+              ) : reservationHistory.map(h => {
+                const typeConfig = {
+                  created:   { label: 'Reserved',   bg: 'bg-sky-100 dark:bg-sky-900/30', text: 'text-sky-700 dark:text-sky-300', dot: 'bg-sky-500' },
+                  edited:    { label: 'Edited',     bg: 'bg-indigo-100 dark:bg-indigo-900/30', text: 'text-indigo-700 dark:text-indigo-300', dot: 'bg-indigo-500' },
+                  seated:    { label: 'Seated',     bg: 'bg-emerald-100 dark:bg-emerald-900/30', text: 'text-emerald-700 dark:text-emerald-300', dot: 'bg-emerald-500' },
+                  cancelled: { label: 'Cancelled',  bg: 'bg-rose-100 dark:bg-rose-900/30', text: 'text-rose-700 dark:text-rose-300', dot: 'bg-rose-500' },
+                }[h.type] || {}
+                const timeLabel = h.time ? (() => { const [hr, mn] = h.time.split(':'); const d = new Date(); d.setHours(+hr, +mn); return d.toLocaleTimeString('en-MT', { hour: '2-digit', minute: '2-digit' }) })() : '—'
+                const dateLabel = h.date ? new Date(h.date + 'T00:00').toLocaleDateString('en-MT', { weekday: 'short', month: 'short', day: 'numeric' }) : '—'
+                const loggedAt = new Date(h.performedAt).toLocaleString('en-MT', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                return (
+                  <div key={h.id} className="bg-gray-50 dark:bg-gray-700/40 rounded-xl px-4 py-3 border border-gray-100 dark:border-gray-700">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className={`w-2 h-2 rounded-full mt-0.5 flex-shrink-0 ${typeConfig.dot}`} />
+                        <span className="text-sm font-extrabold text-gray-900 dark:text-white">{h.name || '—'}</span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${typeConfig.bg} ${typeConfig.text}`}>{typeConfig.label}</span>
+                      </div>
+                      <span className="text-xs font-bold text-gray-500 dark:text-gray-400 flex-shrink-0">Table {h.tableNumber}</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-400 mb-2">
+                      <div><span className="text-gray-400 dark:text-gray-500">Guests </span><span className="font-semibold text-gray-700 dark:text-gray-200">{h.guests ?? '—'}</span></div>
+                      <div><span className="text-gray-400 dark:text-gray-500">Time </span><span className="font-semibold text-gray-700 dark:text-gray-200">{timeLabel}</span></div>
+                      <div><span className="text-gray-400 dark:text-gray-500">Date </span><span className="font-semibold text-gray-700 dark:text-gray-200">{dateLabel}</span></div>
+                    </div>
+                    {h.phone && <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">📞 {h.phone}</div>}
+                    {h.notes && <div className="text-xs text-gray-500 dark:text-gray-400 mb-1 italic">"{h.notes}"</div>}
+                    <div className="flex items-center justify-between pt-1.5 border-t border-gray-200 dark:border-gray-600 mt-1.5">
+                      <span className="text-[11px] text-gray-400 dark:text-gray-500">By <span className="font-semibold text-gray-600 dark:text-gray-300">{h.performedBy}</span></span>
+                      <span className="text-[11px] text-gray-400 dark:text-gray-500">{loggedAt}</span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            {reservationHistory.length > 0 && (
+              <div className="px-5 py-3 border-t border-gray-100 dark:border-gray-700">
+                <button
+                  onClick={() => { if (window.confirm('Clear all reservation history?')) setReservationHistory([]) }}
+                  className="w-full py-2 rounded-xl text-xs font-bold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors"
+                >
+                  Clear History
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1040,25 +1244,25 @@ export function Tables({ navTo, setOrderContext }) {
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setReserveModal(null)}>
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-xs mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
-              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700 bg-violet-50 dark:bg-violet-900/20">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700 bg-sky-50 dark:bg-sky-900/20">
                 <div>
-                  <div className="text-xs font-semibold text-violet-400 uppercase tracking-widest mb-0.5">Table {reserveModal.table.number} · Reserved</div>
+                  <div className="text-xs font-semibold text-sky-400 uppercase tracking-widest mb-0.5">Table {reserveModal.table.number} · Reserved</div>
                   <div className="text-base font-extrabold text-gray-900 dark:text-white">{res.name}</div>
                 </div>
                 <button onClick={() => setReserveModal(null)} className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors font-bold text-base">✕</button>
               </div>
               <div className="px-5 py-4 space-y-3">
                 <div className="grid grid-cols-3 gap-2 text-center">
-                  <div className="bg-violet-50 dark:bg-violet-900/20 rounded-xl py-2.5">
+                  <div className="bg-sky-50 dark:bg-sky-900/20 rounded-xl py-2.5">
                     <div className="text-lg font-extrabold text-violet-700 dark:text-violet-300">{res.guests}</div>
                     <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Guests</div>
                   </div>
-                  <div className="bg-violet-50 dark:bg-violet-900/20 rounded-xl py-2.5">
-                    <div className="text-xs font-extrabold text-violet-700 dark:text-violet-300 leading-tight pt-1">{timeLabel}</div>
+                  <div className="bg-sky-50 dark:bg-sky-900/20 rounded-xl py-2.5">
+                    <div className="text-xs font-extrabold text-sky-700 dark:text-sky-300 leading-tight pt-1">{timeLabel}</div>
                     <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Time</div>
                   </div>
-                  <div className="bg-violet-50 dark:bg-violet-900/20 rounded-xl py-2.5">
-                    <div className="text-[10px] font-extrabold text-violet-700 dark:text-violet-300 leading-tight pt-1">{dateLabel}</div>
+                  <div className="bg-sky-50 dark:bg-sky-900/20 rounded-xl py-2.5">
+                    <div className="text-[10px] font-extrabold text-sky-700 dark:text-sky-300 leading-tight pt-1">{dateLabel}</div>
                     <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Date</div>
                   </div>
                 </div>
@@ -1094,11 +1298,11 @@ export function Tables({ navTo, setOrderContext }) {
               <div className="px-5 pb-5 space-y-2.5">
                 <button
                   onClick={() => seatReservation(reserveModal.table)}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-violet-200 dark:border-violet-700 bg-violet-50 dark:bg-violet-900/20 hover:border-violet-500 transition-all text-left"
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-sky-200 dark:border-sky-700 bg-sky-50 dark:bg-sky-900/20 hover:border-sky-500 transition-all text-left"
                 >
                   <span className="text-xl">🪑</span>
                   <div>
-                    <div className="text-sm font-bold text-violet-700 dark:text-violet-300">Seat Now</div>
+                    <div className="text-sm font-bold text-sky-700 dark:text-sky-300">Seat Now</div>
                     <div className="text-xs text-gray-400">Open the table for this reservation</div>
                   </div>
                 </button>
@@ -1112,6 +1316,7 @@ export function Tables({ navTo, setOrderContext }) {
                     <div className="text-xs text-gray-400">Change name, guests, time or notes</div>
                   </div>
                 </button>
+                {can(user, 'cancelReservation') && (
                 <button
                   onClick={() => cancelReservation(reserveModal.table.id)}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-rose-200 dark:border-rose-700 bg-rose-50 dark:bg-rose-900/20 hover:border-rose-500 transition-all text-left"
@@ -1122,85 +1327,13 @@ export function Tables({ navTo, setOrderContext }) {
                     <div className="text-xs text-gray-400">Free the table</div>
                   </div>
                 </button>
+                )}
                 <button onClick={() => setReserveModal(null)} className="w-full py-3 rounded-xl text-sm font-bold border-2 border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all">Close</button>
               </div>
             </div>
           </div>
         )
       })()}
-
-      {/* Assign waiter modal */}
-      {assignModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setAssignModal(null)}>
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-xs mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
-
-            {/* Header */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
-              <div>
-                <div className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-0.5">Table {assignModal.number}</div>
-                <div className="text-base font-extrabold text-gray-900 dark:text-white">Assign Waiter</div>
-              </div>
-              <button onClick={() => setAssignModal(null)} className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors font-bold text-base">✕</button>
-            </div>
-
-            {/* Body */}
-            <div className="px-5 py-4">
-              {activeWaiters.length === 0 ? (
-                <p className="text-sm text-gray-400 text-center py-4">No active waiters. Add waiters in the Waiters page.</p>
-              ) : (
-                <div className="space-y-2">
-                  {activeWaiters.map(w => {
-                    const order = tableOrder(assignModal.id)
-                    const isAssigned = order?.waiter === w.full_name
-                    return (
-                      <button
-                        key={w.id}
-                        onClick={() => {
-                          setTables(p => p.map(t => t.id === assignModal.id ? { ...t, assignedWaiter: w.full_name } : t))
-                          setAssignModal(null)
-                        }}
-                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border-2 text-left transition-all ${
-                          isAssigned
-                            ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
-                            : 'border-gray-200 dark:border-gray-700 hover:border-indigo-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                        }`}
-                      >
-                        <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center text-sm font-bold text-indigo-600 dark:text-indigo-400 flex-shrink-0">
-                          {w.full_name.charAt(0)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm font-semibold text-gray-800 dark:text-gray-200">{w.full_name}</div>
-                          <div className="text-xs text-gray-400 font-mono">@{w.username}</div>
-                        </div>
-                        {isAssigned && <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">✓</span>}
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Footer */}
-            <div className="px-5 pb-5 flex gap-2.5">
-              <button
-                onClick={() => {
-                  setTables(p => p.map(t => t.id === assignModal.id ? { ...t, assignedWaiter: null } : t))
-                  setAssignModal(null)
-                }}
-                className="flex-1 py-3 rounded-xl text-sm font-bold border-2 border-rose-200 dark:border-rose-800 text-rose-500 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-all"
-              >
-                Clear
-              </button>
-              <button
-                onClick={() => setAssignModal(null)}
-                className="flex-1 py-3 rounded-xl text-sm font-bold border-2 border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Guest count modal — open table or edit guests */}
       {guestModal && (
@@ -1308,6 +1441,7 @@ export function Tables({ navTo, setOrderContext }) {
                     ))
                     setGuestModal(null)
                   } else {
+                    pushTableRecord(guestModal.table, { adults: guestAdults, children: guestChildren })
                     setOrderContext({ tableId: guestModal.table.id, tableNumber: guestModal.table.number, isTakeaway: false, existingOrder: null, guests: { adults: guestAdults, children: guestChildren } })
                     setGuestModal(null)
                     navTo('orders')
@@ -1335,7 +1469,6 @@ export function Tables({ navTo, setOrderContext }) {
             </div>
             <div className="px-5 py-4 space-y-2.5">
               {actionModal.table.status === 'merged' ? (
-                /* Merged source table — only show Unmerge */
                 <button
                   onClick={() => confirmUnmerge(actionModal.table)}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20 hover:border-blue-400 transition-all text-left"
@@ -1347,42 +1480,20 @@ export function Tables({ navTo, setOrderContext }) {
                   </div>
                 </button>
               ) : (
-                <>
-                  <button
-                    onClick={() => {
-                      setOrderContext({ tableId: actionModal.table.id, tableNumber: actionModal.table.number, isTakeaway: false, existingOrder: actionModal.order })
-                      setActionModal(null)
-                      navTo('orders')
-                    }}
-                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-indigo-200 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-900/20 hover:border-indigo-400 transition-all text-left"
-                  >
-                    <span className="text-xl">➕</span>
-                    <div>
-                      <div className="text-sm font-bold text-indigo-700 dark:text-indigo-300">Add Items</div>
-                      <div className="text-xs text-gray-400">Add more items to this order</div>
-                    </div>
-                  </button>
-                  <button
-                    onClick={() => { setTransferModal({ fromTable: actionModal.table }); setActionModal(null) }}
-                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 hover:border-amber-400 transition-all text-left"
-                  >
-                    <span className="text-xl">🔀</span>
-                    <div>
-                      <div className="text-sm font-bold text-amber-700 dark:text-amber-300">Transfer Table</div>
-                      <div className="text-xs text-gray-400">Move this order to a free table</div>
-                    </div>
-                  </button>
-                  <button
-                    onClick={() => { setMergeModal({ fromTable: actionModal.table }); setActionModal(null) }}
-                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-purple-200 dark:border-purple-700 bg-purple-50 dark:bg-purple-900/20 hover:border-purple-400 transition-all text-left"
-                  >
-                    <span className="text-xl">🔗</span>
-                    <div>
-                      <div className="text-sm font-bold text-purple-700 dark:text-purple-300">Merge Table</div>
-                      <div className="text-xs text-gray-400">Combine with another occupied table</div>
-                    </div>
-                  </button>
-                </>
+                <button
+                  onClick={() => {
+                    setOrderContext({ tableId: actionModal.table.id, tableNumber: actionModal.table.number, isTakeaway: false, existingOrder: actionModal.order })
+                    setActionModal(null)
+                    navTo('orders')
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-indigo-200 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-900/20 hover:border-indigo-400 transition-all text-left"
+                >
+                  <span className="text-xl">➕</span>
+                  <div>
+                    <div className="text-sm font-bold text-indigo-700 dark:text-indigo-300">Add Items</div>
+                    <div className="text-xs text-gray-400">Add more items to this order</div>
+                  </div>
+                </button>
               )}
             </div>
             <div className="px-5 pb-5">
@@ -1584,11 +1695,43 @@ export function Tables({ navTo, setOrderContext }) {
             <h2 className="font-semibold text-gray-900 dark:text-white">Table Layout</h2>
             <p className="text-xs text-gray-400 mt-0.5">Tap a table to open or add to an order</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 items-center">
+            {can(user, 'addTable') && (
+              <button
+                onClick={() => { setAddTableLabel(''); setAddTableChairs(4); setAddTableFloor('Ground'); setShowAddTableModal(true) }}
+                className="text-xs font-bold px-2.5 py-1 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-colors flex items-center gap-1"
+              >
+                + Table
+              </button>
+            )}
+            {can(user, 'deleteTable') && tables.some(t => t.status === 'archived') && (
+              <button
+                onClick={() => setShowArchivedModal(true)}
+                className="text-xs font-bold px-2.5 py-1 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors flex items-center gap-1"
+              >
+                🗄 Archived <span className="bg-red-400 dark:bg-red-600 text-white rounded-full px-1.5 py-0.5 text-[10px]">{tables.filter(t => t.status === 'archived').length}</span>
+              </button>
+            )}
+            {can(user, 'viewTableRecords') && tableRecords.length > 0 && (
+              <button
+                onClick={() => setShowTableRecordsModal(true)}
+                className="text-xs font-bold px-2.5 py-1 rounded-lg bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors flex items-center gap-1"
+              >
+                📊 Records <span className="bg-purple-400 dark:bg-purple-600 text-white rounded-full px-1.5 py-0.5 text-[10px]">{tableRecords.length}</span>
+              </button>
+            )}
+            {can(user, 'viewReservHistory') && (
+              <button
+                onClick={() => setShowHistoryModal(true)}
+                className="text-xs font-bold px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-1"
+              >
+                📋 Reservation History {reservationHistory.length > 0 && <span className="bg-gray-400 dark:bg-gray-500 text-white rounded-full px-1.5 py-0.5 text-[10px]">{reservationHistory.length}</span>}
+              </button>
+            )}
             <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">
               {tables.filter(t=>t.status==='free').length} Free
             </span>
-            <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">
+            <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">
               {tables.filter(t=>t.status==='occupied').length} Occupied
             </span>
             <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400">
@@ -1600,14 +1743,14 @@ export function Tables({ navTo, setOrderContext }) {
               </span>
             )}
             {tables.some(t=>t.status==='reserved') && (
-              <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400">
+              <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400">
                 {tables.filter(t=>t.status==='reserved').length} Reserved
               </span>
             )}
           </div>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-4">
-          {tables.map(table => {
+          {tables.filter(t => t.status !== 'archived').map(table => {
             // ── Special OTH table card ──────────────────────────────────────
             if (table.isOTH) {
               return (
@@ -1663,18 +1806,18 @@ export function Tables({ navTo, setOrderContext }) {
               statusLabel: 'text-orange-500 dark:text-orange-400',
               statusText:  'Bill Ready',
             } : isOccupied ? {
-              card:        'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700 hover:border-red-500 hover:shadow-md',
-              number:      'text-red-700 dark:text-red-300',
-              dot:         'bg-red-500',
-              value:       'text-red-600 dark:text-red-400',
-              statusLabel: 'text-red-500 dark:text-red-400',
+              card:        'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700 hover:border-amber-500 hover:shadow-md',
+              number:      'text-amber-700 dark:text-amber-300',
+              dot:         'bg-amber-500',
+              value:       'text-amber-600 dark:text-amber-400',
+              statusLabel: 'text-amber-600 dark:text-amber-400',
               statusText:  'Occupied',
             } : isReserved ? {
-              card:        'bg-violet-50 dark:bg-violet-900/20 border-violet-300 dark:border-violet-700 hover:border-violet-500 hover:shadow-md',
-              number:      'text-violet-700 dark:text-violet-300',
-              dot:         'bg-violet-500',
-              value:       'text-violet-600 dark:text-violet-400',
-              statusLabel: 'text-violet-500 dark:text-violet-400',
+              card:        'bg-sky-50 dark:bg-sky-900/20 border-sky-300 dark:border-sky-700 hover:border-sky-500 hover:shadow-md',
+              number:      'text-sky-700 dark:text-sky-300',
+              dot:         'bg-sky-500',
+              value:       'text-sky-600 dark:text-sky-400',
+              statusLabel: 'text-sky-500 dark:text-sky-400',
               statusText:  'Reserved',
             } : {
               card:        'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 hover:border-emerald-400 hover:shadow-md',
@@ -1702,15 +1845,25 @@ export function Tables({ navTo, setOrderContext }) {
                   {/* Always-same-height info rows */}
                   <div className="space-y-1">
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Time</span>
-                      <span className={`text-xs font-extrabold tabular-nums ${isOccupied ? colors.value : isReserved ? colors.value : 'text-gray-300 dark:text-gray-600'}`}>
-                        {isReserved && res?.time ? (() => { const [h, m] = res.time.split(':'); const d = new Date(); d.setHours(+h, +m); return d.toLocaleTimeString('en-MT', { hour: '2-digit', minute: '2-digit' }) })() : elapsedTime || '—'}
+                      <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{!isOccupied && !isReserved ? 'Section' : 'Time'}</span>
+                      <span className={`text-xs font-extrabold tabular-nums ${isOccupied ? colors.value : isReserved ? colors.value : 'text-gray-400 dark:text-gray-500'}`}>
+                        {!isOccupied && !isReserved
+                          ? (table.floor || 'Ground')
+                          : isReserved && res?.time
+                            ? (() => { const [h, m] = res.time.split(':'); const d = new Date(); d.setHours(+h, +m); return d.toLocaleTimeString('en-MT', { hour: '2-digit', minute: '2-digit' }) })()
+                            : elapsedTime || '—'}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Guests</span>
-                      <span className={`text-xs font-extrabold tabular-nums ${isOccupied && totalGuests > 0 ? colors.value : isReserved && res?.guests ? colors.value : 'text-gray-300 dark:text-gray-600'}`}>
-                        {isOccupied && totalGuests > 0 ? totalGuests : isReserved && res?.guests ? res.guests : '—'}
+                      <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{!isOccupied && !isReserved ? 'Chairs' : 'Guests'}</span>
+                      <span className={`text-xs font-extrabold tabular-nums ${isOccupied && totalGuests > 0 ? colors.value : isReserved && res?.guests ? colors.value : 'text-emerald-500 dark:text-emerald-400'}`}>
+                        {!isOccupied && !isReserved
+                          ? `🪑 ${table.capacity || 4}`
+                          : isOccupied && totalGuests > 0
+                            ? totalGuests
+                            : isReserved && res?.guests
+                              ? res.guests
+                              : '—'}
                       </span>
                     </div>
                   </div>
@@ -1718,9 +1871,12 @@ export function Tables({ navTo, setOrderContext }) {
                   {/* Status row */}
                   <div className="pt-0.5 border-t border-gray-100 dark:border-gray-700/60 flex items-center justify-between gap-1.5 min-h-[1.25rem]">
                     <span className={`text-[10px] font-bold ${colors.statusLabel}`}>{colors.statusText}</span>
+                    {table.addedBy && table.status === 'free' && (
+                      <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900/40 text-indigo-500 dark:text-indigo-400 leading-none">NEW</span>
+                    )}
                     {isReserved && res?.name && (
                       <div className="flex items-center gap-1">
-                        <div className="w-4 h-4 rounded-full bg-violet-200 dark:bg-violet-800 flex items-center justify-center text-[9px] font-bold flex-shrink-0 text-violet-700 dark:text-violet-300">
+                        <div className="w-4 h-4 rounded-full bg-sky-200 dark:bg-sky-800 flex items-center justify-center text-[9px] font-bold flex-shrink-0 text-sky-700 dark:text-sky-300">
                           {res.name.charAt(0).toUpperCase()}
                         </div>
                         <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 truncate">{res.name.split(' ')[0]}</span>
@@ -1737,15 +1893,6 @@ export function Tables({ navTo, setOrderContext }) {
                   </div>
                 </button>
 
-                {/* Waiter assign badge */}
-                <button
-                  onClick={e => { e.stopPropagation(); setAssignModal(table) }}
-                  title="Assign waiter"
-                  className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-all flex items-center justify-center text-[10px] font-bold shadow-sm"
-                >
-                  {waiterInitial || '+'}
-                </button>
-
                 {/* Merged tables badge — shown on target table */}
                 {table.mergedTables?.length > 0 && (
                   <div className="absolute -top-1.5 -left-1.5 flex gap-0.5">
@@ -1755,6 +1902,28 @@ export function Tables({ navTo, setOrderContext }) {
                       </span>
                     ))}
                   </div>
+                )}
+
+                {/* Transfer badge — occupied, allowed roles only */}
+                {isOccupied && can(user, 'transferTable') && (
+                  <button
+                    onClick={e => { e.stopPropagation(); setTransferModal({ fromTable: table }) }}
+                    title="Transfer table"
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-white dark:bg-gray-700 border border-amber-300 dark:border-amber-600 text-amber-500 dark:text-amber-400 hover:bg-amber-500 hover:text-white hover:border-amber-500 transition-all flex items-center justify-center text-[10px] shadow-sm"
+                  >
+                    🔀
+                  </button>
+                )}
+
+                {/* Merge badge — occupied, allowed roles only */}
+                {isOccupied && can(user, 'mergeTable') && (
+                  <button
+                    onClick={e => { e.stopPropagation(); setMergeModal({ fromTable: table }) }}
+                    title="Merge table"
+                    className="absolute -bottom-1.5 -left-1.5 w-5 h-5 rounded-full bg-white dark:bg-gray-700 border border-purple-300 dark:border-purple-600 text-purple-500 dark:text-purple-400 hover:bg-purple-500 hover:text-white hover:border-purple-500 transition-all flex items-center justify-center text-[10px] shadow-sm"
+                  >
+                    🔗
+                  </button>
                 )}
 
                 {/* Edit guests badge — occupied only */}
@@ -1768,14 +1937,36 @@ export function Tables({ navTo, setOrderContext }) {
                   </button>
                 )}
 
-                {/* Reserve badge — free tables only */}
-                {table.status === 'free' && (
+                {/* Reserve badge — free tables, allowed roles only */}
+                {table.status === 'free' && can(user, 'reserveTable') && (
                   <button
                     onClick={e => { e.stopPropagation(); openReserveCreate(table) }}
                     title="Reserve table"
-                    className="absolute -bottom-1.5 -left-1.5 w-5 h-5 rounded-full bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-400 dark:text-gray-400 hover:bg-violet-600 hover:text-white hover:border-violet-600 transition-all flex items-center justify-center text-[9px] shadow-sm"
+                    className="absolute -bottom-1.5 -left-1.5 w-5 h-5 rounded-full bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-400 dark:text-gray-400 hover:bg-sky-600 hover:text-white hover:border-sky-600 transition-all flex items-center justify-center text-[9px] shadow-sm"
                   >
                     📅
+                  </button>
+                )}
+
+                {/* Edit table badge — free tables, allowed roles only */}
+                {table.status === 'free' && !table.isOTH && can(user, 'editTable') && (
+                  <button
+                    onClick={e => { e.stopPropagation(); openEditTable(table) }}
+                    title="Edit table"
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-400 hover:bg-indigo-500 hover:text-white hover:border-indigo-500 transition-all flex items-center justify-center text-[9px] shadow-sm"
+                  >
+                    ✏
+                  </button>
+                )}
+
+                {/* Delete table badge — free tables, management only */}
+                {table.status === 'free' && !table.isOTH && can(user, 'deleteTable') && (
+                  <button
+                    onClick={e => { e.stopPropagation(); setDeleteTableConfirm(table) }}
+                    title="Delete table"
+                    className="absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-400 hover:bg-red-500 hover:text-white hover:border-red-500 transition-all flex items-center justify-center text-[9px] shadow-sm"
+                  >
+                    🗑
                   </button>
                 )}
               </div>
@@ -1786,7 +1977,7 @@ export function Tables({ navTo, setOrderContext }) {
         {/* Stats badges row */}
         <div className="flex flex-wrap gap-2 mb-3">
           {tables.filter(t => t.status === 'reserved').length > 0 && (
-            <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400">
+            <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400">
               {tables.filter(t => t.status === 'reserved').length} Reserved
             </span>
           )}
@@ -1794,10 +1985,10 @@ export function Tables({ navTo, setOrderContext }) {
 
         <div className="flex flex-wrap items-center gap-4 text-xs text-gray-400 pt-2 border-t border-gray-100 dark:border-gray-700/60">
           <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />Free</span>
-          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500" />Occupied</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-500" />Occupied</span>
           <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-orange-500" />Bill Ready</span>
           <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-blue-400" />Merged</span>
-          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-violet-500" />Reserved</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-sky-500" />Reserved</span>
           <span className="flex items-center gap-1.5"><span className="text-base">🎁</span><span className="font-semibold text-amber-600 dark:text-amber-400">T0 — On the House</span></span>
           <span className="flex items-center gap-1.5 ml-auto">
             <span className="w-4 h-4 rounded-full border border-gray-300 dark:border-gray-500 flex items-center justify-center bg-white dark:bg-gray-700 font-bold text-[10px]">+</span>
@@ -1813,6 +2004,410 @@ export function Tables({ navTo, setOrderContext }) {
           </span>
         </div>
       </Card>
+
+      {/* ── Add Table Modal ── */}
+      {showAddTableModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowAddTableModal(false)}>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700 bg-indigo-50 dark:bg-indigo-900/20">
+              <div>
+                <div className="text-xs font-semibold text-indigo-400 uppercase tracking-widest mb-0.5">Table Layout</div>
+                <div className="text-base font-extrabold text-gray-900 dark:text-white">Add New Table</div>
+              </div>
+              <button onClick={() => setShowAddTableModal(false)} className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors font-bold">✕</button>
+            </div>
+            <div className="px-5 py-5 space-y-4">
+              {/* Chairs / Capacity */}
+              <div>
+                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">Number of Chairs *</label>
+                <div className="flex items-center gap-3">
+                  <button onClick={() => setAddTableChairs(c => Math.max(1, c - 1))} className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-gray-700 font-bold text-gray-700 dark:text-gray-200 flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-600 text-lg transition-all">−</button>
+                  <div className="flex-1 text-center">
+                    <div className="text-3xl font-extrabold text-gray-900 dark:text-white">{addTableChairs}</div>
+                    <div className="text-xs text-gray-400">chairs</div>
+                  </div>
+                  <button onClick={() => setAddTableChairs(c => Math.min(20, c + 1))} className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/40 font-bold text-indigo-700 dark:text-indigo-300 flex items-center justify-center hover:bg-indigo-200 dark:hover:bg-indigo-900/60 text-lg transition-all">+</button>
+                </div>
+                <div className="flex gap-2 mt-2">
+                  {[2,4,6,8].map(n => (
+                    <button key={n} onClick={() => setAddTableChairs(n)} className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${addTableChairs === n ? 'bg-indigo-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200'}`}>{n}</button>
+                  ))}
+                </div>
+              </div>
+              {/* Floor / Section */}
+              <div>
+                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wide">Section / Floor</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {['Ground','Terrace','Bar','VIP','Garden','Upstairs'].map(f => (
+                    <button key={f} onClick={() => setAddTableFloor(f)} className={`py-2 rounded-xl text-xs font-bold transition-all ${addTableFloor === f ? 'bg-indigo-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>{f}</button>
+                  ))}
+                </div>
+              </div>
+              {/* Optional label */}
+              <div>
+                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wide">Custom Label <span className="font-normal normal-case text-gray-400">(optional)</span></label>
+                <input
+                  type="text"
+                  value={addTableLabel}
+                  onChange={e => setAddTableLabel(e.target.value)}
+                  placeholder={`Table ${tables.filter(t => !t.isOTH).length + 1}`}
+                  className="w-full px-3 py-2.5 rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-semibold text-gray-800 dark:text-gray-200 placeholder-gray-300 focus:outline-none focus:border-indigo-500 transition-colors"
+                />
+              </div>
+              {/* Preview */}
+              <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl px-4 py-3 flex items-center gap-3">
+                <div className="text-2xl">🪑</div>
+                <div>
+                  <div className="text-sm font-extrabold text-gray-900 dark:text-white">
+                    Table {tables.filter(t => !t.isOTH).length + 1}
+                    {addTableLabel.trim() ? ` — "${addTableLabel.trim()}"` : ''}
+                  </div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400">{addTableChairs} chairs · {addTableFloor} · Added by {user?.full_name || user?.username}</div>
+                </div>
+              </div>
+            </div>
+            <div className="px-5 pb-5 flex gap-2.5">
+              <button onClick={() => setShowAddTableModal(false)} className="flex-1 py-3 rounded-xl text-sm font-bold border-2 border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all">Cancel</button>
+              <button onClick={confirmAddTable} className="flex-1 py-3 rounded-xl text-sm font-extrabold bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white transition-all">Add Table</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Edit Table Modal ── */}
+      {editTableModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setEditTableModal(null)}>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700 bg-indigo-50 dark:bg-indigo-900/20">
+              <div>
+                <div className="text-xs font-semibold text-indigo-400 uppercase tracking-widest mb-0.5">Table {editTableModal.number}</div>
+                <div className="text-base font-extrabold text-gray-900 dark:text-white">Edit Table</div>
+              </div>
+              <button onClick={() => setEditTableModal(null)} className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors font-bold">✕</button>
+            </div>
+            <div className="px-5 py-5 space-y-4">
+              {/* Chairs */}
+              <div>
+                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">Number of Chairs</label>
+                <div className="flex items-center gap-3">
+                  <button onClick={() => setEditTableChairs(c => Math.max(1, c - 1))} className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-gray-700 font-bold text-gray-700 dark:text-gray-200 flex items-center justify-center hover:bg-gray-200 text-lg transition-all">−</button>
+                  <div className="flex-1 text-center">
+                    <div className="text-3xl font-extrabold text-gray-900 dark:text-white">{editTableChairs}</div>
+                    <div className="text-xs text-gray-400">chairs</div>
+                  </div>
+                  <button onClick={() => setEditTableChairs(c => Math.min(20, c + 1))} className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/40 font-bold text-indigo-700 dark:text-indigo-300 flex items-center justify-center hover:bg-indigo-200 text-lg transition-all">+</button>
+                </div>
+                <div className="flex gap-2 mt-2">
+                  {[2,4,6,8].map(n => (
+                    <button key={n} onClick={() => setEditTableChairs(n)} className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${editTableChairs === n ? 'bg-indigo-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-500 hover:bg-gray-200'}`}>{n}</button>
+                  ))}
+                </div>
+              </div>
+              {/* Floor / Section */}
+              <div>
+                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wide">Section / Floor</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {['Ground','Terrace','Bar','VIP','Garden','Upstairs'].map(f => (
+                    <button key={f} onClick={() => setEditTableFloor(f)} className={`py-2 rounded-xl text-xs font-bold transition-all ${editTableFloor === f ? 'bg-indigo-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>{f}</button>
+                  ))}
+                </div>
+              </div>
+              {/* Label */}
+              <div>
+                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wide">Custom Label <span className="font-normal normal-case text-gray-400">(optional)</span></label>
+                <input
+                  type="text"
+                  value={editTableLabel}
+                  onChange={e => setEditTableLabel(e.target.value)}
+                  placeholder={`Table ${editTableModal.number}`}
+                  className="w-full px-3 py-2.5 rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-semibold text-gray-800 dark:text-gray-200 placeholder-gray-300 focus:outline-none focus:border-indigo-500 transition-colors"
+                />
+              </div>
+              {/* Current info */}
+              {editTableModal.addedBy && (
+                <div className="text-xs text-gray-400 bg-gray-50 dark:bg-gray-700/40 rounded-xl px-3 py-2">
+                  Added by {editTableModal.addedBy} · {editTableModal.floor} · {editTableModal.capacity} chairs
+                  {editTableModal.updatedBy && ` · Last updated by ${editTableModal.updatedBy}`}
+                </div>
+              )}
+            </div>
+            <div className="px-5 pb-5 flex gap-2.5">
+              <button onClick={() => setEditTableModal(null)} className="flex-1 py-3 rounded-xl text-sm font-bold border-2 border-gray-200 dark:border-gray-600 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all">Cancel</button>
+              <button onClick={confirmEditTable} className="flex-1 py-3 rounded-xl text-sm font-extrabold bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white transition-all">Save Changes</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Archive Table Confirm ── */}
+      {deleteTableConfirm && (() => {
+        const recCount = tableRecords.filter(r => r.tableId === deleteTableConfirm.id).length
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => { setDeleteTableConfirm(null); setDeleteReason('') }}>
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700 bg-red-50 dark:bg-red-900/20">
+                <div>
+                  <div className="text-xs font-semibold text-red-400 uppercase tracking-widest mb-0.5">Table {deleteTableConfirm.number}</div>
+                  <div className="text-base font-extrabold text-gray-900 dark:text-white">Archive Table</div>
+                </div>
+                <button onClick={() => { setDeleteTableConfirm(null); setDeleteReason('') }} className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors font-bold">✕</button>
+              </div>
+              <div className="px-5 py-5 space-y-4">
+                {/* Table summary */}
+                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl px-4 py-3 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/40 flex items-center justify-center flex-shrink-0">
+                    <span className="text-sm font-extrabold text-red-600 dark:text-red-400">T{deleteTableConfirm.number}</span>
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-gray-800 dark:text-gray-200">{deleteTableConfirm.label || `Table ${deleteTableConfirm.number}`}</div>
+                    <div className="text-xs text-gray-400">{deleteTableConfirm.capacity || '—'} chairs · {deleteTableConfirm.floor || '—'}</div>
+                  </div>
+                </div>
+                {/* Record count warning */}
+                {recCount > 0 && (
+                  <div className="flex items-start gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl px-3 py-2.5">
+                    <span className="text-amber-500 text-sm flex-shrink-0">⚠️</span>
+                    <div className="text-xs text-amber-700 dark:text-amber-300">
+                      This table has <span className="font-bold">{recCount} seating record{recCount !== 1 ? 's' : ''}</span>. Records will be preserved but the table will no longer appear in the layout.
+                    </div>
+                  </div>
+                )}
+                {/* Reason */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wide">Reason for archiving</label>
+                  <input
+                    type="text"
+                    value={deleteReason}
+                    onChange={e => setDeleteReason(e.target.value)}
+                    placeholder="e.g. Damaged, removed for event, relocated..."
+                    className="w-full px-3 py-2.5 rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-semibold text-gray-800 dark:text-gray-200 placeholder-gray-300 focus:outline-none focus:border-red-400 transition-colors"
+                  />
+                </div>
+                <div className="text-xs text-gray-400 bg-gray-50 dark:bg-gray-700/40 rounded-xl px-3 py-2">
+                  The table will be archived, not permanently deleted. Management can restore it at any time from the Archived list.
+                </div>
+              </div>
+              <div className="px-5 pb-5 flex gap-2.5">
+                <button onClick={() => { setDeleteTableConfirm(null); setDeleteReason('') }} className="flex-1 py-3 rounded-xl text-sm font-bold border-2 border-gray-200 dark:border-gray-600 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all">Cancel</button>
+                <button onClick={() => confirmDeleteTable(deleteTableConfirm)} className="flex-1 py-3 rounded-xl text-sm font-extrabold bg-red-600 hover:bg-red-700 active:scale-[0.98] text-white transition-all">Archive Table</button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* ── Archived Tables Modal ── */}
+      {showArchivedModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3" onClick={() => setShowArchivedModal(false)}>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md max-h-[85vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700 flex-shrink-0">
+              <div>
+                <h3 className="text-base font-extrabold text-gray-900 dark:text-white">🗄 Archived Tables</h3>
+                <div className="text-xs text-gray-400 mt-0.5">{tables.filter(t => t.status === 'archived').length} archived · can be restored</div>
+              </div>
+              <button onClick={() => setShowArchivedModal(false)} className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors font-bold">✕</button>
+            </div>
+            <div className="overflow-y-auto flex-1 p-4 space-y-3">
+              {tables.filter(t => t.status === 'archived').length === 0 ? (
+                <div className="text-center text-sm text-gray-400 py-8">No archived tables</div>
+              ) : tables.filter(t => t.status === 'archived').map(t => {
+                const recCount = tableRecords.filter(r => r.tableId === t.id).length
+                return (
+                  <div key={t.id} className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/40 flex items-center justify-center flex-shrink-0">
+                        <span className="text-sm font-extrabold text-red-500 dark:text-red-400">T{t.number}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-bold text-gray-800 dark:text-gray-200">{t.label || `Table ${t.number}`}</div>
+                        <div className="text-xs text-gray-400">{t.capacity || '—'} chairs · {t.floor || '—'}</div>
+                        {t.archiveReason && (
+                          <div className="text-xs text-red-500 dark:text-red-400 mt-0.5">Reason: {t.archiveReason}</div>
+                        )}
+                        <div className="text-xs text-gray-400 mt-0.5">
+                          Archived by {t.archivedBy} · {t.archivedAt ? new Date(t.archivedAt).toLocaleString('en-MT', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
+                        </div>
+                        {recCount > 0 && (
+                          <div className="text-xs text-purple-500 dark:text-purple-400 mt-0.5">{recCount} seating record{recCount !== 1 ? 's' : ''} preserved</div>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => restoreTable(t)}
+                        className="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-200 dark:hover:bg-emerald-900/60 transition-all"
+                      >
+                        Restore
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Table Records Modal ── */}
+      {showTableRecordsModal && (() => {
+        const roleCfg = {
+          superadmin: { label: 'Superadmin', cls: 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400' },
+          admin:      { label: 'Admin',      cls: 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400' },
+          owner:      { label: 'Owner',      cls: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' },
+          manager:    { label: 'Manager',    cls: 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' },
+          supervisor: { label: 'Supervisor', cls: 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400' },
+          waiter:     { label: 'Waiter',     cls: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400' },
+          cashier:    { label: 'Cashier',    cls: 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400' },
+        }
+        const actionCfg = {
+          seated:   { label: '🪑 Seated',   cls: 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800' },
+          added:    { label: '➕ Added',    cls: 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800' },
+          edited:   { label: '✏ Edited',   cls: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800' },
+          archived: { label: '🗄 Archived', cls: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800' },
+          restored: { label: '♻ Restored', cls: 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800' },
+        }
+        const allTableNums = [...new Set(tableHistory.map(h => h.tableNumber))].sort((a,b)=>a-b)
+        const filteredHistory = recordsFilter === 'all' ? tableHistory : tableHistory.filter(h => String(h.tableNumber) === recordsFilter)
+        const filteredSeatings = recordsFilter === 'all' ? tableRecords : tableRecords.filter(r => String(r.tableNumber) === recordsFilter)
+
+        function RoleBadge({ role }) {
+          const cfg = roleCfg[role] || { label: role, cls: 'bg-gray-100 dark:bg-gray-700 text-gray-500' }
+          return <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${cfg.cls}`}>{cfg.label}</span>
+        }
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3" onClick={() => setShowTableRecordsModal(false)}>
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[92vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700 flex-shrink-0">
+                <div>
+                  <h3 className="text-base font-extrabold text-gray-900 dark:text-white">📊 Table Records</h3>
+                  <div className="text-xs text-gray-400 mt-0.5">{tableRecords.length} seatings · {tableHistory.length} actions logged</div>
+                </div>
+                <button onClick={() => setShowTableRecordsModal(false)} className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors font-bold">✕</button>
+              </div>
+
+              {/* Tabs */}
+              <div className="px-4 pt-3 pb-0 flex-shrink-0">
+                <div className="grid grid-cols-2 gap-1.5 bg-gray-100 dark:bg-gray-700/50 rounded-xl p-1">
+                  <button onClick={() => setRecordsTab('seatings')} className={`py-2 rounded-lg text-xs font-bold transition-all ${recordsTab === 'seatings' ? 'bg-white dark:bg-gray-800 text-purple-700 dark:text-purple-300 shadow' : 'text-gray-500 dark:text-gray-400'}`}>
+                    🪑 Seatings ({tableRecords.length})
+                  </button>
+                  <button onClick={() => setRecordsTab('history')} className={`py-2 rounded-lg text-xs font-bold transition-all ${recordsTab === 'history' ? 'bg-white dark:bg-gray-800 text-indigo-700 dark:text-indigo-300 shadow' : 'text-gray-500 dark:text-gray-400'}`}>
+                    📋 Activity Log ({tableHistory.length})
+                  </button>
+                </div>
+              </div>
+
+              {/* Filter by table */}
+              <div className="px-4 pt-2 pb-2 border-b border-gray-100 dark:border-gray-700 flex-shrink-0">
+                <div className="flex gap-1.5 overflow-x-auto pb-1">
+                  <button onClick={() => setRecordsFilter('all')} className={`flex-shrink-0 px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${recordsFilter === 'all' ? 'bg-purple-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}>All</button>
+                  {allTableNums.map(num => (
+                    <button key={num} onClick={() => setRecordsFilter(String(num))} className={`flex-shrink-0 px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${recordsFilter === String(num) ? 'bg-purple-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}>T{num}</button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="overflow-y-auto flex-1 p-4 space-y-2">
+                {recordsTab === 'seatings' ? (
+                  filteredSeatings.length === 0
+                    ? <div className="text-center text-sm text-gray-400 py-8">No seatings recorded yet</div>
+                    : filteredSeatings.map(r => (
+                      <div key={r.id} className="bg-gray-50 dark:bg-gray-700/50 rounded-xl px-4 py-3 flex items-start gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-purple-100 dark:bg-purple-900/40 flex items-center justify-center flex-shrink-0">
+                          <span className="text-xs font-extrabold text-purple-700 dark:text-purple-300">T{r.tableNumber}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+                            <span className="text-sm font-bold text-gray-800 dark:text-gray-200">{r.tableLabel}</span>
+                            <span className="text-[10px] font-semibold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 px-1.5 py-0.5 rounded-full">
+                              {(r.covers.adults||0)+(r.covers.children||0)} covers{r.covers.children > 0 ? ` (${r.covers.adults}A+${r.covers.children}C)` : ''}
+                            </span>
+                            {r.fromReservation && <span className="text-[10px] font-semibold text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-900/30 px-1.5 py-0.5 rounded-full">📅 Reservation</span>}
+                          </div>
+                          {r.fromReservation && r.reservationName && <div className="text-xs text-gray-500 dark:text-gray-400">Guest: {r.reservationName}</div>}
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-xs text-gray-400">By {r.openedBy}</span>
+                            <RoleBadge role={r.openedByRole} />
+                            <span className="text-xs text-gray-400">· {new Date(r.openedAt).toLocaleString('en-MT', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                ) : (
+                  filteredHistory.length === 0
+                    ? <div className="text-center text-sm text-gray-400 py-8">No activity logged yet</div>
+                    : filteredHistory.map(h => {
+                      const aCfg = actionCfg[h.action] || { label: h.action, cls: 'bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-700' }
+                      return (
+                        <div key={h.id} className={`rounded-xl border px-4 py-3 ${aCfg.cls}`}>
+                          <div className="flex items-start gap-3">
+                            <div className="w-9 h-9 rounded-xl bg-white/70 dark:bg-gray-800/70 flex items-center justify-center flex-shrink-0">
+                              <span className="text-xs font-extrabold text-gray-700 dark:text-gray-300">T{h.tableNumber}</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+                                <span className="text-xs font-extrabold text-gray-800 dark:text-gray-200">{aCfg.label}</span>
+                                <span className="text-xs font-semibold text-gray-600 dark:text-gray-300">{h.tableLabel}</span>
+                              </div>
+                              {/* Action-specific details */}
+                              {h.action === 'added' && (
+                                <div className="text-xs text-gray-500 dark:text-gray-400">{h.details.chairs} chairs · {h.details.floor}{h.details.label !== `Table ${h.tableNumber}` ? ` · "${h.details.label}"` : ''}</div>
+                              )}
+                              {h.action === 'edited' && (
+                                <div className="text-xs text-gray-500 dark:text-gray-400">
+                                  {h.details.prevChairs !== h.details.chairs && `Chairs: ${h.details.prevChairs}→${h.details.chairs} `}
+                                  {h.details.prevFloor !== h.details.floor && `Section: ${h.details.prevFloor}→${h.details.floor} `}
+                                  {h.details.prevLabel !== h.details.label && `Label: "${h.details.prevLabel}"→"${h.details.label}"`}
+                                </div>
+                              )}
+                              {h.action === 'archived' && (
+                                <div className="text-xs text-red-500 dark:text-red-400">Reason: {h.details.reason}</div>
+                              )}
+                              {h.action === 'restored' && h.details.previousReason && (
+                                <div className="text-xs text-gray-400">Was archived: {h.details.previousReason}</div>
+                              )}
+                              {h.action === 'seated' && (
+                                <div className="text-xs text-gray-500 dark:text-gray-400">
+                                  {(h.details.covers?.adults||0)+(h.details.covers?.children||0)} covers{h.details.fromReservation ? ` · Reservation: ${h.details.reservationName||''}` : ''}
+                                </div>
+                              )}
+                              <div className="flex items-center gap-1.5 mt-1">
+                                <span className="text-xs text-gray-400">{h.performedBy}</span>
+                                <RoleBadge role={h.performedByRole} />
+                                <span className="text-xs text-gray-400">· {new Date(h.performedAt).toLocaleString('en-MT', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })
+                )}
+              </div>
+
+              {/* Footer summary */}
+              <div className="px-5 py-3 border-t border-gray-100 dark:border-gray-700 flex-shrink-0 bg-gray-50 dark:bg-gray-700/30">
+                {recordsTab === 'seatings' ? (
+                  <div className="grid grid-cols-3 gap-3 text-center">
+                    <div><div className="text-lg font-extrabold text-gray-900 dark:text-white">{tableRecords.length}</div><div className="text-[11px] text-gray-400">Total Seatings</div></div>
+                    <div><div className="text-lg font-extrabold text-gray-900 dark:text-white">{tableRecords.reduce((s,r)=>s+(r.covers.adults||0)+(r.covers.children||0),0)}</div><div className="text-[11px] text-gray-400">Total Covers</div></div>
+                    <div><div className="text-lg font-extrabold text-gray-900 dark:text-white">{[...new Set(tableRecords.map(r=>r.tableNumber))].length}</div><div className="text-[11px] text-gray-400">Tables Used</div></div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-4 gap-2 text-center">
+                    {['added','edited','archived','restored'].map(a => (
+                      <div key={a}>
+                        <div className="text-base font-extrabold text-gray-900 dark:text-white">{tableHistory.filter(h=>h.action===a).length}</div>
+                        <div className="text-[11px] text-gray-400 capitalize">{a}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
       <ActiveOrdersCard liveOrders={liveOrders} setLiveOrders={setLiveOrders} setReprintModal={setReprintModal} setOrderContext={setOrderContext} navTo={navTo} />
 
       {/* Reprint modal */}
@@ -1900,7 +2495,7 @@ export function Tables({ navTo, setOrderContext }) {
 
 // ─── Orders ───────────────────────────────────────────────────────────────────
 export function Orders({ navTo, orderContext, setOrderContext }) {
-  const { lang, user, liveOrders, setLiveOrders, nextOrderNum, setNextOrderNum, markOrderServed, completeProcess, menuItems, menuCategories } = useApp()
+  const { lang, user, liveOrders, setLiveOrders, nextOrderNum, setNextOrderNum, markOrderServed, completeProcess, menuItems, menuCategories, deductInventory, pushNotif } = useApp()
   const [reprintModal, setReprintModal] = useState(null)
   const [newItems, setNewItems] = useState([])
   const [cat, setCat] = useState('cat1')
@@ -2015,6 +2610,12 @@ export function Orders({ navTo, orderContext, setOrderContext }) {
       const mergedItems   = [...existingOrder.items, ...mappedItems]
       const allHasKitchen = mergedItems.some(i => (i.station || 'kitchen') !== 'bar')
       const allHasBar     = mergedItems.some(i => i.station === 'bar')
+      const editEntry = {
+        editedAt: new Date(),
+        editedBy: user?.full_name || 'Staff',
+        editedByRole: user?.role || '',
+        addedItems: mappedItems.map(i => ({ name: i.name, qty: i.qty, price: i.price })),
+      }
       const updatedOrder  = {
         ...existingOrder,
         items: mergedItems,
@@ -2022,9 +2623,11 @@ export function Orders({ navTo, orderContext, setOrderContext }) {
         status: 'cooking',
         kitchenStatus: allHasKitchen ? (existingOrder.kitchenStatus === 'served' ? 'cooking' : existingOrder.kitchenStatus || 'cooking') : null,
         barStatus:     allHasBar     ? (existingOrder.barStatus     === 'served' ? 'pending'  : existingOrder.barStatus     || 'pending')  : null,
+        editLog: [...(existingOrder.editLog || []), editEntry],
       }
       setLiveOrders(prev => prev.map(o => o.id === existingOrder.id ? updatedOrder : o))
-      // Auto-print only the new items for this round
+      deductInventory(mappedItems)
+      pushNotif(`Round ${round} added to Order #${existingOrder.order_number} (${label})`, 'info', 'Orders')
       const roundTicket = { ...existingOrder, rounds: round }
       if (hasKitchen) printStationTicket(roundTicket, kitchenItems, 'Kitchen')
       if (hasBar)     printStationTicket(roundTicket, barItems, 'Bar')
@@ -2045,10 +2648,12 @@ export function Orders({ navTo, orderContext, setOrderContext }) {
         rounds: 1,
         kitchenStatus: hasKitchen ? 'cooking' : null,
         barStatus:     hasBar     ? 'pending'  : null,
+        editLog: [],
       }
       setLiveOrders(prev => [...prev, newOrder])
       setNextOrderNum(n => n + 1)
-      // Auto-print chits
+      deductInventory(mappedItems)
+      pushNotif(`New Order #${nextOrderNum} placed for ${label} by ${user?.full_name || 'Staff'}`, 'info', 'Orders')
       if (hasKitchen) printStationTicket(newOrder, kitchenItems, 'Kitchen')
       if (hasBar)     printStationTicket(newOrder, barItems, 'Bar')
     }
@@ -2915,12 +3520,10 @@ export function Billing({ orderContext }) {
   const [modalSearch, setModalSearch] = useState('')
   const [showShopModal, setShowShopModal] = useState(false)
   const [showSplitModal, setShowSplitModal] = useState(false)
-  const [splitMode, setSplitMode] = useState('equal')   // 'equal' | 'byItem'
   const [splitCount, setSplitCount] = useState(2)
-  const [itemSplits, setItemSplits] = useState({})       // { itemKey: personIndex (0-based) }
-  const [splitPaid, setSplitPaid] = useState({})         // { personIndex: bool }
-  const [splitPayMethods, setSplitPayMethods] = useState({}) // { personIndex: 'cash'|'card' }
-  const [splitCashGiven, setSplitCashGiven] = useState({})   // { personIndex: number }
+  const [splitPaid, setSplitPaid] = useState({})
+  const [splitPayMethods, setSplitPayMethods] = useState({})
+  const [splitCashGiven, setSplitCashGiven] = useState({})
   const [billItemModal, setBillItemModal] = useState(null)
   const [billModalQty, setBillModalQty] = useState(1)
   const [billModalSelections, setBillModalSelections] = useState({})
@@ -3522,7 +4125,7 @@ export function Billing({ orderContext }) {
                 Confirm
               </button>
               <button
-                onClick={() => { setShowSplitModal(true); setSplitMode('equal'); setSplitCount(2); setItemSplits({}); setSplitPaid({}); setSplitPayMethods({}); setSplitCashGiven({}); }}
+                onClick={() => { setShowSplitModal(true); setSplitCount(2); setSplitPaid({}); setSplitPayMethods({}); setSplitCashGiven({}); }}
                 className="py-3 rounded-xl text-sm font-bold bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/40 dark:hover:bg-blue-900/60 active:scale-[0.98] text-blue-700 dark:text-blue-300 transition-all"
               >
                 ✂ Split
@@ -3753,32 +4356,14 @@ export function Billing({ orderContext }) {
       const personColors = ['bg-rose-500','bg-blue-500','bg-emerald-500','bg-amber-500','bg-purple-500','bg-pink-500']
       const personLabels = ['Person 1','Person 2','Person 3','Person 4','Person 5','Person 6']
       const persons = Array.from({ length: splitCount }, (_, i) => i)
-
-      // Item key helper
-      const itemKey = (item, idx) => item.cartKey || item.id + '-' + idx
-
-      // Equal split amounts
-      const perPersonEqual = total / splitCount
-
-      // By-item: compute totals per person
-      const personTotals = persons.map(pi => {
-        const items = allCartItems.filter((it, idx) => itemSplits[itemKey(it, idx)] === pi)
-        const sub = items.reduce((a, i) => {
-          const disc = Number(i.discount_pct || 0) / 100
-          return a + (i.price * (1 - disc)) * i.qty
-        }, 0)
-        return { subtotal: sub, vat: sub * vatRate, total: sub + sub * vatRate, items }
-      })
-
+      const perPerson = total / splitCount
       const allPaid = persons.every(pi => splitPaid[pi])
-      const unassigned = allCartItems.filter((it, idx) => itemSplits[itemKey(it, idx)] === undefined)
 
       function closeSplit() {
         setShowSplitModal(false)
         setSplitPaid({})
         setSplitPayMethods({})
         setSplitCashGiven({})
-        setItemSplits({})
       }
 
       function finalizeSplitBill() {
@@ -3817,15 +4402,13 @@ export function Billing({ orderContext }) {
       function markPaid(pi) {
         const method = splitPayMethods[pi] || 'cash'
         const cash = Number(splitCashGiven[pi] || 0)
-        const amt = splitMode === 'equal' ? perPersonEqual : personTotals[pi].total
-        if (method === 'cash' && cash < amt) return
+        if (method === 'cash' && cash < perPerson) return
         setSplitPaid(p => ({ ...p, [pi]: true }))
       }
 
       return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3" onClick={closeSplit}>
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[94vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
-            {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700 flex-shrink-0">
               <div>
                 <h3 className="text-base font-extrabold text-gray-900 dark:text-white">✂ Split Bill</h3>
@@ -3835,22 +4418,6 @@ export function Billing({ orderContext }) {
             </div>
 
             <div className="overflow-y-auto flex-1 p-4 space-y-4">
-              {/* Mode toggle */}
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => setSplitMode('equal')}
-                  className={`py-2.5 rounded-xl text-sm font-bold transition-all ${splitMode === 'equal' ? 'bg-blue-600 text-white shadow' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}
-                >
-                  ⚖ Equal Split
-                </button>
-                <button
-                  onClick={() => setSplitMode('byItem')}
-                  className={`py-2.5 rounded-xl text-sm font-bold transition-all ${splitMode === 'byItem' ? 'bg-blue-600 text-white shadow' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}
-                >
-                  🍽 By Item
-                </button>
-              </div>
-
               {/* Number of people */}
               <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-700/50 rounded-xl px-4 py-3">
                 <span className="text-sm font-bold text-gray-700 dark:text-gray-200">Number of people</span>
@@ -3861,83 +4428,29 @@ export function Billing({ orderContext }) {
                 </div>
               </div>
 
-              {/* By Item — assign items */}
-              {splitMode === 'byItem' && (
-                <div>
-                  <div className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Assign Items</div>
-                  {unassigned.length > 0 && (
-                    <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-3 py-1.5 mb-2">
-                      {unassigned.length} item{unassigned.length > 1 ? 's' : ''} not yet assigned
-                    </div>
-                  )}
-                  <div className="space-y-1.5">
-                    {allCartItems.map((item, idx) => {
-                      const key = itemKey(item, idx)
-                      const assigned = itemSplits[key]
-                      return (
-                        <div key={key} className="flex items-center gap-2 bg-gray-50 dark:bg-gray-700/50 rounded-xl px-3 py-2">
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{item.name_en}</div>
-                            <div className="text-xs text-gray-400">×{item.qty} — €{((item.price * (1 - (item.discount_pct || 0) / 100)) * item.qty).toFixed(2)}</div>
-                          </div>
-                          <div className="flex gap-1 flex-shrink-0">
-                            {persons.map(pi => (
-                              <button
-                                key={pi}
-                                onClick={() => setItemSplits(p => ({ ...p, [key]: assigned === pi ? undefined : pi }))}
-                                className={`w-7 h-7 rounded-full text-xs font-bold transition-all ${assigned === pi ? personColors[pi] + ' text-white scale-110 shadow' : 'bg-gray-200 dark:bg-gray-600 text-gray-500 hover:bg-gray-300'}`}
-                              >
-                                {pi + 1}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
-
               {/* Per-person payment panels */}
               <div className="space-y-3">
-                <div className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  {splitMode === 'equal' ? 'Payments' : 'Per-person Totals'}
-                </div>
+                <div className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Payments</div>
                 {persons.map(pi => {
-                  const amt = splitMode === 'equal' ? perPersonEqual : personTotals[pi].total
                   const paid = splitPaid[pi]
                   const method = splitPayMethods[pi] || 'cash'
                   const cash = Number(splitCashGiven[pi] || 0)
-                  const change = Math.max(0, cash - amt)
-                  const canPay = method === 'card' || cash >= amt
-
-                  if (splitMode === 'byItem' && personTotals[pi].items.length === 0) {
-                    return (
-                      <div key={pi} className="flex items-center gap-3 bg-gray-50 dark:bg-gray-700/40 rounded-xl px-4 py-3 opacity-50">
-                        <div className={`w-8 h-8 rounded-full ${personColors[pi]} flex items-center justify-center text-white text-xs font-bold flex-shrink-0`}>{pi + 1}</div>
-                        <div className="text-sm text-gray-400 dark:text-gray-500">No items assigned</div>
-                      </div>
-                    )
-                  }
-
+                  const change = Math.max(0, cash - perPerson)
+                  const canPay = method === 'card' || cash >= perPerson
                   return (
                     <div key={pi} className={`rounded-xl border-2 transition-all ${paid ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-900/20' : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-750'}`}>
                       <div className="flex items-center gap-3 px-4 py-3">
                         <div className={`w-8 h-8 rounded-full ${personColors[pi]} flex items-center justify-center text-white text-xs font-bold flex-shrink-0`}>{pi + 1}</div>
                         <div className="flex-1">
                           <div className="text-sm font-bold text-gray-800 dark:text-gray-200">{personLabels[pi]}</div>
-                          {splitMode === 'byItem' && personTotals[pi].items.length > 0 && (
-                            <div className="text-xs text-gray-400">{personTotals[pi].items.map(it => it.name_en).join(', ')}</div>
-                          )}
                         </div>
                         <div className="text-right">
-                          <div className="text-base font-extrabold text-gray-900 dark:text-white">€{amt.toFixed(2)}</div>
+                          <div className="text-base font-extrabold text-gray-900 dark:text-white">€{perPerson.toFixed(2)}</div>
                           {paid && <div className="text-xs text-emerald-600 font-bold">✓ Paid</div>}
                         </div>
                       </div>
                       {!paid && (
                         <div className="px-4 pb-3 space-y-2 border-t border-gray-100 dark:border-gray-700 pt-2">
-                          {/* Method toggle */}
                           <div className="grid grid-cols-2 gap-1.5">
                             <button
                               onClick={() => setSplitPayMethods(p => ({ ...p, [pi]: 'cash' }))}
@@ -3961,10 +4474,10 @@ export function Billing({ orderContext }) {
                                 step="0.01"
                                 value={splitCashGiven[pi] || ''}
                                 onChange={e => setSplitCashGiven(p => ({ ...p, [pi]: e.target.value }))}
-                                placeholder={amt.toFixed(2)}
+                                placeholder={perPerson.toFixed(2)}
                                 className="flex-1 bg-gray-100 dark:bg-gray-700 rounded-lg px-2 py-1 text-sm font-bold text-gray-900 dark:text-white outline-none"
                               />
-                              {cash >= amt && cash > 0 && (
+                              {cash >= perPerson && cash > 0 && (
                                 <span className="text-xs text-emerald-600 font-bold flex-shrink-0">Change €{change.toFixed(2)}</span>
                               )}
                             </div>
@@ -3984,7 +4497,6 @@ export function Billing({ orderContext }) {
               </div>
             </div>
 
-            {/* Footer */}
             <div className="px-4 pb-4 pt-3 border-t border-gray-100 dark:border-gray-700 flex-shrink-0">
               {allPaid ? (
                 <button
@@ -3996,14 +4508,10 @@ export function Billing({ orderContext }) {
               ) : (
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-500 dark:text-gray-400">{persons.filter(pi => splitPaid[pi]).length} of {splitCount} paid</span>
-                  <div className="flex gap-2">
-                    {persons.filter(pi => splitPaid[pi]).length > 0 && (
-                      <div className="flex gap-0.5">
-                        {persons.map(pi => (
-                          <div key={pi} className={`w-3 h-3 rounded-full ${splitPaid[pi] ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-gray-600'}`} />
-                        ))}
-                      </div>
-                    )}
+                  <div className="flex gap-0.5">
+                    {persons.map(pi => (
+                      <div key={pi} className={`w-3 h-3 rounded-full ${splitPaid[pi] ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-gray-600'}`} />
+                    ))}
                   </div>
                 </div>
               )}
@@ -5497,6 +6005,25 @@ export function History() {
                               </div>
                             </div>
                           </div>
+                          {/* Edit log */}
+                          {r.editLog && r.editLog.length > 0 && (
+                            <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                              <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Edit History</div>
+                              <div className="space-y-2">
+                                {r.editLog.map((entry, ei) => (
+                                  <div key={ei} className="flex items-start gap-2 text-xs">
+                                    <span className="w-4 h-4 rounded-full bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center text-[9px] font-bold text-indigo-600 flex-shrink-0 mt-0.5">✏</span>
+                                    <div>
+                                      <span className="font-semibold text-gray-700 dark:text-gray-300">{entry.editedBy}</span>
+                                      <span className="text-gray-400 ml-1">({entry.editedByRole})</span>
+                                      <span className="text-gray-400 ml-1">added {entry.addedItems?.map(i => `${i.qty}× ${i.name}`).join(', ')}</span>
+                                      <div className="text-gray-400">{new Date(entry.editedAt).toLocaleString('en-MT', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' })}</div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     )}

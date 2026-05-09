@@ -84,6 +84,8 @@ export function AppProvider({ children }) {
   function addOthRecords(records) {
     setOthRecords(p => [...records, ...p])
   }
+
+  // ── Notifications ──────────────────────────────────────────────────────────
   const [notifications, setNotifications] = useState([
     { id:1, message_en:'Low stock: Olive Oil below minimum', type:'warning', module:'Inventory', is_read:false, created_at: new Date() },
     { id:2, message_en:'New user request: Maria Galea', type:'info', module:'Users', is_read:false, created_at: new Date() },
@@ -184,6 +186,70 @@ export function AppProvider({ children }) {
 
   function markAllRead() {
     setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
+  }
+
+  function markNotifRead(id) {
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n))
+  }
+
+  function pushNotif(message, type = 'info', module = 'System') {
+    setNotifications(prev => [{
+      id: Date.now() + Math.random(),
+      message_en: message,
+      type,
+      module,
+      is_read: false,
+      created_at: new Date(),
+    }, ...prev])
+  }
+
+  // Keyword-based rules: if ordered item name contains the keyword,
+  // deduct `qty` units (per item qty ordered) from matching inventory item.
+  const INVENTORY_DEDUCTIONS = [
+    { keyword: 'pasta',       item: 'Pasta',          qty: 0.2  },
+    { keyword: 'carbonara',   item: 'Pasta',          qty: 0.2  },
+    { keyword: 'tagliatelle', item: 'Pasta',          qty: 0.2  },
+    { keyword: 'wine',        item: 'Wine',           qty: 0.15 },
+    { keyword: 'beer',        item: 'Beer',           qty: 1    },
+    { keyword: 'salmon',      item: 'Salmon Fillets', qty: 0.15 },
+    { keyword: 'chicken',     item: 'Chicken',        qty: 0.15 },
+    { keyword: 'ribeye',      item: 'Beef',           qty: 0.3  },
+    { keyword: 'bruschetta',  item: 'Olive Oil',      qty: 0.02 },
+    { keyword: 'tiramisu',    item: 'Cheese',         qty: 0.05 },
+    { keyword: 'mussels',     item: 'Tomatoes',       qty: 0.1  },
+    { keyword: 'calamari',    item: 'Olive Oil',      qty: 0.03 },
+    { keyword: 'rabbit',      item: 'Tomatoes',       qty: 0.15 },
+    { keyword: 'lamb',        item: 'Olive Oil',      qty: 0.02 },
+  ]
+
+  function deductInventory(orderedItems) {
+    // Compute deductions using current inventoryItems (closure value — correct at call time)
+    const toDeduct = {}
+    orderedItems.forEach(item => {
+      const nameLower = (item.name || item.name_en || '').toLowerCase()
+      INVENTORY_DEDUCTIONS.forEach(rule => {
+        if (nameLower.includes(rule.keyword)) {
+          toDeduct[rule.item] = (toDeduct[rule.item] || 0) + rule.qty * (item.qty || 1)
+        }
+      })
+    })
+
+    if (Object.keys(toDeduct).length === 0) return
+
+    // Find items that will cross the low-stock threshold
+    const newlyLow = inventoryItems
+      .filter(inv => {
+        const d = toDeduct[inv.item_name] || 0
+        return d > 0 && inv.quantity > inv.min_stock && Math.max(0, inv.quantity - d) <= inv.min_stock
+      })
+      .map(inv => `${inv.item_name} (${Math.max(0, inv.quantity - (toDeduct[inv.item_name] || 0)).toFixed(1)} ${inv.unit} remaining)`)
+
+    setInventoryItems(prev => prev.map(inv => {
+      const d = toDeduct[inv.item_name] || 0
+      return d > 0 ? { ...inv, quantity: Math.max(0, inv.quantity - d) } : inv
+    }))
+
+    newlyLow.forEach(msg => pushNotif(`⚠️ Low stock: ${msg}`, 'warning', 'Inventory'))
   }
 
   // Mark a ready order as served (waiter confirms delivery)
@@ -331,7 +397,7 @@ export function AppProvider({ children }) {
     : false
 
   return (
-    <AppContext.Provider value={{ user, login, logout, lang, setLang, theme, setTheme, company, setCompany, users, createUser, approveUser, deactivateUser, updateUser, deleteUser, notifications, markAllRead, unreadCount, liveOrders, setLiveOrders, nextOrderNum, setNextOrderNum, openBills, markOrderServed, completeProcess, finalizeBill, orderHistory, addToHistory, transferOrder, mergeOrder, unmergeOrder, menuItems, setMenuItems, menuCategories, setMenuCategories, inventoryItems, setInventoryItems, customers, createCustomer, updateCustomer, deleteCustomer, recordCustomerSale, clockRecords, clockIn, clockOut, isClockedIn, othRecords, addOthRecords }}>
+    <AppContext.Provider value={{ user, login, logout, lang, setLang, theme, setTheme, company, setCompany, users, createUser, approveUser, deactivateUser, updateUser, deleteUser, notifications, markAllRead, markNotifRead, unreadCount, pushNotif, deductInventory, liveOrders, setLiveOrders, nextOrderNum, setNextOrderNum, openBills, markOrderServed, completeProcess, finalizeBill, orderHistory, addToHistory, transferOrder, mergeOrder, unmergeOrder, menuItems, setMenuItems, menuCategories, setMenuCategories, inventoryItems, setInventoryItems, customers, createCustomer, updateCustomer, deleteCustomer, recordCustomerSale, clockRecords, clockIn, clockOut, isClockedIn, othRecords, addOthRecords }}>
       {children}
     </AppContext.Provider>
   )
