@@ -272,8 +272,8 @@ function OrderDetailModal({ order, onClose, navTo, tab }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
@@ -389,8 +389,8 @@ function OrderDetailModal({ order, onClose, navTo, tab }) {
 
         {/* ── Delete Auth Dialog ── */}
         {deleteDialog && (
-          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setDeleteDialog(null)}>
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-xs p-5" onClick={e => e.stopPropagation()}>
+          <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setDeleteDialog(null)}>
+            <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-xs p-5" onClick={e => e.stopPropagation()}>
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 rounded-xl bg-rose-100 dark:bg-rose-900/40 flex items-center justify-center flex-shrink-0">
                   <X size={18} className="text-rose-600 dark:text-rose-400" />
@@ -497,8 +497,8 @@ function OrderDetailModal({ order, onClose, navTo, tab }) {
 
         {/* Item Modifier */}
         {itemModal && (
-          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" onClick={() => setItemModal(null)}>
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/50" onClick={() => setItemModal(null)}>
+            <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
               <div className="flex items-start justify-between p-5 border-b border-gray-100 dark:border-gray-700">
                 <div>
                   <h2 className="text-base font-bold text-gray-900 dark:text-white mb-0.5">{itemModal.name_en}</h2>
@@ -566,8 +566,8 @@ function OrderDetailModal({ order, onClose, navTo, tab }) {
 
         {/* Pre-flag as Comp dialog */}
         {compDialog && (
-          <div className={`fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 ${compDialog.index === -1 ? 'z-[80]' : 'z-[60]'}`} onClick={() => setCompDialog(null)}>
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
+          <div className={`fixed inset-0 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm ${compDialog.index === -1 ? 'z-[80]' : 'z-[60]'}`} onClick={() => setCompDialog(null)}>
+            <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-sm max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700 bg-amber-50 dark:bg-amber-900/20">
                 <div className="flex items-center gap-2.5">
                   <span className="text-xl">🎁</span>
@@ -722,12 +722,10 @@ export default function OrderList({ navTo }) {
   // Dine-in orders (excludes takeaway — shown in dedicated section below)
   const baseOrders = allActive.filter(o => o.order_type !== 'takeaway')
 
-  // Takeaway orders — active (non-paid) for the dedicated section
+  // Takeaway orders — only active (non-paid); paid ones move to Paid Orders section below
   const takeawayOrders = allActive
-    .filter(o => o.order_type === 'takeaway')
+    .filter(o => o.order_type === 'takeaway' && o.status !== 'paid')
     .sort((a, b) => (a.order_number || 0) - (b.order_number || 0))
-  const takeawayActive = takeawayOrders.filter(o => o.status !== 'paid')
-  const takeawayPaid   = takeawayOrders.filter(o => o.status === 'paid')
 
   const tabOrders = baseOrders.filter(o => {
     if (tab === 'kitchen') return o.items.some(i => (i.station || 'kitchen') !== 'bar')
@@ -743,7 +741,7 @@ export default function OrderList({ navTo }) {
     return (b.order_number || 0) - (a.order_number || 0)
   })
 
-  const paidOrders = baseOrders.filter(o => o.status === 'paid').sort((a, b) => (b.order_number || 0) - (a.order_number || 0))
+  const paidOrders = allActive.filter(o => o.status === 'paid').sort((a, b) => (b.order_number || 0) - (a.order_number || 0))
 
   // Stats (dine-in only)
   const counts = { paid: 0, unpaid: 0 }
@@ -776,7 +774,7 @@ export default function OrderList({ navTo }) {
         <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800/40 rounded-2xl px-3 py-3 flex items-center gap-2.5">
           <span className="text-lg flex-shrink-0">🥡</span>
           <div>
-            <div className="text-2xl font-extrabold text-gray-900 dark:text-white leading-none">{takeawayActive.length}</div>
+            <div className="text-2xl font-extrabold text-gray-900 dark:text-white leading-none">{takeawayOrders.length}</div>
             <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">Takeaway Active</div>
           </div>
         </div>
@@ -1002,60 +1000,49 @@ export default function OrderList({ navTo }) {
           <div className="flex items-center gap-2 mb-3">
             <span className="text-base">🥡</span>
             <span className="text-sm font-bold text-gray-700 dark:text-gray-300">Takeaway Orders</span>
-            {takeawayActive.length > 0 && (
-              <span className="text-xs font-bold bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 px-2 py-0.5 rounded-full">{takeawayActive.length} active</span>
-            )}
-            {takeawayPaid.length > 0 && (
-              <span className="text-xs font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full">{takeawayPaid.length} paid</span>
+            {takeawayOrders.length > 0 && (
+              <span className="text-xs font-bold bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 px-2 py-0.5 rounded-full">{takeawayOrders.length} active</span>
             )}
           </div>
 
           {/* Mobile cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 lg:hidden">
-            {(showAllTakeaway ? takeawayOrders : takeawayOrders.slice(0, 4)).map(order => {
-              const isPaid = order.status === 'paid'
-              return (
-                <div key={order.id} className={`bg-white dark:bg-gray-800 rounded-2xl border overflow-hidden transition-all ${isPaid ? 'opacity-60 border-gray-100 dark:border-gray-700/40' : 'border-orange-200 dark:border-orange-800/40'}`}>
-                  <div className={`h-1 w-full ${isPaid ? 'bg-green-400' : 'bg-orange-400'}`} />
-                  <div className="p-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="text-base font-extrabold text-orange-600 dark:text-orange-400">#{order.order_number}</span>
-                        {isPaid
-                          ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"><span className="w-1.5 h-1.5 rounded-full bg-green-400" />Paid</span>
-                          : <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400"><span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse" />Active</span>
-                        }
+            {(showAllTakeaway ? takeawayOrders : takeawayOrders.slice(0, 4)).map(order => (
+              <div key={order.id} className="bg-white dark:bg-gray-800 rounded-2xl border border-orange-200 dark:border-orange-800/40 overflow-hidden transition-all">
+                <div className="h-1 w-full bg-orange-400" />
+                <div className="p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base font-extrabold text-orange-600 dark:text-orange-400">#{order.order_number}</span>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400"><span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse" />Active</span>
+                    </div>
+                    <ElapsedBadge timeStr={order.created_at} />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <TakeawayLabel order={order} />
+                    <span className="text-xs text-gray-400">{order.waiter || '—'}</span>
+                  </div>
+                  <div className="bg-orange-50 dark:bg-orange-900/10 border border-orange-100 dark:border-orange-900/30 rounded-xl p-3 space-y-1.5">
+                    {order.items.slice(0, 3).map((item, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <span className="inline-flex items-center justify-center w-5 h-5 rounded-md text-[11px] font-extrabold flex-shrink-0 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-300">{item.qty}</span>
+                        <span className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate">{item.name || item.name_en}</span>
+                        {item.note && <MessageSquare size={10} className="text-amber-500 flex-shrink-0" />}
                       </div>
-                      <ElapsedBadge timeStr={order.created_at} />
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <TakeawayLabel order={order} />
-                      <span className="text-xs text-gray-400">{order.waiter || '—'}</span>
-                    </div>
-                    <div className="bg-orange-50 dark:bg-orange-900/10 border border-orange-100 dark:border-orange-900/30 rounded-xl p-3 space-y-1.5">
-                      {order.items.slice(0, 3).map((item, i) => (
-                        <div key={i} className="flex items-center gap-2">
-                          <span className="inline-flex items-center justify-center w-5 h-5 rounded-md text-[11px] font-extrabold flex-shrink-0 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-300">{item.qty}</span>
-                          <span className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate">{item.name || item.name_en}</span>
-                          {item.note && <MessageSquare size={10} className="text-amber-500 flex-shrink-0" />}
-                        </div>
-                      ))}
-                      {order.items.length > 3 && <div className="text-[11px] text-gray-400 pl-7">+{order.items.length - 3} more</div>}
-                    </div>
-                    <div className="flex gap-2 pt-1">
-                      <button onClick={() => setViewOrder(order)} className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 hover:border-orange-300 transition-all">
-                        <Eye size={13} />View
-                      </button>
-                      {!isPaid && (
-                        <button onClick={() => navTo('billing', { preloadOrder: order })} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-800/60 hover:bg-orange-100 transition-all">
-                          Go to Billing
-                        </button>
-                      )}
-                    </div>
+                    ))}
+                    {order.items.length > 3 && <div className="text-[11px] text-gray-400 pl-7">+{order.items.length - 3} more</div>}
+                  </div>
+                  <div className="flex gap-2 pt-1">
+                    <button onClick={() => setViewOrder(order)} className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 hover:border-orange-300 transition-all">
+                      <Eye size={13} />View
+                    </button>
+                    <button onClick={() => navTo('billing', { preloadOrder: order })} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-800/60 hover:bg-orange-100 transition-all">
+                      Go to Billing
+                    </button>
                   </div>
                 </div>
-              )
-            })}
+              </div>
+            ))}
           </div>
 
           {/* Desktop table */}
@@ -1073,49 +1060,41 @@ export default function OrderList({ navTo }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50 dark:divide-gray-700/40">
-                {(showAllTakeaway ? takeawayOrders : takeawayOrders.slice(0, 8)).map(order => {
-                  const isPaid = order.status === 'paid'
-                  return (
-                    <tr key={order.id} className={`transition-colors ${isPaid ? 'opacity-60 hover:bg-gray-50/50 dark:hover:bg-gray-700/10' : 'hover:bg-orange-50/40 dark:hover:bg-orange-900/5'}`}>
-                      <td className="px-5 py-3.5">
-                        <span className="font-extrabold text-orange-600 dark:text-orange-400">#{order.order_number}</span>
-                      </td>
-                      <td className="px-4 py-3.5"><TakeawayLabel order={order} /></td>
-                      <td className="px-4 py-3.5 max-w-xs">
-                        <div className="flex flex-col gap-1">
-                          {order.items.slice(0, 2).map((item, i) => (
-                            <div key={i} className="flex items-center gap-1.5">
-                              <span className="inline-flex items-center justify-center w-5 h-5 rounded-md text-[10px] font-extrabold flex-shrink-0 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-300">{item.qty}</span>
-                              <span className="text-xs text-gray-700 dark:text-gray-300 truncate max-w-[140px]">{item.name || item.name_en}</span>
-                              {item.note && <MessageSquare size={10} className="text-amber-500 flex-shrink-0" />}
-                            </div>
-                          ))}
-                          {order.items.length > 2 && <span className="text-[11px] text-gray-400 pl-6.5">+{order.items.length - 2} more</span>}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3.5 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{order.waiter || '—'}</td>
-                      <td className="px-4 py-3.5 whitespace-nowrap"><ElapsedBadge timeStr={order.created_at} /></td>
-                      <td className="px-4 py-3.5 whitespace-nowrap">
-                        {isPaid
-                          ? <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"><span className="w-1.5 h-1.5 rounded-full bg-green-400" />Paid</span>
-                          : <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400"><span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse" />Active</span>
-                        }
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <div className="flex items-center justify-center gap-1.5">
-                          <button onClick={() => setViewOrder(order)} title="View detail" className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 hover:border-orange-300 hover:text-orange-600 transition-all">
-                            <Eye size={12} />View
-                          </button>
-                          {!isPaid && (
-                            <button onClick={() => navTo('billing', { preloadOrder: order })} title="Go to Billing" className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-800/60 hover:bg-orange-100 transition-all">
-                              Billing
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
+                {(showAllTakeaway ? takeawayOrders : takeawayOrders.slice(0, 8)).map(order => (
+                  <tr key={order.id} className="transition-colors hover:bg-orange-50/40 dark:hover:bg-orange-900/5">
+                    <td className="px-5 py-3.5">
+                      <span className="font-extrabold text-orange-600 dark:text-orange-400">#{order.order_number}</span>
+                    </td>
+                    <td className="px-4 py-3.5"><TakeawayLabel order={order} /></td>
+                    <td className="px-4 py-3.5 max-w-xs">
+                      <div className="flex flex-col gap-1">
+                        {order.items.slice(0, 2).map((item, i) => (
+                          <div key={i} className="flex items-center gap-1.5">
+                            <span className="inline-flex items-center justify-center w-5 h-5 rounded-md text-[10px] font-extrabold flex-shrink-0 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-300">{item.qty}</span>
+                            <span className="text-xs text-gray-700 dark:text-gray-300 truncate max-w-[140px]">{item.name || item.name_en}</span>
+                            {item.note && <MessageSquare size={10} className="text-amber-500 flex-shrink-0" />}
+                          </div>
+                        ))}
+                        {order.items.length > 2 && <span className="text-[11px] text-gray-400 pl-6.5">+{order.items.length - 2} more</span>}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3.5 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{order.waiter || '—'}</td>
+                    <td className="px-4 py-3.5 whitespace-nowrap"><ElapsedBadge timeStr={order.created_at} /></td>
+                    <td className="px-4 py-3.5 whitespace-nowrap">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400"><span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse" />Active</span>
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <div className="flex items-center justify-center gap-1.5">
+                        <button onClick={() => setViewOrder(order)} title="View detail" className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 hover:border-orange-300 hover:text-orange-600 transition-all">
+                          <Eye size={12} />View
+                        </button>
+                        <button onClick={() => navTo('billing', { preloadOrder: order })} title="Go to Billing" className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-800/60 hover:bg-orange-100 transition-all">
+                          Billing
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
             {takeawayOrders.length > 8 && (
@@ -1152,7 +1131,7 @@ export default function OrderList({ navTo }) {
                 <thead className="sticky top-0 z-10">
                   <tr className="border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/80">
                     <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider w-16">#</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Table</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Table / Customer</th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden sm:table-cell">Items</th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden md:table-cell">Waiter</th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
@@ -1165,7 +1144,7 @@ export default function OrderList({ navTo }) {
                       <td className="px-5 py-3">
                         <span className="font-extrabold text-indigo-600 dark:text-indigo-400">#{order.order_number}</span>
                       </td>
-                      <td className="px-4 py-3"><TableLabel order={order} /></td>
+                      <td className="px-4 py-3">{order.order_type === 'takeaway' ? <TakeawayLabel order={order} /> : <TableLabel order={order} />}</td>
                       <td className="px-4 py-3 hidden sm:table-cell">
                         <span className="text-xs text-gray-500 dark:text-gray-400">{order.items.length} item{order.items.length !== 1 ? 's' : ''}</span>
                       </td>

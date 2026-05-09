@@ -121,8 +121,8 @@ export function Users() {
     <div>
       {/* Confirm deactivate dialog */}
       {confirmDeactivate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl max-w-sm w-full mx-4">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl p-6 shadow-2xl w-full sm:max-w-sm">
             <h3 className="font-bold text-gray-900 dark:text-white mb-2">Deactivate account?</h3>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
               <strong>{confirmDeactivate.full_name}</strong> will no longer be able to log in.
@@ -343,8 +343,8 @@ export function Waiters() {
     <div>
       {/* Confirm delete dialog */}
       {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl max-w-sm w-full mx-4">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl p-6 shadow-2xl w-full sm:max-w-sm">
             <h3 className="font-bold text-gray-900 dark:text-white mb-2">Remove waiter?</h3>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
               <strong>{confirmDelete.full_name}</strong> will be permanently deleted.
@@ -359,8 +359,8 @@ export function Waiters() {
 
       {/* Edit modal */}
       {editModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setEditModal(null)}>
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50" onClick={() => setEditModal(null)}>
+          <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-sm max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
               <h2 className="font-bold text-gray-900 dark:text-white">Edit Waiter</h2>
               <button onClick={() => setEditModal(null)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
@@ -704,8 +704,8 @@ function ActiveOrdersCard({ liveOrders, setLiveOrders, setReprintModal, setOrder
 
     {/* ── Pre-Comp Flag Dialog ─────────────────────────────────────────────────── */}
     {preCompDialog && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setPreCompDialog(null)}>
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setPreCompDialog(null)}>
+        <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-sm max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700 bg-amber-50 dark:bg-amber-900/20">
             <div className="flex items-center gap-2.5">
               <span className="text-xl">🎁</span>
@@ -1157,8 +1157,8 @@ export function Tables({ navTo, setOrderContext }) {
 
       {/* ── Reserve Table Modal (create / edit) ─────────────────────── */}
       {(reserveModal?.mode === 'create' || reserveModal?.mode === 'edit') && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setReserveModal(null)}>
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setReserveModal(null)}>
+          <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-sm max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700 bg-sky-50 dark:bg-sky-900/20">
               <div>
                 <div className="text-xs font-semibold text-sky-400 uppercase tracking-widest mb-0.5">Table {reserveModal.table.number}</div>
@@ -1497,8 +1497,8 @@ export function Tables({ navTo, setOrderContext }) {
         const dateLabel = res.date ? new Date(res.date + 'T00:00').toLocaleDateString('en-MT', { weekday: 'short', month: 'short', day: 'numeric' }) : '—'
         const timeLabel = res.time ? (() => { const [h, m] = res.time.split(':'); const d = new Date(); d.setHours(+h, +m); return d.toLocaleTimeString('en-MT', { hour: '2-digit', minute: '2-digit' }) })() : '—'
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setReserveModal(null)}>
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-xs mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setReserveModal(null)}>
+            <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-xs max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
               <div className={`flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700 ${res.status === 'arrived' ? 'bg-violet-50 dark:bg-violet-900/20' : 'bg-sky-50 dark:bg-sky-900/20'}`}>
                 <div>
                   <div className={`text-xs font-semibold uppercase tracking-widest mb-0.5 ${res.status === 'arrived' ? 'text-violet-400' : 'text-sky-400'}`}>
@@ -1618,8 +1618,8 @@ export function Tables({ navTo, setOrderContext }) {
 
       {/* Guest count modal — open table or edit guests */}
       {guestModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setGuestModal(null)}>
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setGuestModal(null)}>
+          <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-sm max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
 
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
@@ -1739,8 +1739,8 @@ export function Tables({ navTo, setOrderContext }) {
 
       {/* Action modal — shown when tapping an occupied table */}
       {actionModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setActionModal(null)}>
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-xs mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setActionModal(null)}>
+          <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-xs max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
               <div>
                 <div className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-0.5">Table {actionModal.table.number}</div>
@@ -1789,8 +1789,8 @@ export function Tables({ navTo, setOrderContext }) {
 
       {/* Transfer table modal */}
       {transferModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setTransferModal(null)}>
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setTransferModal(null)}>
+          <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-sm max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
               <div>
                 <div className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-0.5">Transfer from Table {transferModal.fromTable.number}</div>
@@ -1828,8 +1828,8 @@ export function Tables({ navTo, setOrderContext }) {
 
       {/* Merge table modal */}
       {mergeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setMergeModal(null)}>
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setMergeModal(null)}>
+          <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-sm max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
               <div>
                 <div className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-0.5">Merge from Table {mergeModal.fromTable.number}</div>
@@ -1872,12 +1872,11 @@ export function Tables({ navTo, setOrderContext }) {
       {/* ── Daily OTH Modal ──────────────────────────────────────────── */}
       {showOthModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm"
           onClick={() => setShowOthModal(false)}
         >
           <div
-            className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden flex flex-col"
-            style={{ maxHeight: '85vh' }}
+            className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg max-h-[90vh] overflow-hidden flex flex-col"
             onClick={e => e.stopPropagation()}
           >
             {/* Header */}
@@ -2034,14 +2033,6 @@ export function Tables({ navTo, setOrderContext }) {
             <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400">
               {openBills.length} Bill Ready
             </span>
-            {liveOrders.filter(o => o.order_type === 'takeaway' && !['paid','voided'].includes(o.status)).length > 0 && (
-              <button
-                onClick={() => { setTaName(''); setTaGuests(1); setShowTakeawayModal(true) }}
-                className="text-xs font-bold px-2.5 py-1 rounded-lg bg-orange-500 text-white hover:bg-orange-600 transition-colors flex items-center gap-1"
-              >
-                🥡 {liveOrders.filter(o => o.order_type === 'takeaway' && !['paid','voided'].includes(o.status)).length} Active
-              </button>
-            )}
             {tables.some(t=>t.status==='merged') && (
               <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">
                 {tables.filter(t=>t.status==='merged').length} Merged
@@ -2321,8 +2312,8 @@ export function Tables({ navTo, setOrderContext }) {
 
       {/* ── Add Table Modal ── */}
       {showAddTableModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowAddTableModal(false)}>
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowAddTableModal(false)}>
+          <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-sm max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700 bg-indigo-50 dark:bg-indigo-900/20">
               <div>
                 <div className="text-xs font-semibold text-indigo-400 uppercase tracking-widest mb-0.5">Table Layout</div>
@@ -2390,8 +2381,8 @@ export function Tables({ navTo, setOrderContext }) {
 
       {/* ── Edit Table Modal ── */}
       {editTableModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setEditTableModal(null)}>
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setEditTableModal(null)}>
+          <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-sm max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700 bg-indigo-50 dark:bg-indigo-900/20">
               <div>
                 <div className="text-xs font-semibold text-indigo-400 uppercase tracking-widest mb-0.5">Table {editTableModal.number}</div>
@@ -2457,8 +2448,8 @@ export function Tables({ navTo, setOrderContext }) {
       {deleteTableConfirm && (() => {
         const recCount = tableRecords.filter(r => r.tableId === deleteTableConfirm.id).length
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => { setDeleteTableConfirm(null); setDeleteReason('') }}>
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => { setDeleteTableConfirm(null); setDeleteReason('') }}>
+            <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-sm max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700 bg-red-50 dark:bg-red-900/20">
                 <div>
                   <div className="text-xs font-semibold text-red-400 uppercase tracking-widest mb-0.5">Table {deleteTableConfirm.number}</div>
@@ -2730,8 +2721,8 @@ export function Tables({ navTo, setOrderContext }) {
         const kitchenItems = (o.items || []).filter(i => (i.station || 'kitchen') !== 'bar')
         const barItems     = (o.items || []).filter(i => i.station === 'bar')
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setReprintModal(null)}>
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-xs mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setReprintModal(null)}>
+            <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-xs max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
                 <div>
                   <div className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-0.5">
@@ -2985,8 +2976,8 @@ export function Orders({ navTo, orderContext, setOrderContext }) {
     <>
     {/* ── Item Modifier Modal ── */}
     {itemModal && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setItemModal(null)}>
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50" onClick={() => setItemModal(null)}>
+        <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
           {/* Header */}
           <div className="flex items-start justify-between p-5 border-b border-gray-100 dark:border-gray-700">
             <div>
@@ -3053,8 +3044,8 @@ export function Orders({ navTo, orderContext, setOrderContext }) {
 
     {/* ── Pre-Comp Flag Dialog (existing items) ────────────────────────────────── */}
     {existingPreCompDialog && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setExistingPreCompDialog(null)}>
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setExistingPreCompDialog(null)}>
+        <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-sm max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700 bg-amber-50 dark:bg-amber-900/20">
             <div className="flex items-center gap-2.5">
               <span className="text-xl">🎁</span>
@@ -3110,8 +3101,8 @@ export function Orders({ navTo, orderContext, setOrderContext }) {
       const kitchenItems = (o.items || []).filter(i => (i.station || 'kitchen') !== 'bar')
       const barItems     = (o.items || []).filter(i => i.station === 'bar')
       return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setReprintModal(null)}>
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-xs mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setReprintModal(null)}>
+          <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-xs max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
               <div>
                 <div className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-0.5">
@@ -4230,41 +4221,6 @@ export function Billing({ orderContext }) {
       {/* ── LEFT: Product browser ── */}
       <div className={`flex-1 flex flex-col min-w-0 gap-3 min-h-0 ${mobileBillTab !== 'menu' ? 'hidden lg:flex' : ''}`}>
 
-        {/* Active Takeaway quick-load — only when bill is empty */}
-        {billItems.length === 0 && cart.length === 0 && (() => {
-          const activeTakeaways = liveOrders.filter(o => o.order_type === 'takeaway' && !['paid','voided'].includes(o.status))
-          if (!activeTakeaways.length) return null
-          return (
-            <div className="rounded-2xl border border-orange-200 dark:border-orange-800/50 bg-orange-50 dark:bg-orange-900/10 p-3">
-              <div className="flex items-center gap-1.5 mb-2">
-                <span className="text-sm">🥡</span>
-                <span className="text-xs font-bold text-orange-700 dark:text-orange-400 uppercase tracking-wider">Active Takeaway — tap to load</span>
-                <span className="ml-auto text-[11px] font-bold bg-orange-200 dark:bg-orange-800/50 text-orange-700 dark:text-orange-300 px-1.5 py-0.5 rounded-full">{activeTakeaways.length}</span>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                {activeTakeaways.map(o => (
-                  <button
-                    key={o.id}
-                    onClick={() => loadTakeawayOrder(o)}
-                    className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-white dark:bg-gray-800 border border-orange-200 dark:border-orange-700/60 hover:border-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-all text-left group"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-lg bg-orange-100 dark:bg-orange-900/40 flex items-center justify-center flex-shrink-0">
-                        <span className="text-sm font-extrabold text-orange-600 dark:text-orange-400">#{o.order_number}</span>
-                      </div>
-                      <div>
-                        <div className="text-sm font-bold text-gray-900 dark:text-white">{o.customer_name || 'Walk-in'}</div>
-                        <div className="text-xs text-gray-400">{o.items.length} item{o.items.length !== 1 ? 's' : ''} · €{o.items.reduce((s, i) => s + i.price * i.qty, 0).toFixed(2)} · {o.created_at}</div>
-                      </div>
-                    </div>
-                    <span className="text-xs font-bold text-orange-500 dark:text-orange-400 group-hover:translate-x-0.5 transition-transform flex-shrink-0">Load →</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )
-        })()}
-
         {/* Search row */}
         <div className="flex gap-2">
           {/* Text / code search */}
@@ -4573,8 +4529,8 @@ export function Billing({ orderContext }) {
 
     {/* ── Comp (OTH) Reason Dialog ───────────────────────────────────────────── */}
     {compDialog && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setCompDialog(null)}>
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setCompDialog(null)}>
+        <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-sm max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700 bg-amber-50 dark:bg-amber-900/20">
             <div className="flex items-center gap-2.5">
@@ -4642,8 +4598,8 @@ export function Billing({ orderContext }) {
 
     {/* ── Comp Reversal Confirmation Dialog ────────────────────────────────────── */}
     {reverseDialog && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setReverseDialog(null)}>
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setReverseDialog(null)}>
+        <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-sm max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700 bg-rose-50 dark:bg-rose-900/20">
             <div className="flex items-center gap-2.5">
@@ -4719,8 +4675,8 @@ export function Billing({ orderContext }) {
 
     {/* ── Shop / Owner Account Confirmation Modal ── */}
     {showShopModal && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setShowShopModal(false)}>
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowShopModal(false)}>
+        <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-sm max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
             <h3 className="text-base font-extrabold text-gray-900 dark:text-white">Owner's Account</h3>
             <button onClick={() => setShowShopModal(false)} className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors font-bold">✕</button>
@@ -4946,8 +4902,8 @@ export function Billing({ orderContext }) {
 
     {/* ── Item Modifier Modal (Billing) ── */}
     {billItemModal && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setBillItemModal(null)}>
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50" onClick={() => setBillItemModal(null)}>
+        <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
           <div className="flex items-start justify-between p-5 border-b border-gray-100 dark:border-gray-700">
             <div>
               <div className="flex items-center gap-2 mb-0.5">
@@ -5078,8 +5034,8 @@ export function Billing({ orderContext }) {
 
     {/* ── Payment Modal ── */}
     {showPayModal && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm">
+        <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-sm max-h-[90vh] overflow-y-auto">
           {/* Modal header */}
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
             <h3 className="text-base font-extrabold text-gray-900 dark:text-white">💳 Payment</h3>
@@ -5208,8 +5164,8 @@ export function Inventory() {
     <div>
       {/* Confirm delete */}
       {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl max-w-sm w-full mx-4">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl p-6 shadow-2xl w-full sm:max-w-sm">
             <h3 className="font-bold text-gray-900 dark:text-white mb-2">Delete stock item?</h3>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">"{confirmDelete.item_name}" will be removed from inventory.</p>
             <div className="flex gap-2">
@@ -5222,8 +5178,8 @@ export function Inventory() {
 
       {/* Add / Edit Modal */}
       {modal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={closeModal}>
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50" onClick={closeModal}>
+          <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
               <h2 className="font-bold text-gray-900 dark:text-white">{modal.mode === 'add' ? 'Add Stock Item' : 'Edit Stock Item'}</h2>
               <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
@@ -5811,8 +5767,8 @@ export function Customers() {
     <div>
       {/* Confirm delete */}
       {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl max-w-sm w-full mx-4">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl p-6 shadow-2xl w-full sm:max-w-sm">
             <h3 className="font-bold text-gray-900 dark:text-white mb-2">Remove customer?</h3>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">"{confirmDelete.name}"'s data will be permanently deleted.</p>
             <div className="flex gap-2">
@@ -5825,8 +5781,8 @@ export function Customers() {
 
       {/* Add / Edit / View Modal */}
       {modal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={closeModal}>
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50" onClick={closeModal}>
+          <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
               <h2 className="font-bold text-gray-900 dark:text-white">
                 {modal.mode === 'add' ? 'Add Customer' : modal.mode === 'view' ? 'Customer Details' : 'Edit Customer'}
@@ -6081,8 +6037,8 @@ export function MenuManagement() {
     <div>
       {/* ── Confirm delete ── */}
       {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl max-w-sm w-full mx-4">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl p-6 shadow-2xl w-full sm:max-w-sm">
             <h3 className="font-bold text-gray-900 dark:text-white mb-2">Delete item?</h3>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">"{confirmDelete.name_en}" will be permanently removed from the menu.</p>
             <div className="flex gap-2">
@@ -6095,8 +6051,8 @@ export function MenuManagement() {
 
       {/* ── Add / Edit Modal ── */}
       {modal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={closeModal}>
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-xl max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50" onClick={closeModal}>
+          <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-xl max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
               <h2 className="font-bold text-gray-900 dark:text-white">{modal.mode === 'add' ? 'Add Menu Item' : 'Edit Menu Item'}</h2>
               <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl">✕</button>
