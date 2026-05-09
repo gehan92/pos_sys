@@ -773,16 +773,18 @@ export function Tables({ navTo, setOrderContext }) {
   const [now, setNow] = useState(Date.now())
   const [showOthModal, setShowOthModal] = useState(false)
   const [othLoading, setOthLoading] = useState(false)
-  const [reservations, setReservations] = useState({})   // { tableId: { name, phone, guests, date, time, notes } }
-  const [reserveModal, setReserveModal] = useState(null) // { table, mode: 'create'|'view' }
+  const [reservationsList, setReservationsList] = useState([])  // flat array: { id, tableId, tableNumber, name, phone, guests, date, time, notes, status, createdAt, createdBy, ... }
+  const [reserveModal, setReserveModal] = useState(null)        // { table, mode: 'create'|'view'|'edit', resId? }
   const [reservationHistory, setReservationHistory] = useState([])
   const [showHistoryModal, setShowHistoryModal] = useState(false)
+  const [showTodayBookings, setShowTodayBookings] = useState(false)
   const [resName, setResName] = useState('')
   const [resPhone, setResPhone] = useState('')
   const [resGuests, setResGuests] = useState(2)
   const [resDate, setResDate] = useState('')
   const [resTime, setResTime] = useState('')
   const [resNotes, setResNotes] = useState('')
+  const [resEditId, setResEditId] = useState(null)
   // ── Add Table ──────────────────────────────────────────────────────────────
   const [showAddTableModal, setShowAddTableModal] = useState(false)
   const [addTableChairs, setAddTableChairs] = useState(4)
@@ -805,6 +807,10 @@ export function Tables({ navTo, setOrderContext }) {
   const todayStr = new Date().toDateString()
   const todayOthRecords = othRecords.filter(r => new Date(r.created_at).toDateString() === todayStr)
   const todayOthTotal = todayOthRecords.reduce((s, r) => s + Number(r.total_value || 0), 0)
+  const todayISO = new Date().toISOString().split('T')[0]
+  const todayActiveRes = reservationsList.filter(r => r.date === todayISO && ['confirmed','arrived'].includes(r.status))
+  function getTableReservation(tableId) { return todayActiveRes.find(r => r.tableId === tableId) || null }
+  function getTableFutureRes(tableId) { return reservationsList.filter(r => r.tableId === tableId && r.date > todayISO && r.status === 'confirmed') }
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 30000)
     return () => clearInterval(timer)
@@ -831,15 +837,16 @@ export function Tables({ navTo, setOrderContext }) {
   }
 
   function selectTable(table) {
-    if (table.status === 'reserved') {
-      setReserveModal({ table, mode: 'view' })
+    const todayRes = getTableReservation(table.id)
+    if (table.status === 'reserved' && todayRes) {
+      setReserveModal({ table, mode: 'view', resId: todayRes.id })
     } else if (table.status === 'free') {
       setGuestAdults(1)
       setGuestChildren(0)
       setGuestModal({ table, mode: 'open' })
     } else {
       const existingOrder = liveOrders.find(o => o.table_id === table.id && !['paid'].includes(o.status))
-      setActionModal({ table, order: existingOrder })
+      addToOrder(existingOrder || { table_id: table.id, table_number: table.number, order_type: 'dine_in' })
     }
   }
 
@@ -850,6 +857,7 @@ export function Tables({ navTo, setOrderContext }) {
     setResDate(new Date().toISOString().split('T')[0])
     setResTime('')
     setResNotes('')
+    setResEditId(null)
     setReserveModal({ table, mode: 'create' })
   }
 
@@ -860,70 +868,122 @@ export function Tables({ navTo, setOrderContext }) {
     setResDate(res.date || new Date().toISOString().split('T')[0])
     setResTime(res.time || '')
     setResNotes(res.notes || '')
+    setResEditId(res.id)
     setReserveModal({ table, mode: 'edit' })
   }
 
   function confirmReservation() {
     if (!resName.trim() || !resTime) return
     const table = reserveModal.table
-    const isEdit = reserveModal.mode === 'edit'
-    const existing = reservations[table.id] || {}
+    const isEdit = !!resEditId
     const performer = user?.full_name || user?.username || 'Staff'
-    const now = new Date()
-    setReservations(prev => ({
-      ...prev,
-      [table.id]: {
-        ...existing,
-        name: resName.trim(), phone: resPhone.trim(), guests: resGuests, date: resDate, time: resTime, notes: resNotes.trim(),
-        createdAt: isEdit ? existing.createdAt : now,
-        createdBy: isEdit ? existing.createdBy : performer,
-        editedAt: isEdit ? now : undefined,
-        editedBy: isEdit ? performer : undefined,
-      },
-    }))
+    const nowTs = new Date()
+    const isToday = resDate === todayISO
+
+    if (isEdit) {
+      const oldRes = reservationsList.find(r => r.id === resEditId)
+      const wasToday = oldRes?.date === todayISO
+      setReservationsList(prev => prev.map(r => r.id === resEditId ? {
+        ...r, name: resName.trim(), phone: resPhone.trim(), guests: resGuests,
+        date: resDate, time: resTime, notes: resNotes.trim(),
+        updatedAt: nowTs, updatedBy: performer,
+      } : r))
+      // Adjust table status if date moved to/from today
+      if (wasToday && !isToday) {
+        const stillHasToday = reservationsList.some(r => r.id !== resEditId && r.tableId === table.id && r.date === todayISO && ['confirmed','arrived'].includes(r.status))
+        if (!stillHasToday) setTables(prev => prev.map(t => t.id === table.id ? { ...t, status: 'free' } : t))
+      } else if (!wasToday && isToday) {
+        setTables(prev => prev.map(t => t.id === table.id && t.status === 'free' ? { ...t, status: 'reserved' } : t))
+      }
+    } else {
+      const newRes = {
+        id: `res_${Date.now()}`, tableId: table.id, tableNumber: table.number,
+        name: resName.trim(), phone: resPhone.trim(), guests: resGuests,
+        date: resDate, time: resTime, notes: resNotes.trim(),
+        status: 'confirmed', createdAt: nowTs, createdBy: performer,
+      }
+      setReservationsList(prev => [...prev, newRes])
+      if (isToday) setTables(prev => prev.map(t => t.id === table.id && t.status === 'free' ? { ...t, status: 'reserved' } : t))
+    }
+
     setReservationHistory(prev => [{
       id: Date.now(), type: isEdit ? 'edited' : 'created',
       tableId: table.id, tableNumber: table.number,
       name: resName.trim(), phone: resPhone.trim(), guests: resGuests,
       date: resDate, time: resTime, notes: resNotes.trim(),
-      performedBy: performer, performedAt: now,
+      performedBy: performer, performedAt: nowTs,
     }, ...prev])
-    setTables(prev => prev.map(t => t.id === table.id ? { ...t, status: 'reserved' } : t))
     pushNotif(`Table ${table.number} ${isEdit ? 'reservation updated' : 'reserved'} for ${resName.trim()} at ${resTime} by ${performer}`, 'info', 'Reservations')
     setReserveModal(null)
   }
 
-  function cancelReservation(tableId) {
-    const res = reservations[tableId]
+  function cancelReservation(resId) {
+    const res = reservationsList.find(r => r.id === resId)
+    if (!res) return
     const performer = user?.full_name || user?.username || 'Staff'
-    const tbl = tables.find(t => t.id === tableId)
+    setReservationsList(prev => prev.map(r => r.id === resId ? { ...r, status: 'cancelled', cancelledBy: performer, cancelledAt: new Date() } : r))
+    const stillHasToday = reservationsList.some(r => r.id !== resId && r.tableId === res.tableId && r.date === todayISO && ['confirmed','arrived'].includes(r.status))
+    if (!stillHasToday) setTables(prev => prev.map(t => t.id === res.tableId ? { ...t, status: 'free' } : t))
     setReservationHistory(prev => [{
       id: Date.now(), type: 'cancelled',
-      tableId, tableNumber: tbl?.number,
-      name: res?.name, phone: res?.phone, guests: res?.guests,
-      date: res?.date, time: res?.time, notes: res?.notes,
+      tableId: res.tableId, tableNumber: res.tableNumber,
+      name: res.name, phone: res.phone, guests: res.guests,
+      date: res.date, time: res.time, notes: res.notes,
       performedBy: performer, performedAt: new Date(),
     }, ...prev])
-    setReservations(prev => { const n = { ...prev }; delete n[tableId]; return n })
-    setTables(prev => prev.map(t => t.id === tableId ? { ...t, status: 'free' } : t))
     setReserveModal(null)
   }
 
-  function seatReservation(table) {
-    const res = reservations[table.id]
+  function checkInReservation(resId) {
+    const res = reservationsList.find(r => r.id === resId)
+    if (!res) return
     const performer = user?.full_name || user?.username || 'Staff'
+    setReservationsList(prev => prev.map(r => r.id === resId ? { ...r, status: 'arrived', arrivedAt: new Date(), arrivedBy: performer } : r))
+    setReservationHistory(prev => [{
+      id: Date.now(), type: 'arrived',
+      tableId: res.tableId, tableNumber: res.tableNumber,
+      name: res.name, phone: res.phone, guests: res.guests,
+      date: res.date, time: res.time, notes: res.notes,
+      performedBy: performer, performedAt: new Date(),
+    }, ...prev])
+    pushNotif(`${res.name} checked in for Table ${res.tableNumber}`, 'info', 'Reservations')
+    setReserveModal(null)
+  }
+
+  function markNoShow(resId) {
+    const res = reservationsList.find(r => r.id === resId)
+    if (!res) return
+    const performer = user?.full_name || user?.username || 'Staff'
+    setReservationsList(prev => prev.map(r => r.id === resId ? { ...r, status: 'no_show', noShowBy: performer, noShowAt: new Date() } : r))
+    const stillHasToday = reservationsList.some(r => r.id !== resId && r.tableId === res.tableId && r.date === todayISO && ['confirmed','arrived'].includes(r.status))
+    if (!stillHasToday) setTables(prev => prev.map(t => t.id === res.tableId ? { ...t, status: 'free' } : t))
+    setReservationHistory(prev => [{
+      id: Date.now(), type: 'no_show',
+      tableId: res.tableId, tableNumber: res.tableNumber,
+      name: res.name, phone: res.phone, guests: res.guests,
+      date: res.date, time: res.time, notes: res.notes,
+      performedBy: performer, performedAt: new Date(),
+    }, ...prev])
+    setReserveModal(null)
+  }
+
+  function seatReservation(resId, table) {
+    const res = reservationsList.find(r => r.id === resId)
+    if (!res) return
+    const performer = user?.full_name || user?.username || 'Staff'
+    setReservationsList(prev => prev.map(r => r.id === resId ? { ...r, status: 'seated', seatedAt: new Date(), seatedBy: performer } : r))
+    const stillHasToday = reservationsList.some(r => r.id !== resId && r.tableId === table.id && r.date === todayISO && ['confirmed','arrived'].includes(r.status))
+    if (!stillHasToday) setTables(prev => prev.map(t => t.id === table.id ? { ...t, status: 'free' } : t))
     setReservationHistory(prev => [{
       id: Date.now(), type: 'seated',
       tableId: table.id, tableNumber: table.number,
-      name: res?.name, phone: res?.phone, guests: res?.guests,
-      date: res?.date, time: res?.time, notes: res?.notes,
+      name: res.name, phone: res.phone, guests: res.guests,
+      date: res.date, time: res.time, notes: res.notes,
       performedBy: performer, performedAt: new Date(),
     }, ...prev])
-    setReservations(prev => { const n = { ...prev }; delete n[table.id]; return n })
-    setTables(prev => prev.map(t => t.id === table.id ? { ...t, status: 'free' } : t))
     setReserveModal(null)
-    const guests = Math.max(1, res?.guests || 1)
-    pushTableRecord(table, { adults: guests, children: 0 }, true, res?.name)
+    const guests = Math.max(1, res.guests || 1)
+    pushTableRecord(table, { adults: guests, children: 0 }, true, res.name)
     setOrderContext({ tableId: table.id, tableNumber: table.number, isTakeaway: false, existingOrder: null, guests: { adults: guests, children: 0 } })
     navTo('orders')
   }
@@ -1172,6 +1232,96 @@ export function Tables({ navTo, setOrderContext }) {
         </div>
       )}
 
+      {/* ── Today's Bookings Modal ─────────────────────────────────── */}
+      {showTodayBookings && (() => {
+        const todayAll = reservationsList.filter(r => r.date === todayISO).sort((a, b) => a.time.localeCompare(b.time))
+        const statusCfg = {
+          confirmed: { label: 'Confirmed', bg: 'bg-sky-100 dark:bg-sky-900/30',    text: 'text-sky-700 dark:text-sky-300'      },
+          arrived:   { label: 'Arrived',   bg: 'bg-violet-100 dark:bg-violet-900/30', text: 'text-violet-700 dark:text-violet-300' },
+          seated:    { label: 'Seated',    bg: 'bg-emerald-100 dark:bg-emerald-900/30', text: 'text-emerald-700 dark:text-emerald-300' },
+          no_show:   { label: 'No-Show',   bg: 'bg-amber-100 dark:bg-amber-900/30', text: 'text-amber-700 dark:text-amber-300'  },
+          cancelled: { label: 'Cancelled', bg: 'bg-rose-100 dark:bg-rose-900/30',   text: 'text-rose-700 dark:text-rose-300'    },
+        }
+        return (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowTodayBookings(false)}>
+            <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg overflow-hidden flex flex-col max-h-[92vh]" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700 bg-sky-50 dark:bg-sky-900/20">
+                <div>
+                  <div className="text-xs font-semibold text-sky-400 uppercase tracking-widest mb-0.5">
+                    {new Date().toLocaleDateString('en-MT', { weekday: 'long', month: 'long', day: 'numeric' })}
+                  </div>
+                  <div className="text-base font-extrabold text-gray-900 dark:text-white">Today's Bookings</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold px-2 py-1 rounded-lg bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300">{todayActiveRes.length} active</span>
+                  <button onClick={() => setShowTodayBookings(false)} className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors font-bold">✕</button>
+                </div>
+              </div>
+
+              <div className="overflow-y-auto flex-1 px-4 py-3 space-y-2">
+                {todayAll.length === 0 ? (
+                  <div className="text-center py-12 text-gray-400 text-sm">No bookings for today</div>
+                ) : todayAll.map(r => {
+                  const cfg = statusCfg[r.status] || statusCfg.confirmed
+                  const timeLabel = r.time ? (() => { const [h, m] = r.time.split(':'); const d = new Date(); d.setHours(+h, +m); return d.toLocaleTimeString('en-MT', { hour: '2-digit', minute: '2-digit' }) })() : '—'
+                  const tbl = tables.find(t => t.id === r.tableId)
+                  const isDone = ['seated','no_show','cancelled'].includes(r.status)
+                  return (
+                    <div key={r.id} className={`rounded-xl border px-4 py-3 ${isDone ? 'bg-gray-50 dark:bg-gray-700/30 border-gray-100 dark:border-gray-700 opacity-60' : 'bg-white dark:bg-gray-700/60 border-gray-200 dark:border-gray-600 shadow-sm'}`}>
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-extrabold text-gray-900 dark:text-white">{r.name}</span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${cfg.bg} ${cfg.text}`}>{cfg.label}</span>
+                        </div>
+                        <span className="text-xs font-bold text-gray-400 flex-shrink-0">T{r.tableNumber}</span>
+                      </div>
+                      <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400 mb-2">
+                        <span>🕐 <span className="font-bold text-gray-700 dark:text-gray-200">{timeLabel}</span></span>
+                        <span>👥 <span className="font-bold text-gray-700 dark:text-gray-200">{r.guests} guests</span></span>
+                        {r.phone && <span>📞 <span className="font-semibold">{r.phone}</span></span>}
+                      </div>
+                      {r.notes && <div className="text-xs text-gray-400 italic mb-2">"{r.notes}"</div>}
+                      {!isDone && tbl && (
+                        <div className="flex gap-2 pt-2 border-t border-gray-100 dark:border-gray-600">
+                          {r.status === 'confirmed' && (
+                            <button onClick={() => checkInReservation(r.id)} className="flex-1 py-1.5 rounded-lg text-xs font-bold bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 hover:bg-violet-200 dark:hover:bg-violet-900/50 transition-colors">
+                              ✅ Check In
+                            </button>
+                          )}
+                          <button onClick={() => { seatReservation(r.id, tbl); setShowTodayBookings(false) }} className="flex-1 py-1.5 rounded-lg text-xs font-bold bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300 hover:bg-sky-200 dark:hover:bg-sky-900/50 transition-colors">
+                            🪑 Seat
+                          </button>
+                          {can(user, 'cancelReservation') && (
+                            <button onClick={() => markNoShow(r.id)} className="flex-1 py-1.5 rounded-lg text-xs font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors">
+                              ⏰ No-Show
+                            </button>
+                          )}
+                          {can(user, 'cancelReservation') && (
+                            <button onClick={() => cancelReservation(r.id)} className="flex-1 py-1.5 rounded-lg text-xs font-bold bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 hover:bg-rose-200 dark:hover:bg-rose-900/50 transition-colors">
+                              ✕ Cancel
+                            </button>
+                          )}
+                        </div>
+                      )}
+                      {isDone && (
+                        <div className="text-[11px] text-gray-400 dark:text-gray-500 pt-1.5 border-t border-gray-100 dark:border-gray-600">
+                          By {r.status === 'seated' ? r.seatedBy : r.status === 'no_show' ? r.noShowBy : r.cancelledBy || r.createdBy} · {new Date(r.status === 'seated' ? r.seatedAt : r.status === 'no_show' ? r.noShowAt : r.cancelledAt || r.createdAt).toLocaleTimeString('en-MT', { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+
+              <div className="px-5 py-3 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/20 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                <span>{todayAll.filter(r => r.status === 'seated').length} seated · {todayAll.filter(r => r.status === 'no_show').length} no-show · {todayAll.filter(r => r.status === 'cancelled').length} cancelled</span>
+                <button onClick={() => { setShowTodayBookings(false) }} className="text-xs font-bold text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">Close</button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* ── Reservation History Modal ───────────────────────────────── */}
       {showHistoryModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowHistoryModal(false)}>
@@ -1237,16 +1387,18 @@ export function Tables({ navTo, setOrderContext }) {
 
       {/* ── Reserve Table Modal (view) ───────────────────────────────── */}
       {reserveModal?.mode === 'view' && (() => {
-        const res = reservations[reserveModal.table.id]
+        const res = reservationsList.find(r => r.id === reserveModal.resId)
         if (!res) return null
         const dateLabel = res.date ? new Date(res.date + 'T00:00').toLocaleDateString('en-MT', { weekday: 'short', month: 'short', day: 'numeric' }) : '—'
         const timeLabel = res.time ? (() => { const [h, m] = res.time.split(':'); const d = new Date(); d.setHours(+h, +m); return d.toLocaleTimeString('en-MT', { hour: '2-digit', minute: '2-digit' }) })() : '—'
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setReserveModal(null)}>
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-xs mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
-              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700 bg-sky-50 dark:bg-sky-900/20">
+              <div className={`flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700 ${res.status === 'arrived' ? 'bg-violet-50 dark:bg-violet-900/20' : 'bg-sky-50 dark:bg-sky-900/20'}`}>
                 <div>
-                  <div className="text-xs font-semibold text-sky-400 uppercase tracking-widest mb-0.5">Table {reserveModal.table.number} · Reserved</div>
+                  <div className={`text-xs font-semibold uppercase tracking-widest mb-0.5 ${res.status === 'arrived' ? 'text-violet-400' : 'text-sky-400'}`}>
+                    Table {reserveModal.table.number} · {res.status === 'arrived' ? '✅ Guest Arrived' : 'Reserved'}
+                  </div>
                   <div className="text-base font-extrabold text-gray-900 dark:text-white">{res.name}</div>
                 </div>
                 <button onClick={() => setReserveModal(null)} className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors font-bold text-base">✕</button>
@@ -1296,14 +1448,26 @@ export function Tables({ navTo, setOrderContext }) {
                 )}
               </div>
               <div className="px-5 pb-5 space-y-2.5">
+                {res.status === 'confirmed' && (
+                  <button
+                    onClick={() => checkInReservation(res.id)}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-violet-200 dark:border-violet-700 bg-violet-50 dark:bg-violet-900/20 hover:border-violet-500 transition-all text-left"
+                  >
+                    <span className="text-xl">✅</span>
+                    <div>
+                      <div className="text-sm font-bold text-violet-700 dark:text-violet-300">Check In Guest</div>
+                      <div className="text-xs text-gray-400">Mark guest as arrived — table goes violet</div>
+                    </div>
+                  </button>
+                )}
                 <button
-                  onClick={() => seatReservation(reserveModal.table)}
+                  onClick={() => seatReservation(res.id, reserveModal.table)}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-sky-200 dark:border-sky-700 bg-sky-50 dark:bg-sky-900/20 hover:border-sky-500 transition-all text-left"
                 >
                   <span className="text-xl">🪑</span>
                   <div>
                     <div className="text-sm font-bold text-sky-700 dark:text-sky-300">Seat Now</div>
-                    <div className="text-xs text-gray-400">Open the table for this reservation</div>
+                    <div className="text-xs text-gray-400">Open the table and start an order</div>
                   </div>
                 </button>
                 <button
@@ -1317,16 +1481,28 @@ export function Tables({ navTo, setOrderContext }) {
                   </div>
                 </button>
                 {can(user, 'cancelReservation') && (
-                <button
-                  onClick={() => cancelReservation(reserveModal.table.id)}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-rose-200 dark:border-rose-700 bg-rose-50 dark:bg-rose-900/20 hover:border-rose-500 transition-all text-left"
-                >
-                  <span className="text-xl">✕</span>
-                  <div>
-                    <div className="text-sm font-bold text-rose-700 dark:text-rose-300">Cancel Reservation</div>
-                    <div className="text-xs text-gray-400">Free the table</div>
-                  </div>
-                </button>
+                  <button
+                    onClick={() => markNoShow(res.id)}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 hover:border-amber-500 transition-all text-left"
+                  >
+                    <span className="text-xl">⏰</span>
+                    <div>
+                      <div className="text-sm font-bold text-amber-700 dark:text-amber-300">No-Show</div>
+                      <div className="text-xs text-gray-400">Guest didn't arrive — free the table</div>
+                    </div>
+                  </button>
+                )}
+                {can(user, 'cancelReservation') && (
+                  <button
+                    onClick={() => cancelReservation(res.id)}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-rose-200 dark:border-rose-700 bg-rose-50 dark:bg-rose-900/20 hover:border-rose-500 transition-all text-left"
+                  >
+                    <span className="text-xl">✕</span>
+                    <div>
+                      <div className="text-sm font-bold text-rose-700 dark:text-rose-300">Cancel Reservation</div>
+                      <div className="text-xs text-gray-400">Guest cancelled — free the table</div>
+                    </div>
+                  </button>
                 )}
                 <button onClick={() => setReserveModal(null)} className="w-full py-3 rounded-xl text-sm font-bold border-2 border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all">Close</button>
               </div>
@@ -1720,6 +1896,14 @@ export function Tables({ navTo, setOrderContext }) {
                 📊 Records <span className="bg-purple-400 dark:bg-purple-600 text-white rounded-full px-1.5 py-0.5 text-[10px]">{tableRecords.length}</span>
               </button>
             )}
+            {reservationsList.some(r => r.date === todayISO) && (
+              <button
+                onClick={() => setShowTodayBookings(true)}
+                className="text-xs font-bold px-2.5 py-1 rounded-lg bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300 hover:bg-sky-200 dark:hover:bg-sky-900/50 transition-colors flex items-center gap-1"
+              >
+                📅 Today {todayActiveRes.length > 0 && <span className="bg-sky-500 text-white rounded-full px-1.5 py-0.5 text-[10px]">{todayActiveRes.length}</span>}
+              </button>
+            )}
             {can(user, 'viewReservHistory') && (
               <button
                 onClick={() => setShowHistoryModal(true)}
@@ -1788,7 +1972,9 @@ export function Tables({ navTo, setOrderContext }) {
             const isMerged    = table.status === 'merged'
             const isReserved  = table.status === 'reserved'
             const isBillReady = isOccupied && openBills.some(b => b.tableId === table.id && b.status === 'open')
-            const res = reservations[table.id]
+            const todayRes    = getTableReservation(table.id)
+            const futureResList = getTableFutureRes(table.id)
+            const isArrived   = isReserved && todayRes?.status === 'arrived'
 
             // Color tokens per state
             const colors = isMerged ? {
@@ -1812,6 +1998,13 @@ export function Tables({ navTo, setOrderContext }) {
               value:       'text-amber-600 dark:text-amber-400',
               statusLabel: 'text-amber-600 dark:text-amber-400',
               statusText:  'Occupied',
+            } : isArrived ? {
+              card:        'bg-violet-50 dark:bg-violet-900/20 border-violet-400 dark:border-violet-600 hover:border-violet-500 hover:shadow-md',
+              number:      'text-violet-700 dark:text-violet-300',
+              dot:         'bg-violet-500 animate-pulse',
+              value:       'text-violet-600 dark:text-violet-400',
+              statusLabel: 'text-violet-600 dark:text-violet-400',
+              statusText:  'Guest Arrived',
             } : isReserved ? {
               card:        'bg-sky-50 dark:bg-sky-900/20 border-sky-300 dark:border-sky-700 hover:border-sky-500 hover:shadow-md',
               number:      'text-sky-700 dark:text-sky-300',
@@ -1849,20 +2042,20 @@ export function Tables({ navTo, setOrderContext }) {
                       <span className={`text-xs font-extrabold tabular-nums ${isOccupied ? colors.value : isReserved ? colors.value : 'text-gray-400 dark:text-gray-500'}`}>
                         {!isOccupied && !isReserved
                           ? (table.floor || 'Ground')
-                          : isReserved && res?.time
-                            ? (() => { const [h, m] = res.time.split(':'); const d = new Date(); d.setHours(+h, +m); return d.toLocaleTimeString('en-MT', { hour: '2-digit', minute: '2-digit' }) })()
+                          : isReserved && todayRes?.time
+                            ? (() => { const [h, m] = todayRes.time.split(':'); const d = new Date(); d.setHours(+h, +m); return d.toLocaleTimeString('en-MT', { hour: '2-digit', minute: '2-digit' }) })()
                             : elapsedTime || '—'}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{!isOccupied && !isReserved ? 'Chairs' : 'Guests'}</span>
-                      <span className={`text-xs font-extrabold tabular-nums ${isOccupied && totalGuests > 0 ? colors.value : isReserved && res?.guests ? colors.value : 'text-emerald-500 dark:text-emerald-400'}`}>
+                      <span className={`text-xs font-extrabold tabular-nums ${isOccupied && totalGuests > 0 ? colors.value : isReserved && todayRes?.guests ? colors.value : 'text-emerald-500 dark:text-emerald-400'}`}>
                         {!isOccupied && !isReserved
                           ? `🪑 ${table.capacity || 4}`
                           : isOccupied && totalGuests > 0
                             ? totalGuests
-                            : isReserved && res?.guests
-                              ? res.guests
+                            : isReserved && todayRes?.guests
+                              ? todayRes.guests
                               : '—'}
                       </span>
                     </div>
@@ -1874,12 +2067,12 @@ export function Tables({ navTo, setOrderContext }) {
                     {table.addedBy && table.status === 'free' && (
                       <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900/40 text-indigo-500 dark:text-indigo-400 leading-none">NEW</span>
                     )}
-                    {isReserved && res?.name && (
+                    {isReserved && todayRes?.name && (
                       <div className="flex items-center gap-1">
-                        <div className="w-4 h-4 rounded-full bg-sky-200 dark:bg-sky-800 flex items-center justify-center text-[9px] font-bold flex-shrink-0 text-sky-700 dark:text-sky-300">
-                          {res.name.charAt(0).toUpperCase()}
+                        <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0 ${isArrived ? 'bg-violet-200 dark:bg-violet-800 text-violet-700 dark:text-violet-300' : 'bg-sky-200 dark:bg-sky-800 text-sky-700 dark:text-sky-300'}`}>
+                          {todayRes.name.charAt(0).toUpperCase()}
                         </div>
-                        <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 truncate">{res.name.split(' ')[0]}</span>
+                        <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 truncate">{todayRes.name.split(' ')[0]}</span>
                       </div>
                     )}
                     {isOccupied && waiterName && (
@@ -1941,10 +2134,10 @@ export function Tables({ navTo, setOrderContext }) {
                 {table.status === 'free' && can(user, 'reserveTable') && (
                   <button
                     onClick={e => { e.stopPropagation(); openReserveCreate(table) }}
-                    title="Reserve table"
-                    className="absolute -bottom-1.5 -left-1.5 w-5 h-5 rounded-full bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-400 dark:text-gray-400 hover:bg-sky-600 hover:text-white hover:border-sky-600 transition-all flex items-center justify-center text-[9px] shadow-sm"
+                    title={futureResList.length > 0 ? `${futureResList.length} future booking(s) — add another` : 'Reserve table'}
+                    className={`absolute -bottom-1.5 -left-1.5 w-5 h-5 rounded-full border transition-all flex items-center justify-center text-[9px] font-bold shadow-sm ${futureResList.length > 0 ? 'bg-sky-500 border-sky-400 text-white hover:bg-sky-600' : 'bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-400 hover:bg-sky-600 hover:text-white hover:border-sky-600'}`}
                   >
-                    📅
+                    {futureResList.length > 0 ? futureResList.length : '📅'}
                   </button>
                 )}
 
@@ -2786,17 +2979,6 @@ export function Orders({ navTo, orderContext, setOrderContext }) {
         </div>
       </div>
     )}
-
-    {/* ── Active Orders list with OTH comp flags ───────────────────────────────── */}
-    <div className="mb-5">
-      <ActiveOrdersCard
-        liveOrders={liveOrders}
-        setLiveOrders={setLiveOrders}
-        setReprintModal={setReprintModal}
-        setOrderContext={setOrderContext}
-        navTo={navTo}
-      />
-    </div>
 
     {/* ── Reprint Modal ──────────────────────────────────────────────────────── */}
     {reprintModal && (() => {
