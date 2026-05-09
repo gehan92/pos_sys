@@ -760,7 +760,7 @@ function ActiveOrdersCard({ liveOrders, setLiveOrders, setReprintModal, setOrder
 
 // ─── Tables ───────────────────────────────────────────────────────────────────
 export function Tables({ navTo, setOrderContext }) {
-  const { user, liveOrders, setLiveOrders, users, company, openBills, transferOrder, mergeOrder, unmergeOrder, othRecords, pushNotif } = useApp()
+  const { user, liveOrders, setLiveOrders, users, company, openBills, transferOrder, mergeOrder, unmergeOrder, othRecords, pushNotif, clockRecords } = useApp()
   const [tables, setTables] = useState(TABLES)
   const [assignModal, setAssignModal] = useState(null)    // table object
   const [guestModal, setGuestModal] = useState(null)      // { table, mode: 'open'|'edit' }
@@ -2309,6 +2309,52 @@ export function Tables({ navTo, setOrderContext }) {
           </span>
         </div>
       </Card>
+
+      {/* ── Active Staff on Shift ── */}
+      {(() => {
+        const todayStr = new Date().toDateString()
+        const onShift = clockRecords.filter(r => r.clockOut === null && r.clockIn.toDateString() === todayStr)
+        if (onShift.length === 0) return null
+        function shiftDuration(clockIn) {
+          const mins = Math.floor((Date.now() - clockIn) / 60000)
+          return `${Math.floor(mins / 60)}h ${mins % 60 < 10 ? '0' : ''}${mins % 60}m`
+        }
+        const ROLE_COLOR = {
+          waiter:     'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-300',
+          cashier:    'bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-300',
+          cook:       'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300',
+          bartender:  'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300',
+          supervisor: 'bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300',
+          manager:    'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300',
+          admin:      'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',
+          owner:      'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300',
+        }
+        return (
+          <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700/60 rounded-2xl px-4 py-3 shadow-sm">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
+              <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Active Staff on Shift</span>
+              <span className="ml-auto text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800/40">{onShift.length} on duty</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {onShift.map(r => (
+                <div key={r.id} className="flex items-center gap-2 bg-gray-50 dark:bg-gray-700/40 border border-gray-100 dark:border-gray-700 rounded-xl px-3 py-2">
+                  <div className="w-7 h-7 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center text-xs font-extrabold text-indigo-600 dark:text-indigo-400 flex-shrink-0">
+                    {r.userName?.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-gray-800 dark:text-gray-100 leading-none">{r.userName}</div>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${ROLE_COLOR[r.role] || 'bg-gray-100 dark:bg-gray-700 text-gray-500'}`}>{r.role}</span>
+                      <span className="text-[10px] text-gray-400">{shiftDuration(r.clockIn)}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
 
       {/* ── Add Table Modal ── */}
       {showAddTableModal && (
@@ -5627,82 +5673,121 @@ export function Supervisor() {
 
 // ─── Shifts ───────────────────────────────────────────────────────────────────
 export function Shifts() {
-  const { clockRecords, user, clockIn, clockOut, isClockedIn } = useApp()
-  const [tab, setTab] = useState('today') // 'today' | 'history'
+  const { clockRecords, user, clockIn, clockOut, isClockedIn, adminClockOut } = useApp()
+  const [tab, setTab] = useState('today')
   const [now, setNow] = useState(new Date())
+  const [histSearch, setHistSearch] = useState('')
+  const [histDate, setHistDate] = useState('')
+  const [forceOutConfirm, setForceOutConfirm] = useState(null) // record id
 
-  // Live clock update every minute
-  useState(() => {
-    const timer = setInterval(() => setNow(new Date()), 60000)
+  const isManagement = ['superadmin','admin','owner','manager','supervisor'].includes(user?.role)
+
+  // Live clock — fixed: useEffect not useState
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 30000)
     return () => clearInterval(timer)
-  })
+  }, [])
 
   const todayStr = now.toDateString()
 
-  // Today's records
-  const todayRecords = clockRecords.filter(r => r.clockIn.toDateString() === todayStr)
-  // All past records (clocked out)
-  const historyRecords = [...clockRecords].sort((a, b) => b.clockIn - a.clockIn)
+  // Scope records by role
+  const visibleRecords = isManagement
+    ? clockRecords
+    : clockRecords.filter(r => r.userId === user?.id)
+
+  const todayRecords   = visibleRecords.filter(r => r.clockIn.toDateString() === todayStr)
+  const activeNow      = todayRecords.filter(r => r.clockOut === null)
+  const doneToday      = todayRecords.filter(r => r.clockOut !== null)
+
+  // History = all records for this user (or all for management), sorted newest first
+  const historyRecords = [...visibleRecords]
+    .filter(r => {
+      const q = histSearch.trim().toLowerCase()
+      const matchName = !q || r.userName?.toLowerCase().includes(q) || r.role?.toLowerCase().includes(q)
+      const matchDate = !histDate || r.clockIn.toISOString().startsWith(histDate)
+      return matchName && matchDate
+    })
+    .sort((a, b) => b.clockIn - a.clockIn)
 
   function fmtTime(date) {
     if (!date) return '—'
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   }
 
-  function fmtDuration(clockIn, clockOut) {
-    const end = clockOut || now
-    const mins = Math.round((end - clockIn) / 60000)
+  function fmtDuration(start, end) {
+    const e = end || now
+    const mins = Math.round((e - start) / 60000)
     const h = Math.floor(mins / 60)
     const m = mins % 60
-    return `${h}h ${m}m`
+    return `${h}h ${m < 10 ? '0' : ''}${m}m`
   }
 
   function fmtDate(date) {
-    return date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })
+    return date.toLocaleDateString([], { weekday: 'short', day: '2-digit', month: 'short' })
   }
 
-  const activeNow = todayRecords.filter(r => r.clockOut === null)
-  const doneToday = todayRecords.filter(r => r.clockOut !== null)
+  // Total hours worked today (completed shifts only)
+  const totalMinsToday = doneToday.reduce((s, r) => s + Math.round((r.clockOut - r.clockIn) / 60000), 0)
+  const totalHoursToday = `${Math.floor(totalMinsToday / 60)}h ${totalMinsToday % 60}m`
+
+  // My open shift record
+  const myOpenShift = clockRecords.find(r => r.userId === user?.id && r.clockOut === null)
 
   return (
-    <div>
+    <div className="space-y-4">
+
       {/* My status card */}
-      <div className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl px-5 py-4 mb-4 border-2 ${isClockedIn ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-300 dark:border-emerald-700' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'}`}>
+      <div className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl px-5 py-4 border-2 ${isClockedIn ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-300 dark:border-emerald-700' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'}`}>
         <div className="flex items-center gap-3">
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg ${isClockedIn ? 'bg-emerald-500 text-white' : 'bg-gray-300 dark:bg-gray-600 text-gray-600 dark:text-gray-300'}`}>
+          <div className={`w-11 h-11 rounded-xl flex items-center justify-center text-xl ${isClockedIn ? 'bg-emerald-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-500'}`}>
             {isClockedIn ? '🟢' : '⚫'}
           </div>
           <div>
-            <div className="font-bold text-gray-900 dark:text-white">{user?.full_name}</div>
-            {isClockedIn ? (
+            <div className="font-bold text-gray-900 dark:text-white text-sm">{user?.full_name}</div>
+            {isClockedIn && myOpenShift ? (
               <div className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">
-                Clocked in · {fmtTime(clockRecords.find(r => r.userId === user?.id && r.clockOut === null)?.clockIn)} ·&nbsp;
-                <span className="font-semibold">
-                  {fmtDuration(clockRecords.find(r => r.userId === user?.id && r.clockOut === null)?.clockIn, null)}
-                </span>
+                On shift since {fmtTime(myOpenShift.clockIn)} · <span className="font-bold">{fmtDuration(myOpenShift.clockIn, null)}</span>
               </div>
             ) : (
-              <div className="text-sm text-gray-400">Not clocked in today</div>
+              <div className="text-sm text-gray-400 dark:text-gray-500">Not clocked in today</div>
             )}
           </div>
         </div>
         <button
           onClick={isClockedIn ? clockOut : clockIn}
-          className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all ${
+          className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all shadow-sm ${
             isClockedIn
-              ? 'bg-rose-500 hover:bg-rose-600 text-white shadow-sm'
-              : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm'
+              ? 'bg-rose-500 hover:bg-rose-600 text-white'
+              : 'bg-emerald-500 hover:bg-emerald-600 text-white'
           }`}
         >
           {isClockedIn ? '⏹ Clock Out' : '▶ Clock In'}
         </button>
       </div>
 
+      {/* Stats (management only) */}
+      {isManagement && (
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/40 rounded-2xl px-4 py-3">
+            <div className="text-2xl font-extrabold text-gray-900 dark:text-white leading-none">{activeNow.length}</div>
+            <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">On Shift Now</div>
+          </div>
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/40 rounded-2xl px-4 py-3">
+            <div className="text-2xl font-extrabold text-gray-900 dark:text-white leading-none">{doneToday.length}</div>
+            <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">Completed Today</div>
+          </div>
+          <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800/40 rounded-2xl px-4 py-3">
+            <div className="text-lg font-extrabold text-gray-900 dark:text-white leading-none">{doneToday.length > 0 ? totalHoursToday : '—'}</div>
+            <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">Total Hours Today</div>
+          </div>
+        </div>
+      )}
+
       {/* Tabs */}
-      <div className="flex gap-2 mb-4">
-        {[['today', `Today (${todayRecords.length})`], ['history', 'Full History']].map(([key, label]) => (
+      <div className="flex gap-2">
+        {[['today', `Today (${todayRecords.length})`], ['history', isManagement ? 'Full History' : 'My History']].map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)}
-            className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${tab === key ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300'}`}>
+            className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${tab === key ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-indigo-300'}`}>
             {label}
           </button>
         ))}
@@ -5710,109 +5795,200 @@ export function Shifts() {
 
       {tab === 'today' && (
         <div className="space-y-4">
-          {/* Currently clocked in */}
+
+          {/* Currently on shift */}
           {activeNow.length > 0 && (
             <Card padding={false}>
-              <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse inline-block" />
-                <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Currently On Shift</span>
+              <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse inline-block" />
+                  <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Currently On Shift</span>
+                </div>
+                <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">{activeNow.length} active</span>
               </div>
               <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-100 dark:border-gray-700/60">
-                    {['Staff','Role','Clocked In','Duration'].map(h => (
-                      <th key={h} className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {activeNow.map(r => (
-                    <tr key={r.id} className="border-b border-gray-100 dark:border-gray-700/40 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                      <td className="px-4 py-3 font-semibold text-gray-800 dark:text-gray-200">{r.userName}</td>
-                      <td className="px-4 py-3"><Badge color="indigo">{r.role}</Badge></td>
-                      <td className="px-4 py-3 text-emerald-600 dark:text-emerald-400 font-semibold">{fmtTime(r.clockIn)}</td>
-                      <td className="px-4 py-3 text-gray-600 dark:text-gray-300 font-medium">{fmtDuration(r.clockIn, null)}</td>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100 dark:border-gray-700/60">
+                      {[isManagement ? 'Staff' : null,'Role','Clocked In','Duration', isManagement ? '' : null].filter(Boolean).map(h => (
+                        <th key={h} className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {activeNow.map(r => (
+                      <tr key={r.id} className="border-b border-gray-100 dark:border-gray-700/40 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                        {isManagement && <td className="px-4 py-3 font-semibold text-gray-800 dark:text-gray-200">{r.userName}</td>}
+                        <td className="px-4 py-3"><Badge color="indigo">{r.role}</Badge></td>
+                        <td className="px-4 py-3 text-emerald-600 dark:text-emerald-400 font-semibold">{fmtTime(r.clockIn)}</td>
+                        <td className="px-4 py-3 font-bold text-gray-700 dark:text-gray-300">{fmtDuration(r.clockIn, null)}</td>
+                        {isManagement && (
+                          <td className="px-4 py-3">
+                            <button
+                              onClick={() => setForceOutConfirm(r.id)}
+                              title="Force clock-out (staff forgot)"
+                              className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800/40 hover:bg-rose-100 dark:hover:bg-rose-900/30 transition-all"
+                            >
+                              Force Out
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </Card>
           )}
 
-          {/* Finished today */}
+          {/* Completed today */}
           {doneToday.length > 0 && (
             <Card padding={false}>
               <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
                 <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Completed Today</span>
               </div>
               <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-100 dark:border-gray-700/60">
-                    {['Staff','Role','In','Out','Total Hours'].map(h => (
-                      <th key={h} className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {doneToday.map(r => (
-                    <tr key={r.id} className="border-b border-gray-100 dark:border-gray-700/40 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                      <td className="px-4 py-3 font-semibold text-gray-800 dark:text-gray-200">{r.userName}</td>
-                      <td className="px-4 py-3"><Badge color="gray">{r.role}</Badge></td>
-                      <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{fmtTime(r.clockIn)}</td>
-                      <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{fmtTime(r.clockOut)}</td>
-                      <td className="px-4 py-3 font-bold text-indigo-600 dark:text-indigo-400">{fmtDuration(r.clockIn, r.clockOut)}</td>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100 dark:border-gray-700/60">
+                      {[isManagement ? 'Staff' : null,'Role','In','Out','Duration'].filter(Boolean).map(h => (
+                        <th key={h} className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {doneToday.map(r => (
+                      <tr key={r.id} className="border-b border-gray-100 dark:border-gray-700/40 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                        {isManagement && <td className="px-4 py-3 font-semibold text-gray-800 dark:text-gray-200">{r.userName}</td>}
+                        <td className="px-4 py-3"><Badge color="gray">{r.role}</Badge></td>
+                        <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{fmtTime(r.clockIn)}</td>
+                        <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{fmtTime(r.clockOut)}</td>
+                        <td className="px-4 py-3 font-bold text-indigo-600 dark:text-indigo-400">{fmtDuration(r.clockIn, r.clockOut)}</td>
+                      </tr>
+                    ))}
+                    {isManagement && doneToday.length > 0 && (
+                      <tr className="bg-gray-50 dark:bg-gray-700/30 border-t-2 border-gray-200 dark:border-gray-600">
+                        <td colSpan={3} className="px-4 py-2.5 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total</td>
+                        <td />
+                        <td className="px-4 py-2.5 font-extrabold text-indigo-700 dark:text-indigo-300 text-sm">{totalHoursToday}</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </Card>
           )}
 
           {todayRecords.length === 0 && (
-            <Card><div className="text-center py-8 text-gray-400">No clock-in records for today yet.</div></Card>
+            <Card>
+              <div className="text-center py-10">
+                <div className="text-3xl mb-2">🕐</div>
+                <div className="text-sm font-semibold text-gray-500 dark:text-gray-400">No shift records for today yet</div>
+                {!isClockedIn && <div className="text-xs text-gray-400 mt-1">Clock in using the button above to start your shift</div>}
+              </div>
+            </Card>
           )}
         </div>
       )}
 
       {tab === 'history' && (
-        <Card padding={false}>
-          <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100 dark:border-gray-700/60">
-                {['Date','Staff','Role','Clock In','Clock Out','Total Hours','Status'].map(h => (
-                  <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {historyRecords.map(r => (
-                <tr key={r.id} className="border-b border-gray-100 dark:border-gray-700/40 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                  <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">{fmtDate(r.clockIn)}</td>
-                  <td className="px-4 py-3 font-semibold text-gray-800 dark:text-gray-200">{r.userName}</td>
-                  <td className="px-4 py-3"><Badge color="gray">{r.role}</Badge></td>
-                  <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{fmtTime(r.clockIn)}</td>
-                  <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{r.clockOut ? fmtTime(r.clockOut) : <span className="text-emerald-500 font-semibold">Active</span>}</td>
-                  <td className="px-4 py-3 font-bold text-indigo-600 dark:text-indigo-400">{fmtDuration(r.clockIn, r.clockOut)}</td>
-                  <td className="px-4 py-3">
-                    {r.clockOut
-                      ? <Badge color="green">Completed</Badge>
-                      : <Badge color="emerald" dot>On Shift</Badge>}
-                  </td>
-                </tr>
-              ))}
-              {historyRecords.length === 0 && (
-                <tr><td colSpan={7} className="text-center py-8 text-gray-400 text-sm">No shift history yet</td></tr>
-              )}
-            </tbody>
-          </table>
+        <div className="space-y-3">
+          {/* Filters */}
+          <div className="flex flex-col sm:flex-row gap-2">
+            {isManagement && (
+              <input
+                value={histSearch}
+                onChange={e => setHistSearch(e.target.value)}
+                placeholder="Search by name or role…"
+                className="flex-1 text-sm px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            )}
+            <input
+              type="date"
+              value={histDate}
+              onChange={e => setHistDate(e.target.value)}
+              className="text-sm px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+            {histDate && (
+              <button onClick={() => setHistDate('')} className="px-3 py-2 rounded-xl text-xs font-bold border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all">
+                Clear
+              </button>
+            )}
           </div>
-        </Card>
+
+          <Card padding={false}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 dark:border-gray-700/60">
+                    {['Date', isManagement ? 'Staff' : null, 'Role', 'In', 'Out', 'Duration', 'Status'].filter(Boolean).map(h => (
+                      <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {historyRecords.map(r => (
+                    <tr key={r.id} className="border-b border-gray-100 dark:border-gray-700/40 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                      <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{fmtDate(r.clockIn)}</td>
+                      {isManagement && <td className="px-4 py-3 font-semibold text-gray-800 dark:text-gray-200 whitespace-nowrap">{r.userName}</td>}
+                      <td className="px-4 py-3"><Badge color="gray">{r.role}</Badge></td>
+                      <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{fmtTime(r.clockIn)}</td>
+                      <td className="px-4 py-3 text-gray-600 dark:text-gray-400">
+                        {r.clockOut ? fmtTime(r.clockOut) : <span className="text-emerald-500 dark:text-emerald-400 font-bold">Active</span>}
+                      </td>
+                      <td className="px-4 py-3 font-bold text-indigo-600 dark:text-indigo-400">{fmtDuration(r.clockIn, r.clockOut)}</td>
+                      <td className="px-4 py-3">
+                        {r.clockOut
+                          ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">✓ Done</span>
+                          : <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />On Shift
+                            </span>
+                        }
+                      </td>
+                    </tr>
+                  ))}
+                  {historyRecords.length === 0 && (
+                    <tr>
+                      <td colSpan={isManagement ? 7 : 6} className="text-center py-10 text-gray-400 text-sm">
+                        {histSearch || histDate ? 'No records match your filter' : 'No shift history yet'}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
       )}
+
+      {/* Force clock-out confirm modal */}
+      {forceOutConfirm && (() => {
+        const rec = clockRecords.find(r => r.id === forceOutConfirm)
+        return (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setForceOutConfirm(null)}>
+            <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-sm p-6" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-rose-100 dark:bg-rose-900/40 flex items-center justify-center text-xl flex-shrink-0">⏹</div>
+                <div>
+                  <div className="text-sm font-extrabold text-gray-900 dark:text-white">Force Clock-Out</div>
+                  <div className="text-xs text-gray-400 mt-0.5">{rec?.userName} — clocked in at {fmtTime(rec?.clockIn)}</div>
+                </div>
+              </div>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">
+                This will clock out <span className="font-semibold text-gray-700 dark:text-gray-200">{rec?.userName}</span> now ({fmtTime(new Date())}). Use this if staff forgot to clock out.
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <button onClick={() => setForceOutConfirm(null)} className="py-2.5 rounded-xl text-sm font-bold border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all">Cancel</button>
+                <button
+                  onClick={() => { adminClockOut(forceOutConfirm); setForceOutConfirm(null) }}
+                  className="py-2.5 rounded-xl text-sm font-bold bg-rose-600 hover:bg-rose-700 text-white transition-all"
+                >Clock Out Now</button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
     </div>
   )
 }

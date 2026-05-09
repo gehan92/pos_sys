@@ -409,8 +409,12 @@ export function AppProvider({ children }) {
     ? clockRecords.some(r => r.userId === user.id && r.clockOut === null && r.clockIn.toDateString() === new Date().toDateString())
     : false
 
+  function adminClockOut(recordId) {
+    setClockRecords(p => p.map(r => r.id === recordId ? { ...r, clockOut: new Date() } : r))
+  }
+
   return (
-    <AppContext.Provider value={{ user, login, logout, lang, setLang, theme, setTheme, company, setCompany, users, createUser, approveUser, deactivateUser, updateUser, deleteUser, notifications, markAllRead, markNotifRead, unreadCount, pushNotif, deductInventory, liveOrders, setLiveOrders, nextOrderNum, setNextOrderNum, openBills, markOrderServed, completeProcess, finalizeBill, orderHistory, addToHistory, transferOrder, mergeOrder, unmergeOrder, menuItems, setMenuItems, menuCategories, setMenuCategories, inventoryItems, setInventoryItems, customers, createCustomer, updateCustomer, deleteCustomer, recordCustomerSale, clockRecords, clockIn, clockOut, isClockedIn, othRecords, addOthRecords, navPermissions, setNavPermissions }}>
+    <AppContext.Provider value={{ user, login, logout, lang, setLang, theme, setTheme, company, setCompany, users, createUser, approveUser, deactivateUser, updateUser, deleteUser, notifications, markAllRead, markNotifRead, unreadCount, pushNotif, deductInventory, liveOrders, setLiveOrders, nextOrderNum, setNextOrderNum, openBills, markOrderServed, completeProcess, finalizeBill, orderHistory, addToHistory, transferOrder, mergeOrder, unmergeOrder, menuItems, setMenuItems, menuCategories, setMenuCategories, inventoryItems, setInventoryItems, customers, createCustomer, updateCustomer, deleteCustomer, recordCustomerSale, clockRecords, clockIn, clockOut, isClockedIn, adminClockOut, othRecords, addOthRecords, navPermissions, setNavPermissions }}>
       {children}
     </AppContext.Provider>
   )
