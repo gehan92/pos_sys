@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useApp, ROLES, ROLE_NAV } from '../context/AppContext'
 import { t } from '../i18n/translations'
 import { Avatar } from '../components/UI'
@@ -76,15 +76,22 @@ const NAV_ICONS_LUCIDE = {
 }
 
 export default function Layout() {
-  const { user, logout, lang, setLang, theme, setTheme, company, unreadCount, clockIn, clockOut, isClockedIn } = useApp()
+  const { user, logout, lang, setLang, theme, setTheme, company, unreadCount, clockIn, clockOut, isClockedIn, navPermissions } = useApp()
   const [page, setPage] = useState(() => {
-    const nav = ROLE_NAV[user?.role] || ['dashboard']
+    const nav = navPermissions[user?.role] || ['dashboard']
     return nav[0]
   })
   const [orderContext, setOrderContext] = useState({ tableId: null, tableNumber: null, isTakeaway: false })
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
-  const nav = ROLE_NAV[user?.role] || []
+  const nav = navPermissions[user?.role] || []
+
+  // If nav changes and current page was removed, redirect to first available
+  // Note: do NOT include `page` in deps — that would cancel navTo() for pages not in sidebar nav
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (nav.length > 0 && !nav.includes(page)) setPage(nav[0])
+  }, [nav])
   const PageComponent = PAGE_MAP[page] || Dashboard
   const roleInfo = ROLES[user?.role]
   const companyInitials = company.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()

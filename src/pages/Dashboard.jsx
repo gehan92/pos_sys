@@ -1,6 +1,6 @@
 // ─── Dashboard ───────────────────────────────────────────────────────────────
 import { useState, useRef, useEffect } from 'react'
-import { useApp, ROLES } from '../context/AppContext'
+import { useApp, ROLES, ROLE_NAV } from '../context/AppContext'
 import { t } from '../i18n/translations'
 import { Card, StatCard, Badge, Table, TR, TD, Btn, Avatar, Divider, SectionLabel, statusColor, Input, Select, Textarea } from '../components/UI'
 import { SAMPLE_USERS, SAMPLE_ORDERS, INVENTORY_ITEMS, TABLES, MENU_CATEGORIES, MENU_ITEMS, SAMPLE_INVOICES, SUPPLIER_INVOICES } from '../lib/mockData'
@@ -5339,36 +5339,185 @@ export function Reports() {
 }
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
-export function Settings() {
-  const { company, setCompany, lang } = useApp()
-  const [form, setForm] = useState({ ...company })
-  function save() { setCompany(form); alert(t('settingsSaved', lang)) }
+// ── Nav Permission Manager ────────────────────────────────────────────────────
+const NAV_MANAGER_ITEMS = [
+  { key:'dashboard',     label:'Dashboard',     icon:'🏠', cat:'General' },
+  { key:'notifications', label:'Notifications', icon:'🔔', cat:'General' },
+  { key:'tables',        label:'Tables',        icon:'🍽️', cat:'Floor' },
+  { key:'orderlist',     label:'Order List',    icon:'📃', cat:'Floor' },
+  { key:'billing',       label:'Billing',       icon:'💰', cat:'Floor' },
+  { key:'kitchen',       label:'Kitchen',       icon:'👨‍🍳', cat:'Floor' },
+  { key:'bar',           label:'Bar',           icon:'🍸', cat:'Floor' },
+  { key:'oth',           label:'OTH / Comps',   icon:'🎁', cat:'Floor' },
+  { key:'history',       label:'History',       icon:'🕓', cat:'Reports' },
+  { key:'reports',       label:'Reports',       icon:'📊', cat:'Reports' },
+  { key:'supervisor',    label:'Supervisor',    icon:'👁️', cat:'Reports' },
+  { key:'inventory',     label:'Inventory',     icon:'📦', cat:'Management' },
+  { key:'menu',          label:'Menu',          icon:'🗂️', cat:'Management' },
+  { key:'customers',     label:'Customers',     icon:'👤', cat:'Management' },
+  { key:'users',         label:'Users',         icon:'👥', cat:'Management' },
+  { key:'waiters',       label:'Waiters',       icon:'🧑‍🍽️', cat:'Management' },
+  { key:'shifts',        label:'Shifts',        icon:'🗓️', cat:'Management' },
+  { key:'settings',      label:'Settings',      icon:'⚙️', cat:'Admin' },
+  { key:'audit',         label:'Audit Log',     icon:'🔒', cat:'Admin' },
+  { key:'company',       label:'Company',       icon:'🏢', cat:'Admin' },
+  { key:'receipts',      label:'Receipts',      icon:'🖨️', cat:'Other' },
+  { key:'invoices',      label:'Invoices',      icon:'📄', cat:'Other' },
+]
+
+const MANAGED_ROLES = [
+  { key:'superadmin', label:'Super Admin', color:'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300' },
+  { key:'admin',      label:'Admin',       color:'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' },
+  { key:'owner',      label:'Owner',       color:'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' },
+  { key:'manager',    label:'Manager',     color:'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' },
+  { key:'supervisor', label:'Supervisor',  color:'bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300' },
+  { key:'cashier',    label:'Cashier',     color:'bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-300' },
+  { key:'waiter',     label:'Waiter',      color:'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-300' },
+  { key:'cook',       label:'Cook',        color:'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300' },
+  { key:'bartender',  label:'Bartender',   color:'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300' },
+  { key:'supplier',   label:'Supplier',    color:'bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300' },
+]
+
+function NavManager() {
+  const { navPermissions, setNavPermissions } = useApp()
+  const [role, setRole] = useState('admin')
+
+  const roleNav = navPermissions[role] || []
+  const cats = [...new Set(NAV_MANAGER_ITEMS.map(i => i.cat))]
+
+  function toggle(key) {
+    const current = navPermissions[role] || []
+    const updated = current.includes(key) ? current.filter(k => k !== key) : [...current, key]
+    setNavPermissions({ ...navPermissions, [role]: updated })
+  }
+
+  function resetRole() {
+    setNavPermissions({ ...navPermissions, [role]: [...(ROLE_NAV[role] || [])] })
+  }
+
+  const roleInfo = MANAGED_ROLES.find(r => r.key === role)
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <Card>
-        <h2 className="font-medium text-gray-900 dark:text-white mb-4">Company details</h2>
-        <Input label="Company name" value={form.name} onChange={e => setForm(p=>({...p,name:e.target.value}))} />
-        <Input label="Address" value={form.address} onChange={e => setForm(p=>({...p,address:e.target.value}))} />
-        <Select label="Currency" value={form.currency} onChange={e => setForm(p=>({...p,currency:e.target.value}))}>
-          <option value="EUR">EUR — Euro</option>
-          <option value="USD">USD — US Dollar</option>
-          <option value="GBP">GBP — British Pound</option>
-        </Select>
-        <Input label="VAT rate (%)" type="number" value={form.vat_rate} onChange={e => setForm(p=>({...p,vat_rate:Number(e.target.value)}))} />
-        <Textarea label="Receipt footer" value={form.receipt_footer} onChange={e => setForm(p=>({...p,receipt_footer:e.target.value}))} />
-        <Btn variant="success" onClick={save}>Save Changes</Btn>
-      </Card>
-      <Card>
-        <h2 className="font-medium text-gray-900 dark:text-white mb-4">System info</h2>
-        <div className="space-y-2 text-sm">
-          {[['System','Malta POS v1.0'],['Languages','English, Maltese, Italian'],['Database','Supabase (PostgreSQL)'],['VAT Region','Malta — 18%'],['Currency','EUR — Euro']].map(([k,v]) => (
-            <div key={k} className="flex justify-between py-2 border-b border-gray-100 dark:border-gray-700">
-              <span className="text-gray-500 dark:text-gray-400">{k}</span>
-              <span className="text-gray-800 dark:text-gray-200 font-medium">{v}</span>
+    <div className="space-y-4">
+      {/* Role tabs */}
+      <div className="flex flex-wrap gap-2">
+        {MANAGED_ROLES.map(r => (
+          <button key={r.key} onClick={() => setRole(r.key)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold border-2 transition-all ${
+              role === r.key
+                ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
+                : `border-transparent ${r.color} hover:border-gray-300 dark:hover:border-gray-500`
+            }`}
+          >{r.label}</button>
+        ))}
+      </div>
+
+      {/* Stats row */}
+      <div className="flex items-center gap-3 px-1">
+        <span className={`text-xs font-bold px-2.5 py-1 rounded-lg ${roleInfo?.color}`}>{roleInfo?.label}</span>
+        <span className="text-xs text-gray-400">{roleNav.length} pages enabled</span>
+        <button onClick={resetRole} className="ml-auto text-xs font-bold text-rose-500 hover:text-rose-600 dark:text-rose-400 dark:hover:text-rose-300 transition-colors">
+          Reset to default
+        </button>
+      </div>
+
+      {/* Nav items grouped by category */}
+      {cats.map(cat => {
+        const items = NAV_MANAGER_ITEMS.filter(i => i.cat === cat)
+        return (
+          <div key={cat} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+            <div className="px-4 py-2.5 bg-gray-50 dark:bg-gray-700/50 border-b border-gray-100 dark:border-gray-700">
+              <span className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">{cat}</span>
             </div>
-          ))}
+            <div className="divide-y divide-gray-50 dark:divide-gray-700/40">
+              {items.map(item => {
+                const isOn = roleNav.includes(item.key)
+                return (
+                  <div key={item.key} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50/50 dark:hover:bg-gray-700/20 transition-colors">
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-base w-6 text-center">{item.icon}</span>
+                      <span className={`text-sm font-medium ${isOn ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500'}`}>{item.label}</span>
+                    </div>
+                    <button
+                      onClick={() => toggle(item.key)}
+                      className={`relative w-11 h-6 rounded-full transition-colors duration-200 flex-shrink-0 focus:outline-none ${isOn ? 'bg-indigo-500' : 'bg-gray-200 dark:bg-gray-600'}`}
+                    >
+                      <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200 ${isOn ? 'translate-x-5' : 'translate-x-0'}`} />
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+export function Settings() {
+  const { company, setCompany, lang, user } = useApp()
+  const [form, setForm] = useState({ ...company })
+  const [settingsTab, setSettingsTab] = useState('general')
+  const canManageNav = ['superadmin', 'admin'].includes(user?.role)
+  function save() { setCompany(form); alert(t('settingsSaved', lang)) }
+
+  return (
+    <div className="space-y-4">
+      {/* Tab bar */}
+      <div className="flex gap-2 border-b border-gray-100 dark:border-gray-700 pb-0">
+        {[
+          { key: 'general', label: 'General' },
+          ...(canManageNav ? [{ key: 'navigation', label: 'Navigation Access' }] : []),
+        ].map(tb => (
+          <button key={tb.key} onClick={() => setSettingsTab(tb.key)}
+            className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors -mb-px ${
+              settingsTab === tb.key
+                ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
+          >{tb.label}</button>
+        ))}
+      </div>
+
+      {settingsTab === 'general' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Card>
+            <h2 className="font-medium text-gray-900 dark:text-white mb-4">Company details</h2>
+            <Input label="Company name" value={form.name} onChange={e => setForm(p=>({...p,name:e.target.value}))} />
+            <Input label="Address" value={form.address} onChange={e => setForm(p=>({...p,address:e.target.value}))} />
+            <Select label="Currency" value={form.currency} onChange={e => setForm(p=>({...p,currency:e.target.value}))}>
+              <option value="EUR">EUR — Euro</option>
+              <option value="USD">USD — US Dollar</option>
+              <option value="GBP">GBP — British Pound</option>
+            </Select>
+            <Input label="VAT rate (%)" type="number" value={form.vat_rate} onChange={e => setForm(p=>({...p,vat_rate:Number(e.target.value)}))} />
+            <Textarea label="Receipt footer" value={form.receipt_footer} onChange={e => setForm(p=>({...p,receipt_footer:e.target.value}))} />
+            <Btn variant="success" onClick={save}>Save Changes</Btn>
+          </Card>
+          <Card>
+            <h2 className="font-medium text-gray-900 dark:text-white mb-4">System info</h2>
+            <div className="space-y-2 text-sm">
+              {[['System','Malta POS v1.0'],['Languages','English, Maltese, Italian'],['Database','Supabase (PostgreSQL)'],['VAT Region','Malta — 18%'],['Currency','EUR — Euro']].map(([k,v]) => (
+                <div key={k} className="flex justify-between py-2 border-b border-gray-100 dark:border-gray-700">
+                  <span className="text-gray-500 dark:text-gray-400">{k}</span>
+                  <span className="text-gray-800 dark:text-gray-200 font-medium">{v}</span>
+                </div>
+              ))}
+            </div>
+          </Card>
         </div>
-      </Card>
+      )}
+
+      {settingsTab === 'navigation' && canManageNav && (
+        <div>
+          <div className="mb-4">
+            <h2 className="text-base font-bold text-gray-900 dark:text-white">Sidebar Navigation Access</h2>
+            <p className="text-sm text-gray-400 mt-0.5">Control which pages each role can see in the sidebar. Changes take effect immediately.</p>
+          </div>
+          <NavManager />
+        </div>
+      )}
     </div>
   )
 }

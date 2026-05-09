@@ -85,6 +85,19 @@ export function AppProvider({ children }) {
     setOthRecords(p => [...records, ...p])
   }
 
+  // ── Navigation permissions (which nav items each role can see) ──────────────
+  const [navPermissions, setNavPermissionsState] = useState(() => {
+    try {
+      const stored = localStorage.getItem('maltapos_nav_permissions')
+      return stored ? JSON.parse(stored) : { ...ROLE_NAV }
+    } catch { return { ...ROLE_NAV } }
+  })
+
+  function setNavPermissions(perms) {
+    setNavPermissionsState(perms)
+    try { localStorage.setItem('maltapos_nav_permissions', JSON.stringify(perms)) } catch {}
+  }
+
   // ── Notifications ──────────────────────────────────────────────────────────
   const [notifications, setNotifications] = useState([
     { id:1, message_en:'Low stock: Olive Oil below minimum', type:'warning', module:'Inventory', is_read:false, created_at: new Date() },
@@ -397,7 +410,7 @@ export function AppProvider({ children }) {
     : false
 
   return (
-    <AppContext.Provider value={{ user, login, logout, lang, setLang, theme, setTheme, company, setCompany, users, createUser, approveUser, deactivateUser, updateUser, deleteUser, notifications, markAllRead, markNotifRead, unreadCount, pushNotif, deductInventory, liveOrders, setLiveOrders, nextOrderNum, setNextOrderNum, openBills, markOrderServed, completeProcess, finalizeBill, orderHistory, addToHistory, transferOrder, mergeOrder, unmergeOrder, menuItems, setMenuItems, menuCategories, setMenuCategories, inventoryItems, setInventoryItems, customers, createCustomer, updateCustomer, deleteCustomer, recordCustomerSale, clockRecords, clockIn, clockOut, isClockedIn, othRecords, addOthRecords }}>
+    <AppContext.Provider value={{ user, login, logout, lang, setLang, theme, setTheme, company, setCompany, users, createUser, approveUser, deactivateUser, updateUser, deleteUser, notifications, markAllRead, markNotifRead, unreadCount, pushNotif, deductInventory, liveOrders, setLiveOrders, nextOrderNum, setNextOrderNum, openBills, markOrderServed, completeProcess, finalizeBill, orderHistory, addToHistory, transferOrder, mergeOrder, unmergeOrder, menuItems, setMenuItems, menuCategories, setMenuCategories, inventoryItems, setInventoryItems, customers, createCustomer, updateCustomer, deleteCustomer, recordCustomerSale, clockRecords, clockIn, clockOut, isClockedIn, othRecords, addOthRecords, navPermissions, setNavPermissions }}>
       {children}
     </AppContext.Provider>
   )
