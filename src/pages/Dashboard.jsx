@@ -1174,8 +1174,8 @@ export function Tables({ navTo, setOrderContext }) {
 
       {/* ── Reservation History Modal ───────────────────────────────── */}
       {showHistoryModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowHistoryModal(false)}>
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowHistoryModal(false)}>
+          <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg overflow-hidden flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40">
               <div>
                 <div className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-0.5">Management View</div>
@@ -2198,8 +2198,8 @@ export function Tables({ navTo, setOrderContext }) {
 
       {/* ── Archived Tables Modal ── */}
       {showArchivedModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3" onClick={() => setShowArchivedModal(false)}>
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md max-h-[85vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowArchivedModal(false)}>
+          <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md max-h-[85vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700 flex-shrink-0">
               <div>
                 <h3 className="text-base font-extrabold text-gray-900 dark:text-white">🗄 Archived Tables</h3>
@@ -2274,8 +2274,8 @@ export function Tables({ navTo, setOrderContext }) {
         }
 
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3" onClick={() => setShowTableRecordsModal(false)}>
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[92vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowTableRecordsModal(false)}>
+            <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg max-h-[92vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
               {/* Header */}
               <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700 flex-shrink-0">
                 <div>
@@ -2500,6 +2500,7 @@ export function Orders({ navTo, orderContext, setOrderContext }) {
   const [newItems, setNewItems] = useState([])
   const [cat, setCat] = useState('cat1')
   const [notes, setNotes] = useState('')
+  const [mobileOrderTab, setMobileOrderTab] = useState('menu')
 
   // ── Item modifier modal ──────────────────────────────────────────────────────
   const [itemModal, setItemModal] = useState(null)
@@ -2852,9 +2853,23 @@ export function Orders({ navTo, orderContext, setOrderContext }) {
     })()}
 
     {/* ── Order entry form ──────────────────────────────────────────────────── */}
+    {/* Mobile tab switcher */}
+    <div className="flex gap-2 mb-3 md:hidden">
+      <button
+        onClick={() => setMobileOrderTab('menu')}
+        className={`flex-1 py-2.5 rounded-xl text-sm font-bold border-2 transition-all ${mobileOrderTab === 'menu' ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300'}`}
+      >Menu</button>
+      <button
+        onClick={() => setMobileOrderTab('order')}
+        className={`flex-1 py-2.5 rounded-xl text-sm font-bold border-2 transition-all relative ${mobileOrderTab === 'order' ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300'}`}
+      >
+        Order{newItems.length > 0 ? ` (${newItems.reduce((s,i)=>s+i.qty,0)})` : ''}
+      </button>
+    </div>
+
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {/* Menu side */}
-      <div>
+      <div className={mobileOrderTab !== 'menu' ? 'hidden md:block' : ''}>
         <Card className="mb-4">
           <div className="flex items-center justify-between mb-3">
             <div>
@@ -2897,7 +2912,7 @@ export function Orders({ navTo, orderContext, setOrderContext }) {
       </div>
 
       {/* Order side */}
-      <div className="space-y-3">
+      <div className={`space-y-3 ${mobileOrderTab !== 'order' ? 'hidden md:block' : ''}`}>
 
         {/* Allergy / Notes warning for existing orders */}
         {isAddingToExisting && existingOrder?.notes && (
@@ -4407,8 +4422,8 @@ export function Billing({ orderContext }) {
       }
 
       return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3" onClick={closeSplit}>
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[94vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm" onClick={closeSplit}>
+          <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg max-h-[92vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700 flex-shrink-0">
               <div>
                 <h3 className="text-base font-extrabold text-gray-900 dark:text-white">✂ Split Bill</h3>
@@ -5927,13 +5942,18 @@ export function History() {
         </div>
 
         {/* Table */}
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto -mx-1 px-1">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 dark:border-gray-700">
-                {['Date & Time','Order #','Table','Waiter','Cashier','Items','Method','Total'].map(h => (
-                  <th key={h} className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wide pb-2 pr-4 last:pr-0">{h}</th>
-                ))}
+                <th className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wide pb-2 pr-3">Date</th>
+                <th className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wide pb-2 pr-3">Order #</th>
+                <th className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wide pb-2 pr-3">Table</th>
+                <th className="hidden sm:table-cell text-left text-xs font-semibold text-gray-400 uppercase tracking-wide pb-2 pr-3">Waiter</th>
+                <th className="hidden md:table-cell text-left text-xs font-semibold text-gray-400 uppercase tracking-wide pb-2 pr-3">Cashier</th>
+                <th className="hidden sm:table-cell text-left text-xs font-semibold text-gray-400 uppercase tracking-wide pb-2 pr-3">Items</th>
+                <th className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wide pb-2 pr-3">Method</th>
+                <th className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wide pb-2">Total</th>
               </tr>
             </thead>
             <tbody>
@@ -5950,23 +5970,23 @@ export function History() {
                       onClick={() => setExpandedId(isExpanded ? null : r.id)}
                       className="border-b border-gray-50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors"
                     >
-                      <td className="py-2.5 pr-4">
-                        <div className="text-xs font-medium text-gray-700 dark:text-gray-300">{d.toLocaleDateString()}</div>
+                      <td className="py-2.5 pr-3">
+                        <div className="text-xs font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">{d.toLocaleDateString('en-MT',{day:'2-digit',month:'short'})}</div>
                         <div className="text-xs text-gray-400">{d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
                       </td>
-                      <td className="py-2.5 pr-4 font-bold text-gray-800 dark:text-gray-200">#{r.order_number}</td>
-                      <td className="py-2.5 pr-4 text-gray-700 dark:text-gray-300">{r.table_label}</td>
-                      <td className="py-2.5 pr-4 text-gray-600 dark:text-gray-400">{r.waiter}</td>
-                      <td className="py-2.5 pr-4 text-gray-600 dark:text-gray-400">{r.cashier}</td>
-                      <td className="py-2.5 pr-4 text-gray-600 dark:text-gray-400">{r.items.length} item{r.items.length !== 1 ? 's' : ''}</td>
-                      <td className="py-2.5 pr-4">
+                      <td className="py-2.5 pr-3 font-bold text-gray-800 dark:text-gray-200 whitespace-nowrap">#{r.order_number}</td>
+                      <td className="py-2.5 pr-3 text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">{r.table_label}</td>
+                      <td className="hidden sm:table-cell py-2.5 pr-3 text-xs text-gray-600 dark:text-gray-400">{r.waiter}</td>
+                      <td className="hidden md:table-cell py-2.5 pr-3 text-xs text-gray-600 dark:text-gray-400">{r.cashier}</td>
+                      <td className="hidden sm:table-cell py-2.5 pr-3 text-xs text-gray-600 dark:text-gray-400">{r.items.length} item{r.items.length !== 1 ? 's' : ''}</td>
+                      <td className="py-2.5 pr-3">
                         <Badge color={methodColor[r.pay_method] || 'gray'}>{methodLabel[r.pay_method] || r.pay_method}</Badge>
                       </td>
-                      <td className="py-2.5 font-extrabold text-indigo-600 dark:text-indigo-400">€{r.total.toFixed(2)}</td>
+                      <td className="py-2.5 font-extrabold text-indigo-600 dark:text-indigo-400 whitespace-nowrap">€{r.total.toFixed(2)}</td>
                     </tr>
                     {isExpanded && (
                       <tr key={`${r.id}-detail`} className="bg-gray-50 dark:bg-gray-800/60">
-                        <td colSpan={8} className="px-4 py-3">
+                        <td colSpan={8} className="px-3 py-3">
                           <div className="grid sm:grid-cols-2 gap-4">
                             {/* Items */}
                             <div>
