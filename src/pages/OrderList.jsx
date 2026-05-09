@@ -68,6 +68,22 @@ function TableLabel({ order }) {
   )
 }
 
+function TakeawayLabel({ order }) {
+  return (
+    <span className="flex items-center gap-1.5">
+      <span className="text-base">🥡</span>
+      <div>
+        <div className="text-xs font-semibold text-gray-800 dark:text-gray-100">
+          {order.customer_name || 'Walk-in'}
+        </div>
+        {order.customer_name && (
+          <div className="text-[10px] text-gray-400">Counter / Takeaway</div>
+        )}
+      </div>
+    </span>
+  )
+}
+
 // ── Item modifier / add modal ──────────────────────────────────────────────────
 const OTH_REASONS = ['Incorrect Order', 'Customer Complaint', 'VIP / Loyalty', 'Quality Issue', 'Manager Decision', 'Other']
 
@@ -267,12 +283,17 @@ function OrderDetailModal({ order, onClose, navTo, tab }) {
             </div>
             <div>
               <div className="text-sm font-extrabold text-gray-900 dark:text-white flex items-center gap-1.5">
-                <Utensils size={14} className="text-gray-400" />Table {order.table_number || 0}
-                {order.merged_from_number && (
-                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[10px] font-bold ml-1">
-                    <GitMerge size={9} />+T{order.merged_from_number}
-                  </span>
-                )}
+                {order.order_type === 'takeaway'
+                  ? <><span className="text-base">🥡</span>{order.customer_name || 'Walk-in'}</>
+                  : <>
+                      <Utensils size={14} className="text-gray-400" />Table {order.table_number || 0}
+                      {order.merged_from_number && (
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[10px] font-bold ml-1">
+                          <GitMerge size={9} />+T{order.merged_from_number}
+                        </span>
+                      )}
+                    </>
+                }
               </div>
               <span className={`inline-block mt-0.5 px-2 py-0.5 rounded-full text-[11px] font-bold ${cfg.bg} ${cfg.text}`}>
                 {cfg.label || order.status}
@@ -668,6 +689,7 @@ export default function OrderList({ navTo }) {
   const [search, setSearch] = useState('')
   const [viewOrder, setViewOrder] = useState(null)
   const [showAllPaid, setShowAllPaid] = useState(false)
+  const [showAllTakeaway, setShowAllTakeaway] = useState(false)
   const [tab, setTab] = useState(() => {
     if (isCook)      return 'kitchen'
     if (isBartender) return 'bar'
@@ -692,10 +714,20 @@ export default function OrderList({ navTo }) {
     markCooking(order.id)
   }
 
-  const baseOrders = (isWaiter
+  const allActive = (isWaiter
     ? liveOrders.filter(o => o.waiter?.toLowerCase().includes(user.full_name?.split(' ')[0]?.toLowerCase() || ''))
     : [...liveOrders]
   ).filter(o => ACTIVE_STATUSES.includes(o.status))
+
+  // Dine-in orders (excludes takeaway — shown in dedicated section below)
+  const baseOrders = allActive.filter(o => o.order_type !== 'takeaway')
+
+  // Takeaway orders — active (non-paid) for the dedicated section
+  const takeawayOrders = allActive
+    .filter(o => o.order_type === 'takeaway')
+    .sort((a, b) => (a.order_number || 0) - (b.order_number || 0))
+  const takeawayActive = takeawayOrders.filter(o => o.status !== 'paid')
+  const takeawayPaid   = takeawayOrders.filter(o => o.status === 'paid')
 
   const tabOrders = baseOrders.filter(o => {
     if (tab === 'kitchen') return o.items.some(i => (i.station || 'kitchen') !== 'bar')
@@ -707,21 +739,20 @@ export default function OrderList({ navTo }) {
     const q = search.trim().toLowerCase()
     return o.status !== 'paid' && (!q || String(o.order_number).includes(q) || String(o.table_number).includes(q) || o.waiter?.toLowerCase().includes(q) || o.items.some(i => (i.name || i.name_en || '').toLowerCase().includes(q)))
   }).sort((a, b) => {
-    // kitchen/bar: oldest first (most urgent at top)
     if (tab !== 'all') return (a.order_number || 0) - (b.order_number || 0)
     return (b.order_number || 0) - (a.order_number || 0)
   })
 
   const paidOrders = baseOrders.filter(o => o.status === 'paid').sort((a, b) => (b.order_number || 0) - (a.order_number || 0))
 
-  // Stats
+  // Stats (dine-in only)
   const counts = { paid: 0, unpaid: 0 }
   baseOrders.forEach(o => { if (o.status === 'paid') counts.paid++; else counts.unpaid++ })
 
   const tabCounts = {
-    all:     baseOrders.length,
-    kitchen: baseOrders.filter(o => o.items.some(i => (i.station || 'kitchen') !== 'bar')).length,
-    bar:     baseOrders.filter(o => o.items.some(i => i.station === 'bar')).length,
+    all:     baseOrders.filter(o => o.status !== 'paid').length,
+    kitchen: baseOrders.filter(o => o.status !== 'paid' && o.items.some(i => (i.station || 'kitchen') !== 'bar')).length,
+    bar:     baseOrders.filter(o => o.status !== 'paid' && o.items.some(i => i.station === 'bar')).length,
   }
 
   return (
@@ -729,19 +760,26 @@ export default function OrderList({ navTo }) {
       {viewOrder && <OrderDetailModal order={viewOrder} onClose={() => setViewOrder(null)} navTo={navTo} tab={tab} />}
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-3 gap-3">
         {[
-          { key:'unpaid', label:'Not Paid', Icon: AlertTriangle, iconColor:'text-red-500',   bg:'bg-red-50 dark:bg-red-900/20',     border:'border-red-200 dark:border-red-800/40' },
-          { key:'paid',   label:'Paid',     Icon: CheckCircle2,  iconColor:'text-green-500', bg:'bg-green-50 dark:bg-green-900/20', border:'border-green-200 dark:border-green-800/40' },
+          { key:'unpaid', label:'Dine-in Active', Icon: AlertTriangle, iconColor:'text-red-500',   bg:'bg-red-50 dark:bg-red-900/20',     border:'border-red-200 dark:border-red-800/40' },
+          { key:'paid',   label:'Dine-in Paid',   Icon: CheckCircle2,  iconColor:'text-green-500', bg:'bg-green-50 dark:bg-green-900/20', border:'border-green-200 dark:border-green-800/40' },
         ].map(({ key, label, Icon, iconColor, bg, border }) => (
-          <div key={key} className={`${bg} border ${border} rounded-2xl px-4 py-3 flex items-center gap-3`}>
-            <div className={`flex-shrink-0 ${iconColor}`}><Icon size={20} /></div>
+          <div key={key} className={`${bg} border ${border} rounded-2xl px-3 py-3 flex items-center gap-2.5`}>
+            <div className={`flex-shrink-0 ${iconColor}`}><Icon size={18} /></div>
             <div>
               <div className="text-2xl font-extrabold text-gray-900 dark:text-white leading-none">{counts[key]}</div>
-              <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{label}</div>
+              <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">{label}</div>
             </div>
           </div>
         ))}
+        <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800/40 rounded-2xl px-3 py-3 flex items-center gap-2.5">
+          <span className="text-lg flex-shrink-0">🥡</span>
+          <div>
+            <div className="text-2xl font-extrabold text-gray-900 dark:text-white leading-none">{takeawayActive.length}</div>
+            <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">Takeaway Active</div>
+          </div>
+        </div>
       </div>
 
       {/* Sub-nav + search */}
@@ -956,6 +994,148 @@ export default function OrderList({ navTo }) {
             </table>
           </div>
         </>
+      )}
+
+      {/* ── Takeaway Orders ─────────────────────────────────────────────────── */}
+      {takeawayOrders.length > 0 && (
+        <div className="mt-2">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-base">🥡</span>
+            <span className="text-sm font-bold text-gray-700 dark:text-gray-300">Takeaway Orders</span>
+            {takeawayActive.length > 0 && (
+              <span className="text-xs font-bold bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 px-2 py-0.5 rounded-full">{takeawayActive.length} active</span>
+            )}
+            {takeawayPaid.length > 0 && (
+              <span className="text-xs font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full">{takeawayPaid.length} paid</span>
+            )}
+          </div>
+
+          {/* Mobile cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 lg:hidden">
+            {(showAllTakeaway ? takeawayOrders : takeawayOrders.slice(0, 4)).map(order => {
+              const isPaid = order.status === 'paid'
+              return (
+                <div key={order.id} className={`bg-white dark:bg-gray-800 rounded-2xl border overflow-hidden transition-all ${isPaid ? 'opacity-60 border-gray-100 dark:border-gray-700/40' : 'border-orange-200 dark:border-orange-800/40'}`}>
+                  <div className={`h-1 w-full ${isPaid ? 'bg-green-400' : 'bg-orange-400'}`} />
+                  <div className="p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-base font-extrabold text-orange-600 dark:text-orange-400">#{order.order_number}</span>
+                        {isPaid
+                          ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"><span className="w-1.5 h-1.5 rounded-full bg-green-400" />Paid</span>
+                          : <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400"><span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse" />Active</span>
+                        }
+                      </div>
+                      <ElapsedBadge timeStr={order.created_at} />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <TakeawayLabel order={order} />
+                      <span className="text-xs text-gray-400">{order.waiter || '—'}</span>
+                    </div>
+                    <div className="bg-orange-50 dark:bg-orange-900/10 border border-orange-100 dark:border-orange-900/30 rounded-xl p-3 space-y-1.5">
+                      {order.items.slice(0, 3).map((item, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <span className="inline-flex items-center justify-center w-5 h-5 rounded-md text-[11px] font-extrabold flex-shrink-0 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-300">{item.qty}</span>
+                          <span className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate">{item.name || item.name_en}</span>
+                          {item.note && <MessageSquare size={10} className="text-amber-500 flex-shrink-0" />}
+                        </div>
+                      ))}
+                      {order.items.length > 3 && <div className="text-[11px] text-gray-400 pl-7">+{order.items.length - 3} more</div>}
+                    </div>
+                    <div className="flex gap-2 pt-1">
+                      <button onClick={() => setViewOrder(order)} className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 hover:border-orange-300 transition-all">
+                        <Eye size={13} />View
+                      </button>
+                      {!isPaid && (
+                        <button onClick={() => navTo('billing', { preloadOrder: order })} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-800/60 hover:bg-orange-100 transition-all">
+                          Go to Billing
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden lg:block bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700/60 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 dark:border-gray-700 bg-orange-50/60 dark:bg-orange-900/10">
+                  <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider w-16">#</th>
+                  <th className="text-left px-4 py-3.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Customer</th>
+                  <th className="text-left px-4 py-3.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Items</th>
+                  <th className="text-left px-4 py-3.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Staff</th>
+                  <th className="text-left px-4 py-3.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Waiting</th>
+                  <th className="text-left px-4 py-3.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                  <th className="text-center px-4 py-3.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50 dark:divide-gray-700/40">
+                {(showAllTakeaway ? takeawayOrders : takeawayOrders.slice(0, 8)).map(order => {
+                  const isPaid = order.status === 'paid'
+                  return (
+                    <tr key={order.id} className={`transition-colors ${isPaid ? 'opacity-60 hover:bg-gray-50/50 dark:hover:bg-gray-700/10' : 'hover:bg-orange-50/40 dark:hover:bg-orange-900/5'}`}>
+                      <td className="px-5 py-3.5">
+                        <span className="font-extrabold text-orange-600 dark:text-orange-400">#{order.order_number}</span>
+                      </td>
+                      <td className="px-4 py-3.5"><TakeawayLabel order={order} /></td>
+                      <td className="px-4 py-3.5 max-w-xs">
+                        <div className="flex flex-col gap-1">
+                          {order.items.slice(0, 2).map((item, i) => (
+                            <div key={i} className="flex items-center gap-1.5">
+                              <span className="inline-flex items-center justify-center w-5 h-5 rounded-md text-[10px] font-extrabold flex-shrink-0 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-300">{item.qty}</span>
+                              <span className="text-xs text-gray-700 dark:text-gray-300 truncate max-w-[140px]">{item.name || item.name_en}</span>
+                              {item.note && <MessageSquare size={10} className="text-amber-500 flex-shrink-0" />}
+                            </div>
+                          ))}
+                          {order.items.length > 2 && <span className="text-[11px] text-gray-400 pl-6.5">+{order.items.length - 2} more</span>}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3.5 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{order.waiter || '—'}</td>
+                      <td className="px-4 py-3.5 whitespace-nowrap"><ElapsedBadge timeStr={order.created_at} /></td>
+                      <td className="px-4 py-3.5 whitespace-nowrap">
+                        {isPaid
+                          ? <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"><span className="w-1.5 h-1.5 rounded-full bg-green-400" />Paid</span>
+                          : <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400"><span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse" />Active</span>
+                        }
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button onClick={() => setViewOrder(order)} title="View detail" className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 hover:border-orange-300 hover:text-orange-600 transition-all">
+                            <Eye size={12} />View
+                          </button>
+                          {!isPaid && (
+                            <button onClick={() => navTo('billing', { preloadOrder: order })} title="Go to Billing" className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-800/60 hover:bg-orange-100 transition-all">
+                              Billing
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+            {takeawayOrders.length > 8 && (
+              <div className="border-t border-gray-100 dark:border-gray-700 px-4 py-2.5 text-center">
+                <button onClick={() => setShowAllTakeaway(v => !v)} className="text-xs font-bold text-orange-500 dark:text-orange-400 hover:underline">
+                  {showAllTakeaway ? 'Show less' : `Show all ${takeawayOrders.length} takeaway orders`}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Mobile show-more */}
+          {takeawayOrders.length > 4 && (
+            <div className="lg:hidden text-center mt-2">
+              <button onClick={() => setShowAllTakeaway(v => !v)} className="text-xs font-bold text-orange-500 dark:text-orange-400 hover:underline">
+                {showAllTakeaway ? 'Show less' : `Show all ${takeawayOrders.length} takeaway orders`}
+              </button>
+            </div>
+          )}
+        </div>
       )}
 
       {/* Paid Orders */}

@@ -798,6 +798,10 @@ export function Tables({ navTo, setOrderContext }) {
   const [deleteTableConfirm, setDeleteTableConfirm] = useState(null) // table to delete
   const [deleteReason, setDeleteReason] = useState('')
   const [showArchivedModal, setShowArchivedModal] = useState(false)
+  // ── Takeaway ───────────────────────────────────────────────────────────────
+  const [showTakeawayModal, setShowTakeawayModal] = useState(false)
+  const [taName, setTaName] = useState('')
+  const [taGuests, setTaGuests] = useState(1)
   // ── Table Records & History ────────────────────────────────────────────────
   const [tableRecords, setTableRecords] = useState([])
   const [tableHistory, setTableHistory] = useState([])
@@ -1034,7 +1038,21 @@ export function Tables({ navTo, setOrderContext }) {
       tableNumber: order.table_number,
       isTakeaway: order.order_type === 'takeaway',
       existingOrder: order,
+      customerName: order.customer_name || null,
     })
+    navTo('orders')
+  }
+
+  function startTakeaway() {
+    setOrderContext({
+      tableId: null,
+      tableNumber: null,
+      isTakeaway: true,
+      existingOrder: null,
+      guests: { adults: taGuests, children: 0 },
+      customerName: taName.trim() || null,
+    })
+    setShowTakeawayModal(false)
     navTo('orders')
   }
 
@@ -1231,6 +1249,93 @@ export function Tables({ navTo, setOrderContext }) {
           </div>
         </div>
       )}
+
+      {/* ── Takeaway Modal ────────────────────────────────────────── */}
+      {showTakeawayModal && (() => {
+        const activeTakeaways = liveOrders.filter(o => o.order_type === 'takeaway' && !['paid','voided'].includes(o.status))
+        return (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowTakeawayModal(false)}>
+            <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md overflow-hidden" onClick={e => e.stopPropagation()}>
+
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700 bg-orange-50 dark:bg-orange-900/20">
+                <div>
+                  <div className="text-xs font-semibold text-orange-400 uppercase tracking-widest mb-0.5">Counter / Walk-in</div>
+                  <div className="text-base font-extrabold text-gray-900 dark:text-white">🥡 New Takeaway Order</div>
+                </div>
+                <button onClick={() => setShowTakeawayModal(false)} className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors font-bold">✕</button>
+              </div>
+
+              <div className="p-5 space-y-5">
+
+                {/* Active takeaway orders */}
+                {activeTakeaways.length > 0 && (
+                  <div>
+                    <div className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Active Orders — tap to continue</div>
+                    <div className="space-y-2">
+                      {activeTakeaways.map(o => (
+                        <button
+                          key={o.id}
+                          onClick={() => { addToOrder(o); setShowTakeawayModal(false) }}
+                          className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 hover:bg-orange-100 dark:hover:bg-orange-900/40 transition-all text-left group"
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className="text-lg">🥡</span>
+                            <div>
+                              <div className="text-sm font-bold text-gray-900 dark:text-white">
+                                #{o.order_number}{o.customer_name ? ` · ${o.customer_name}` : ''}
+                              </div>
+                              <div className="text-xs text-gray-400">{o.items.length} item{o.items.length !== 1 ? 's' : ''} · {o.created_at} · {o.waiter}</div>
+                            </div>
+                          </div>
+                          <span className="text-xs font-bold text-orange-500 group-hover:translate-x-0.5 transition-transform">Continue →</span>
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-3 mt-4">
+                      <div className="flex-1 h-px bg-gray-100 dark:bg-gray-700" />
+                      <span className="text-xs text-gray-400 font-medium">or start new</span>
+                      <div className="flex-1 h-px bg-gray-100 dark:bg-gray-700" />
+                    </div>
+                  </div>
+                )}
+
+                {/* Customer name */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">Customer Name <span className="font-normal normal-case text-gray-400">(optional)</span></label>
+                  <input
+                    type="text"
+                    value={taName}
+                    onChange={e => setTaName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && startTakeaway()}
+                    placeholder="e.g. John, Maria…"
+                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent transition"
+                    autoFocus
+                  />
+                </div>
+
+                {/* Guest count */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">Guests</label>
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => setTaGuests(g => Math.max(1, g - 1))} className="w-9 h-9 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 font-bold text-lg flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">−</button>
+                    <span className="text-xl font-bold text-gray-900 dark:text-white w-8 text-center">{taGuests}</span>
+                    <button onClick={() => setTaGuests(g => g + 1)} className="w-9 h-9 rounded-xl bg-orange-100 dark:bg-orange-900/40 text-orange-600 dark:text-orange-300 font-bold text-lg flex items-center justify-center hover:bg-orange-200 transition-colors">+</button>
+                  </div>
+                </div>
+
+                {/* Action button */}
+                <button
+                  onClick={startTakeaway}
+                  className="w-full py-3 rounded-xl bg-orange-500 hover:bg-orange-600 active:scale-[0.98] text-white font-extrabold text-sm transition-all shadow-sm flex items-center justify-center gap-2"
+                >
+                  🥡 Start Order{taName.trim() ? ` for ${taName.trim()}` : ''}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* ── Today's Bookings Modal ─────────────────────────────────── */}
       {showTodayBookings && (() => {
@@ -1872,6 +1977,14 @@ export function Tables({ navTo, setOrderContext }) {
             <p className="text-xs text-gray-400 mt-0.5">Tap a table to open or add to an order</p>
           </div>
           <div className="flex flex-wrap gap-2 items-center">
+            {can(user, 'createOrder') && (
+              <button
+                onClick={() => { setTaName(''); setTaGuests(1); setShowTakeawayModal(true) }}
+                className="text-xs font-bold px-2.5 py-1 rounded-lg bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 hover:bg-orange-200 dark:hover:bg-orange-900/50 transition-colors flex items-center gap-1"
+              >
+                🥡 Takeaway
+              </button>
+            )}
             {can(user, 'addTable') && (
               <button
                 onClick={() => { setAddTableLabel(''); setAddTableChairs(4); setAddTableFloor('Ground'); setShowAddTableModal(true) }}
@@ -1921,6 +2034,14 @@ export function Tables({ navTo, setOrderContext }) {
             <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400">
               {openBills.length} Bill Ready
             </span>
+            {liveOrders.filter(o => o.order_type === 'takeaway' && !['paid','voided'].includes(o.status)).length > 0 && (
+              <button
+                onClick={() => { setTaName(''); setTaGuests(1); setShowTakeawayModal(true) }}
+                className="text-xs font-bold px-2.5 py-1 rounded-lg bg-orange-500 text-white hover:bg-orange-600 transition-colors flex items-center gap-1"
+              >
+                🥡 {liveOrders.filter(o => o.order_type === 'takeaway' && !['paid','voided'].includes(o.status)).length} Active
+              </button>
+            )}
             {tables.some(t=>t.status==='merged') && (
               <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">
                 {tables.filter(t=>t.status==='merged').length} Merged
@@ -2772,7 +2893,9 @@ export function Orders({ navTo, orderContext, setOrderContext }) {
   const existingItems = existingOrder?.items || []
   const round = isAddingToExisting ? (existingOrder.rounds ?? 1) + 1 : 1
 
-  const label = orderContext?.isTakeaway ? 'Takeaway' : orderContext?.tableNumber ? `Table ${orderContext.tableNumber}` : 'New Order'
+  const label = orderContext?.isTakeaway
+    ? (orderContext?.customerName ? `Takeaway · ${orderContext.customerName}` : 'Takeaway')
+    : orderContext?.tableNumber ? `Table ${orderContext.tableNumber}` : 'New Order'
   const catItems = menuItems.filter(m => m.category_id === cat && m.available)
 
   const existingSubtotal = existingItems.reduce((a, i) => a + i.price * i.qty, 0)
@@ -2832,6 +2955,7 @@ export function Orders({ navTo, orderContext, setOrderContext }) {
         table_id:     orderContext?.tableId   || null,
         table_number: orderContext?.tableNumber || null,
         order_type:   orderContext?.isTakeaway ? 'takeaway' : 'dinein',
+        customer_name: orderContext?.customerName || null,
         status: 'cooking',
         waiter: user?.full_name || 'Staff',
         notes,
@@ -3033,6 +3157,36 @@ export function Orders({ navTo, orderContext, setOrderContext }) {
         </div>
       )
     })()}
+
+    {/* ── Context Bar ───────────────────────────────────────────────────────── */}
+    {orderContext && (
+      <div className="flex items-center gap-3 mb-4 px-4 py-2.5 rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm">
+        <button
+          onClick={() => navTo('tables')}
+          className="flex items-center gap-1.5 text-sm font-bold text-gray-400 dark:text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all group flex-shrink-0"
+        >
+          <span className="text-base transition-transform group-hover:-translate-x-0.5 inline-block">←</span>
+          <span>Tables</span>
+        </button>
+        <span className="text-gray-200 dark:text-gray-700 select-none">/</span>
+        <div className="flex-1 flex items-center gap-2 min-w-0 flex-wrap">
+          <span className="text-sm font-extrabold text-gray-900 dark:text-white truncate">{label}</span>
+          {isAddingToExisting && (
+            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 flex-shrink-0">
+              Round {round}
+            </span>
+          )}
+          {orderContext.guests && (orderContext.guests.adults + orderContext.guests.children) > 0 && (
+            <span className="text-xs text-gray-400 dark:text-gray-500 flex-shrink-0">
+              · {orderContext.guests.adults + orderContext.guests.children} guest{(orderContext.guests.adults + orderContext.guests.children) !== 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
+        <span className={`text-[11px] font-bold px-2.5 py-1 rounded-lg flex-shrink-0 ${orderContext.isTakeaway ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400' : 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'}`}>
+          {orderContext.isTakeaway ? 'Takeaway' : 'Dine-in'}
+        </span>
+      </div>
+    )}
 
     {/* ── Order entry form ──────────────────────────────────────────────────── */}
     {/* Mobile tab switcher */}
@@ -3629,7 +3783,7 @@ export function Bar() {
 
 // ─── Billing ──────────────────────────────────────────────────────────────────
 export function Billing({ orderContext }) {
-  const { lang, user, company, liveOrders, openBills, finalizeBill, addToHistory, menuItems, menuCategories, addOthRecords } = useApp()
+  const { lang, user, company, liveOrders, setLiveOrders, openBills, finalizeBill, addToHistory, menuItems, menuCategories, addOthRecords } = useApp()
   const vatRate = company.vat_rate / 100
 
   // ── Cart state ──────────────────────────────────────────────────────────────
@@ -3705,6 +3859,7 @@ export function Billing({ orderContext }) {
 
   // ── Open bill tracking ──────────────────────────────────────────────────────
   const [loadedBillId, setLoadedBillId] = useState(null)    // which open bill is loaded
+  const [preloadOrderId, setPreloadOrderId] = useState(null) // liveOrders id when loaded from takeaway
   const [billItems, setBillItems] = useState([])             // items from the loaded bill (read-only display)
   const [preloadLabel, setPreloadLabel] = useState('')      // label when loaded from OrderList
 
@@ -3752,6 +3907,33 @@ export function Billing({ orderContext }) {
     setLoadedBillId(bill.id)
   }
 
+  // ── Load a takeaway (or any) liveOrder directly into billing ───────────────
+  function loadTakeawayOrder(order) {
+    setBillItems(order.items.map(i => ({
+      id: i.id || `bill-${i.name || i.name_en}-${Math.random()}`,
+      name_en: i.name || i.name_en,
+      price: i.price,
+      qty: i.qty,
+      discount_pct: 0,
+      fromBill: true,
+      round: i.round || 1,
+    })))
+    const preComps = {}
+    order.items.forEach((item, idx) => {
+      if (item.comped) {
+        preComps[itemKey('bill', idx)] = { reason: item.comped_reason || 'Pre-flagged', approvedBy: '—' }
+      }
+    })
+    setCompItems(preComps)
+    setCart([])
+    setLoadedBillId(null)
+    setPreloadOrderId(order.id)
+    setPreloadLabel(order.order_type === 'takeaway'
+      ? `🥡 ${order.customer_name || 'Walk-in'} — #${order.order_number}`
+      : `🍽️ Table ${order.table_number} — #${order.order_number}`)
+    setMobileBillTab('cart')
+  }
+
   // ── Preload order when navigated from OrderList ─────────────────────────────
   useEffect(() => {
     const order = orderContext?.preloadOrder
@@ -3765,7 +3947,6 @@ export function Billing({ orderContext }) {
       fromBill: true,
       round: i.round || 1,
     })))
-    // Auto-apply any pre-flagged comps from the order into billing
     const preComps = {}
     order.items.forEach((item, idx) => {
       if (item.comped) {
@@ -3775,13 +3956,15 @@ export function Billing({ orderContext }) {
     setCompItems(preComps)
     setCart([])
     setLoadedBillId(null)
-    setPreloadLabel(order.order_type === 'takeaway' ? `🥡 Takeaway — #${order.order_number}` : `🍽️ Table ${order.table_number} — #${order.order_number}`)
+    setPreloadOrderId(order.id)
+    setPreloadLabel(order.order_type === 'takeaway' ? `🥡 ${order.customer_name || 'Walk-in'} — #${order.order_number}` : `🍽️ Table ${order.table_number} — #${order.order_number}`)
   }, [orderContext?.preloadOrder])
 
   function clearLoadedBill() {
     setBillItems([])
     setCart([])
     setLoadedBillId(null)
+    setPreloadOrderId(null)
     setPayMethod(null)
     setCashGiven(0)
     setBillNote('')
@@ -3881,6 +4064,10 @@ export function Billing({ orderContext }) {
     const bill = loadedBillId ? openBills.find(b => b.id === loadedBillId) : null
     const paidAt = new Date()
     if (loadedBillId) finalizeBill(loadedBillId)
+    if (preloadOrderId) {
+      setLiveOrders(prev => prev.map(o => o.id === preloadOrderId ? { ...o, status: 'paid' } : o))
+      setPreloadOrderId(null)
+    }
 
     // Record comped items to OTH log
     const othEntries = allCartItems
@@ -4042,6 +4229,41 @@ export function Billing({ orderContext }) {
 
       {/* ── LEFT: Product browser ── */}
       <div className={`flex-1 flex flex-col min-w-0 gap-3 min-h-0 ${mobileBillTab !== 'menu' ? 'hidden lg:flex' : ''}`}>
+
+        {/* Active Takeaway quick-load — only when bill is empty */}
+        {billItems.length === 0 && cart.length === 0 && (() => {
+          const activeTakeaways = liveOrders.filter(o => o.order_type === 'takeaway' && !['paid','voided'].includes(o.status))
+          if (!activeTakeaways.length) return null
+          return (
+            <div className="rounded-2xl border border-orange-200 dark:border-orange-800/50 bg-orange-50 dark:bg-orange-900/10 p-3">
+              <div className="flex items-center gap-1.5 mb-2">
+                <span className="text-sm">🥡</span>
+                <span className="text-xs font-bold text-orange-700 dark:text-orange-400 uppercase tracking-wider">Active Takeaway — tap to load</span>
+                <span className="ml-auto text-[11px] font-bold bg-orange-200 dark:bg-orange-800/50 text-orange-700 dark:text-orange-300 px-1.5 py-0.5 rounded-full">{activeTakeaways.length}</span>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                {activeTakeaways.map(o => (
+                  <button
+                    key={o.id}
+                    onClick={() => loadTakeawayOrder(o)}
+                    className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-white dark:bg-gray-800 border border-orange-200 dark:border-orange-700/60 hover:border-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-all text-left group"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-orange-100 dark:bg-orange-900/40 flex items-center justify-center flex-shrink-0">
+                        <span className="text-sm font-extrabold text-orange-600 dark:text-orange-400">#{o.order_number}</span>
+                      </div>
+                      <div>
+                        <div className="text-sm font-bold text-gray-900 dark:text-white">{o.customer_name || 'Walk-in'}</div>
+                        <div className="text-xs text-gray-400">{o.items.length} item{o.items.length !== 1 ? 's' : ''} · €{o.items.reduce((s, i) => s + i.price * i.qty, 0).toFixed(2)} · {o.created_at}</div>
+                      </div>
+                    </div>
+                    <span className="text-xs font-bold text-orange-500 dark:text-orange-400 group-hover:translate-x-0.5 transition-transform flex-shrink-0">Load →</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )
+        })()}
 
         {/* Search row */}
         <div className="flex gap-2">
@@ -4568,6 +4790,10 @@ export function Billing({ orderContext }) {
         const bill = loadedBillId ? openBills.find(b => b.id === loadedBillId) : null
         const paidAt = new Date()
         if (loadedBillId) finalizeBill(loadedBillId)
+        if (preloadOrderId) {
+          setLiveOrders(prev => prev.map(o => o.id === preloadOrderId ? { ...o, status: 'paid' } : o))
+          setPreloadOrderId(null)
+        }
         addToHistory({
           id: `hist_${Date.now()}`,
           order_number: orderNum,
