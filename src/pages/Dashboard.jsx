@@ -765,7 +765,7 @@ function ActiveOrdersCard({ liveOrders, setLiveOrders, setReprintModal, setOrder
 
 // ─── Tables ───────────────────────────────────────────────────────────────────
 export function Tables({ navTo, setOrderContext }) {
-  const { liveOrders, setLiveOrders, users, company, openBills, transferOrder, mergeOrder, unmergeOrder, othRecords } = useApp()
+  const { user, liveOrders, setLiveOrders, users, company, openBills, transferOrder, mergeOrder, unmergeOrder, othRecords } = useApp()
   const [tables, setTables] = useState(TABLES)
   const [assignModal, setAssignModal] = useState(null)    // table object
   const [guestModal, setGuestModal] = useState(null)      // { table, mode: 'open'|'edit' }
@@ -778,6 +778,14 @@ export function Tables({ navTo, setOrderContext }) {
   const [now, setNow] = useState(Date.now())
   const [showOthModal, setShowOthModal] = useState(false)
   const [othLoading, setOthLoading] = useState(false)
+  const [reservations, setReservations] = useState({})   // { tableId: { name, phone, guests, date, time, notes } }
+  const [reserveModal, setReserveModal] = useState(null) // { table, mode: 'create'|'view' }
+  const [resName, setResName] = useState('')
+  const [resPhone, setResPhone] = useState('')
+  const [resGuests, setResGuests] = useState(2)
+  const [resDate, setResDate] = useState('')
+  const [resTime, setResTime] = useState('')
+  const [resNotes, setResNotes] = useState('')
   const todayStr = new Date().toDateString()
   const todayOthRecords = othRecords.filter(r => new Date(r.created_at).toDateString() === todayStr)
   const todayOthTotal = todayOthRecords.reduce((s, r) => s + Number(r.total_value || 0), 0)
@@ -807,7 +815,9 @@ export function Tables({ navTo, setOrderContext }) {
   }
 
   function selectTable(table) {
-    if (table.status === 'free') {
+    if (table.status === 'reserved') {
+      setReserveModal({ table, mode: 'view' })
+    } else if (table.status === 'free') {
       setGuestAdults(1)
       setGuestChildren(0)
       setGuestModal({ table, mode: 'open' })
@@ -815,6 +825,62 @@ export function Tables({ navTo, setOrderContext }) {
       const existingOrder = liveOrders.find(o => o.table_id === table.id && !['paid'].includes(o.status))
       setActionModal({ table, order: existingOrder })
     }
+  }
+
+  function openReserveCreate(table) {
+    setResName('')
+    setResPhone('')
+    setResGuests(2)
+    setResDate(new Date().toISOString().split('T')[0])
+    setResTime('')
+    setResNotes('')
+    setReserveModal({ table, mode: 'create' })
+  }
+
+  function openReserveEdit(table, res) {
+    setResName(res.name)
+    setResPhone(res.phone || '')
+    setResGuests(res.guests || 2)
+    setResDate(res.date || new Date().toISOString().split('T')[0])
+    setResTime(res.time || '')
+    setResNotes(res.notes || '')
+    setReserveModal({ table, mode: 'edit' })
+  }
+
+  function confirmReservation() {
+    if (!resName.trim() || !resTime) return
+    const table = reserveModal.table
+    const isEdit = reserveModal.mode === 'edit'
+    const existing = reservations[table.id] || {}
+    setReservations(prev => ({
+      ...prev,
+      [table.id]: {
+        ...existing,
+        name: resName.trim(), phone: resPhone.trim(), guests: resGuests, date: resDate, time: resTime, notes: resNotes.trim(),
+        createdAt: isEdit ? existing.createdAt : new Date(),
+        createdBy: isEdit ? existing.createdBy : (user?.full_name || user?.username || 'Staff'),
+        editedAt: isEdit ? new Date() : undefined,
+        editedBy: isEdit ? (user?.full_name || user?.username || 'Staff') : undefined,
+      },
+    }))
+    setTables(prev => prev.map(t => t.id === table.id ? { ...t, status: 'reserved' } : t))
+    setReserveModal(null)
+  }
+
+  function cancelReservation(tableId) {
+    setReservations(prev => { const n = { ...prev }; delete n[tableId]; return n })
+    setTables(prev => prev.map(t => t.id === tableId ? { ...t, status: 'free' } : t))
+    setReserveModal(null)
+  }
+
+  function seatReservation(table) {
+    const res = reservations[table.id]
+    setReservations(prev => { const n = { ...prev }; delete n[table.id]; return n })
+    setTables(prev => prev.map(t => t.id === table.id ? { ...t, status: 'free' } : t))
+    setGuestAdults(Math.max(1, res?.guests || 1))
+    setGuestChildren(0)
+    setGuestModal({ table: { ...table, status: 'free' }, mode: 'open' })
+    setReserveModal(null)
   }
 
 
@@ -869,6 +935,200 @@ export function Tables({ navTo, setOrderContext }) {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+      {/* ── Reserve Table Modal (create / edit) ─────────────────────── */}
+      {(reserveModal?.mode === 'create' || reserveModal?.mode === 'edit') && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setReserveModal(null)}>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700 bg-violet-50 dark:bg-violet-900/20">
+              <div>
+                <div className="text-xs font-semibold text-violet-400 uppercase tracking-widest mb-0.5">Table {reserveModal.table.number}</div>
+                <div className="text-base font-extrabold text-gray-900 dark:text-white">{reserveModal.mode === 'edit' ? 'Edit Reservation' : 'Reserve Table'}</div>
+              </div>
+              <button onClick={() => setReserveModal(null)} className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors font-bold text-base">✕</button>
+            </div>
+            <div className="px-5 py-5 space-y-4">
+              {/* Customer name */}
+              <div>
+                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wide">Customer Name *</label>
+                <input
+                  type="text"
+                  value={resName}
+                  onChange={e => setResName(e.target.value)}
+                  placeholder="e.g. Anna Borg"
+                  className="w-full px-3 py-2.5 rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-semibold text-gray-800 dark:text-gray-200 placeholder-gray-300 focus:outline-none focus:border-violet-500 transition-colors"
+                />
+              </div>
+              {/* Phone */}
+              <div>
+                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wide">Phone Number</label>
+                <input
+                  type="tel"
+                  value={resPhone}
+                  onChange={e => setResPhone(e.target.value)}
+                  placeholder="+356 9900 0000"
+                  className="w-full px-3 py-2.5 rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-semibold text-gray-800 dark:text-gray-200 placeholder-gray-300 focus:outline-none focus:border-violet-500 transition-colors"
+                />
+              </div>
+              {/* Guests */}
+              <div>
+                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wide">Number of Guests *</label>
+                <div className="flex items-center gap-3">
+                  <button onClick={() => setResGuests(n => Math.max(1, n - 1))} className="w-9 h-9 rounded-xl border-2 border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 font-bold text-lg flex items-center justify-center hover:border-violet-400 hover:text-violet-600 transition-all disabled:opacity-30" disabled={resGuests <= 1}>−</button>
+                  <span className="text-2xl font-extrabold text-gray-900 dark:text-white w-8 text-center tabular-nums">{resGuests}</span>
+                  <button onClick={() => setResGuests(n => n + 1)} className="w-9 h-9 rounded-xl border-2 border-violet-500 bg-violet-600 text-white font-bold text-lg flex items-center justify-center hover:bg-violet-700 transition-all">+</button>
+                  <div className="flex gap-1.5 flex-1">
+                    {[1,2,3,4,5,6].map(n => (
+                      <button key={n} onClick={() => setResGuests(n)} className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all ${resGuests === n ? 'bg-violet-600 text-white border-violet-600' : 'border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-violet-300 bg-white dark:bg-gray-700'}`}>{n}</button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              {/* Date & Time row */}
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wide">Date</label>
+                  <input
+                    type="date"
+                    value={resDate}
+                    onChange={e => setResDate(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-semibold text-gray-800 dark:text-gray-200 focus:outline-none focus:border-violet-500 transition-colors"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wide">Time *</label>
+                  <input
+                    type="time"
+                    value={resTime}
+                    onChange={e => setResTime(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-semibold text-gray-800 dark:text-gray-200 focus:outline-none focus:border-violet-500 transition-colors"
+                  />
+                </div>
+              </div>
+              {/* Notes */}
+              <div>
+                <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wide">Notes</label>
+                <textarea
+                  value={resNotes}
+                  onChange={e => setResNotes(e.target.value)}
+                  placeholder="e.g. Birthday dinner, window seat preferred"
+                  rows={2}
+                  className="w-full px-3 py-2.5 rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-semibold text-gray-800 dark:text-gray-200 placeholder-gray-300 focus:outline-none focus:border-violet-500 transition-colors resize-none"
+                />
+              </div>
+            </div>
+            <div className="px-5 pb-5 flex gap-2.5">
+              <button onClick={() => setReserveModal(null)} className="flex-1 py-3 rounded-xl text-sm font-bold border-2 border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all">Cancel</button>
+              <button
+                disabled={!resName.trim() || !resTime}
+                onClick={confirmReservation}
+                className="flex-1 py-3 rounded-xl text-sm font-extrabold bg-violet-600 hover:bg-violet-700 active:scale-[0.98] text-white transition-all disabled:bg-gray-200 dark:disabled:bg-gray-700 disabled:text-gray-400 dark:disabled:text-gray-500 disabled:cursor-not-allowed"
+              >
+                {reserveModal.mode === 'edit' ? 'Save Changes' : 'Confirm Reservation'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Reserve Table Modal (view) ───────────────────────────────── */}
+      {reserveModal?.mode === 'view' && (() => {
+        const res = reservations[reserveModal.table.id]
+        if (!res) return null
+        const dateLabel = res.date ? new Date(res.date + 'T00:00').toLocaleDateString('en-MT', { weekday: 'short', month: 'short', day: 'numeric' }) : '—'
+        const timeLabel = res.time ? (() => { const [h, m] = res.time.split(':'); const d = new Date(); d.setHours(+h, +m); return d.toLocaleTimeString('en-MT', { hour: '2-digit', minute: '2-digit' }) })() : '—'
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setReserveModal(null)}>
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-xs mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700 bg-violet-50 dark:bg-violet-900/20">
+                <div>
+                  <div className="text-xs font-semibold text-violet-400 uppercase tracking-widest mb-0.5">Table {reserveModal.table.number} · Reserved</div>
+                  <div className="text-base font-extrabold text-gray-900 dark:text-white">{res.name}</div>
+                </div>
+                <button onClick={() => setReserveModal(null)} className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors font-bold text-base">✕</button>
+              </div>
+              <div className="px-5 py-4 space-y-3">
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="bg-violet-50 dark:bg-violet-900/20 rounded-xl py-2.5">
+                    <div className="text-lg font-extrabold text-violet-700 dark:text-violet-300">{res.guests}</div>
+                    <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Guests</div>
+                  </div>
+                  <div className="bg-violet-50 dark:bg-violet-900/20 rounded-xl py-2.5">
+                    <div className="text-xs font-extrabold text-violet-700 dark:text-violet-300 leading-tight pt-1">{timeLabel}</div>
+                    <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Time</div>
+                  </div>
+                  <div className="bg-violet-50 dark:bg-violet-900/20 rounded-xl py-2.5">
+                    <div className="text-[10px] font-extrabold text-violet-700 dark:text-violet-300 leading-tight pt-1">{dateLabel}</div>
+                    <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Date</div>
+                  </div>
+                </div>
+                {res.phone && (
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-50 dark:bg-gray-700/50">
+                    <span className="text-sm">📞</span>
+                    <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">{res.phone}</span>
+                  </div>
+                )}
+                {res.notes && (
+                  <div className="flex items-start gap-2 px-3 py-2 rounded-xl bg-gray-50 dark:bg-gray-700/50">
+                    <span className="text-sm mt-0.5">📝</span>
+                    <span className="text-xs font-semibold text-gray-600 dark:text-gray-400 leading-relaxed">{res.notes}</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-50 dark:bg-gray-700/50">
+                  <span className="text-sm">👤</span>
+                  <div className="flex-1 flex items-center justify-between">
+                    <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">Added by</span>
+                    <span className="text-xs font-bold text-gray-700 dark:text-gray-300">{res.createdBy}</span>
+                  </div>
+                </div>
+                {res.editedBy && (
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-50 dark:bg-gray-700/50">
+                    <span className="text-sm">✏️</span>
+                    <div className="flex-1 flex items-center justify-between">
+                      <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">Edited by</span>
+                      <span className="text-xs font-bold text-gray-700 dark:text-gray-300">{res.editedBy}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="px-5 pb-5 space-y-2.5">
+                <button
+                  onClick={() => seatReservation(reserveModal.table)}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-violet-200 dark:border-violet-700 bg-violet-50 dark:bg-violet-900/20 hover:border-violet-500 transition-all text-left"
+                >
+                  <span className="text-xl">🪑</span>
+                  <div>
+                    <div className="text-sm font-bold text-violet-700 dark:text-violet-300">Seat Now</div>
+                    <div className="text-xs text-gray-400">Open the table for this reservation</div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => openReserveEdit(reserveModal.table, res)}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-indigo-200 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-900/20 hover:border-indigo-500 transition-all text-left"
+                >
+                  <span className="text-xl">✏️</span>
+                  <div>
+                    <div className="text-sm font-bold text-indigo-700 dark:text-indigo-300">Edit Reservation</div>
+                    <div className="text-xs text-gray-400">Change name, guests, time or notes</div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => cancelReservation(reserveModal.table.id)}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-rose-200 dark:border-rose-700 bg-rose-50 dark:bg-rose-900/20 hover:border-rose-500 transition-all text-left"
+                >
+                  <span className="text-xl">✕</span>
+                  <div>
+                    <div className="text-sm font-bold text-rose-700 dark:text-rose-300">Cancel Reservation</div>
+                    <div className="text-xs text-gray-400">Free the table</div>
+                  </div>
+                </button>
+                <button onClick={() => setReserveModal(null)} className="w-full py-3 rounded-xl text-sm font-bold border-2 border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all">Close</button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* Assign waiter modal */}
       {assignModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setAssignModal(null)}>
@@ -1339,6 +1599,11 @@ export function Tables({ navTo, setOrderContext }) {
                 {tables.filter(t=>t.status==='merged').length} Merged
               </span>
             )}
+            {tables.some(t=>t.status==='reserved') && (
+              <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400">
+                {tables.filter(t=>t.status==='reserved').length} Reserved
+              </span>
+            )}
           </div>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-4">
@@ -1376,11 +1641,13 @@ export function Tables({ navTo, setOrderContext }) {
             const waiterInitial = waiterName ? waiterName.charAt(0).toUpperCase() : null
             const totalGuests = (order?.guests?.adults || 0) + (order?.guests?.children || 0)
             const elapsedTime = order?.created_timestamp ? elapsed(order.created_timestamp) : null
-            const isOccupied = table.status === 'occupied'
-            const isMerged   = table.status === 'merged'
+            const isOccupied  = table.status === 'occupied'
+            const isMerged    = table.status === 'merged'
+            const isReserved  = table.status === 'reserved'
             const isBillReady = isOccupied && openBills.some(b => b.tableId === table.id && b.status === 'open')
+            const res = reservations[table.id]
 
-            // World-standard color tokens per state
+            // Color tokens per state
             const colors = isMerged ? {
               card:        'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700 hover:border-blue-400 hover:shadow-md',
               number:      'text-blue-700 dark:text-blue-300',
@@ -1402,6 +1669,13 @@ export function Tables({ navTo, setOrderContext }) {
               value:       'text-red-600 dark:text-red-400',
               statusLabel: 'text-red-500 dark:text-red-400',
               statusText:  'Occupied',
+            } : isReserved ? {
+              card:        'bg-violet-50 dark:bg-violet-900/20 border-violet-300 dark:border-violet-700 hover:border-violet-500 hover:shadow-md',
+              number:      'text-violet-700 dark:text-violet-300',
+              dot:         'bg-violet-500',
+              value:       'text-violet-600 dark:text-violet-400',
+              statusLabel: 'text-violet-500 dark:text-violet-400',
+              statusText:  'Reserved',
             } : {
               card:        'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 hover:border-emerald-400 hover:shadow-md',
               number:      'text-emerald-700 dark:text-emerald-300',
@@ -1429,14 +1703,14 @@ export function Tables({ navTo, setOrderContext }) {
                   <div className="space-y-1">
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Time</span>
-                      <span className={`text-xs font-extrabold tabular-nums ${isOccupied ? colors.value : 'text-gray-300 dark:text-gray-600'}`}>
-                        {elapsedTime || '—'}
+                      <span className={`text-xs font-extrabold tabular-nums ${isOccupied ? colors.value : isReserved ? colors.value : 'text-gray-300 dark:text-gray-600'}`}>
+                        {isReserved && res?.time ? (() => { const [h, m] = res.time.split(':'); const d = new Date(); d.setHours(+h, +m); return d.toLocaleTimeString('en-MT', { hour: '2-digit', minute: '2-digit' }) })() : elapsedTime || '—'}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Guests</span>
-                      <span className={`text-xs font-extrabold tabular-nums ${isOccupied && totalGuests > 0 ? colors.value : 'text-gray-300 dark:text-gray-600'}`}>
-                        {isOccupied && totalGuests > 0 ? totalGuests : '—'}
+                      <span className={`text-xs font-extrabold tabular-nums ${isOccupied && totalGuests > 0 ? colors.value : isReserved && res?.guests ? colors.value : 'text-gray-300 dark:text-gray-600'}`}>
+                        {isOccupied && totalGuests > 0 ? totalGuests : isReserved && res?.guests ? res.guests : '—'}
                       </span>
                     </div>
                   </div>
@@ -1444,6 +1718,14 @@ export function Tables({ navTo, setOrderContext }) {
                   {/* Status row */}
                   <div className="pt-0.5 border-t border-gray-100 dark:border-gray-700/60 flex items-center justify-between gap-1.5 min-h-[1.25rem]">
                     <span className={`text-[10px] font-bold ${colors.statusLabel}`}>{colors.statusText}</span>
+                    {isReserved && res?.name && (
+                      <div className="flex items-center gap-1">
+                        <div className="w-4 h-4 rounded-full bg-violet-200 dark:bg-violet-800 flex items-center justify-center text-[9px] font-bold flex-shrink-0 text-violet-700 dark:text-violet-300">
+                          {res.name.charAt(0).toUpperCase()}
+                        </div>
+                        <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 truncate">{res.name.split(' ')[0]}</span>
+                      </div>
+                    )}
                     {isOccupied && waiterName && (
                       <div className="flex items-center gap-1">
                         <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0 ${isBillReady ? 'bg-orange-200 dark:bg-orange-800 text-orange-700 dark:text-orange-300' : 'bg-red-200 dark:bg-red-800 text-red-700 dark:text-red-300'}`}>
@@ -1485,15 +1767,37 @@ export function Tables({ navTo, setOrderContext }) {
                     {totalGuests || '+'}
                   </button>
                 )}
+
+                {/* Reserve badge — free tables only */}
+                {table.status === 'free' && (
+                  <button
+                    onClick={e => { e.stopPropagation(); openReserveCreate(table) }}
+                    title="Reserve table"
+                    className="absolute -bottom-1.5 -left-1.5 w-5 h-5 rounded-full bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-400 dark:text-gray-400 hover:bg-violet-600 hover:text-white hover:border-violet-600 transition-all flex items-center justify-center text-[9px] shadow-sm"
+                  >
+                    📅
+                  </button>
+                )}
               </div>
             )
           })}
         </div>
+
+        {/* Stats badges row */}
+        <div className="flex flex-wrap gap-2 mb-3">
+          {tables.filter(t => t.status === 'reserved').length > 0 && (
+            <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400">
+              {tables.filter(t => t.status === 'reserved').length} Reserved
+            </span>
+          )}
+        </div>
+
         <div className="flex flex-wrap items-center gap-4 text-xs text-gray-400 pt-2 border-t border-gray-100 dark:border-gray-700/60">
           <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />Free</span>
           <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500" />Occupied</span>
           <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-orange-500" />Bill Ready</span>
           <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-blue-400" />Merged</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-violet-500" />Reserved</span>
           <span className="flex items-center gap-1.5"><span className="text-base">🎁</span><span className="font-semibold text-amber-600 dark:text-amber-400">T0 — On the House</span></span>
           <span className="flex items-center gap-1.5 ml-auto">
             <span className="w-4 h-4 rounded-full border border-gray-300 dark:border-gray-500 flex items-center justify-center bg-white dark:bg-gray-700 font-bold text-[10px]">+</span>
@@ -1502,6 +1806,10 @@ export function Tables({ navTo, setOrderContext }) {
           <span className="flex items-center gap-1.5">
             <span className="w-4 h-4 rounded-full border border-gray-300 dark:border-gray-500 flex items-center justify-center bg-white dark:bg-gray-700 font-bold text-[10px]">G</span>
             Update guests
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-4 h-4 rounded-full border border-gray-300 dark:border-gray-500 flex items-center justify-center bg-white dark:bg-gray-700 text-[9px] shadow-sm">📅</span>
+            Reserve table
           </span>
         </div>
       </Card>
