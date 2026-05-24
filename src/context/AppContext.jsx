@@ -17,7 +17,7 @@ export const ROLES = {
 }
 
 export const ROLE_NAV = {
-  superadmin: ['dashboard','company','users','customers','inventory','menu','reports','settings','audit','shifts','history','notifications'],
+  superadmin: ['dashboard','company','users','customers','inventory','menu','reports','settings','audit','shifts','history','notifications','dbviewer'],
   admin:      ['dashboard','users','waiters','customers','tables','billing','orderlist','inventory','menu','reports','kitchen','bar','settings','shifts','history','oth','notifications'],
   owner:      ['dashboard','reports','users','waiters','customers','billing','orderlist','inventory','menu','kitchen','bar','settings','shifts','history','oth','notifications'],
   manager:    ['dashboard','users','waiters','customers','orderlist','inventory','menu','kitchen','bar','shifts','history','oth','notifications'],
@@ -33,7 +33,7 @@ export const NAV_ICONS = {
   dashboard:'🏠', company:'🏢', users:'👥', waiters:'🧑‍🍽️', reports:'📊', settings:'⚙️', audit:'🔒',
   tables:'🍽️', orders:'📋', billing:'💰', orderlist:'📃', inventory:'📦', menu:'🗂️',
   cashier:'💰', receipts:'🖨️', supervisor:'👁️', shifts:'🗓️', kitchen:'👨‍🍳', bar:'🍸',
-  invoices:'📄', notifications:'🔔', customers:'👤', history:'🕓',
+  invoices:'📄', notifications:'🔔', customers:'👤', history:'🕓', dbviewer:'🗄️',
 }
 
 const INITIAL_USERS = [

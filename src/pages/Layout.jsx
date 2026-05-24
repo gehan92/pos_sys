@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Building2, Users as UsersIcon, BarChart3, Settings as SettingsIcon, ShieldCheck,
   Grid3x3, ClipboardList, CreditCard, Package, BookOpen, Receipt, Eye,
   Calendar, ChefHat, FileText, Bell, LogOut, Globe, Sun, Moon, ChevronRight,
-  Clock, LogIn, LogOut as LogOutIcon, Menu, X, UserCheck, Wine, History as HistoryIcon, Gift,
+  Clock, LogIn, LogOut as LogOutIcon, Menu, X, UserCheck, Wine, History as HistoryIcon, Gift, Database,
 } from 'lucide-react'
 
 // Pages
@@ -35,6 +35,7 @@ import Bar from './Bar'
 import History from './History'
 import OTH from './OTH'
 import Profile from './Profile'
+import DatabaseViewer from './DatabaseViewer'
 
 const PAGE_MAP = {
   dashboard: Dashboard, tables: Tables, orders: Orders, kitchen: Kitchen,
@@ -47,6 +48,7 @@ const PAGE_MAP = {
   history: History,
   oth: OTH,
   profile: Profile,
+  dbviewer: DatabaseViewer,
 }
 
 const NAV_ICONS_LUCIDE = {
@@ -74,6 +76,7 @@ const NAV_ICONS_LUCIDE = {
   history: HistoryIcon,
   oth: Gift,
   profile: UsersIcon,
+  dbviewer: Database,
 }
 
 export default function Layout() {

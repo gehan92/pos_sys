@@ -14,11 +14,12 @@ const billingRoutes       = require('./routes/billing')
 const shiftsRoutes        = require('./routes/shifts')
 const inventoryRoutes     = require('./routes/inventory')
 const notificationsRoutes = require('./routes/notifications')
+const dbviewerRoutes      = require('./routes/dbviewer')
 
 const app = express()
 const PORT = process.env.BACKEND_PORT || 3001
 
-app.use(cors({ origin: ['http://localhost:5173', 'http://localhost:4173'] }))
+app.use(cors({ origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:4173'] }))
 app.use(express.json())
 
 // Routes
@@ -30,6 +31,7 @@ app.use('/api/billing',       billingRoutes)
 app.use('/api/shifts',        shiftsRoutes)
 app.use('/api/inventory',     inventoryRoutes)
 app.use('/api/notifications', notificationsRoutes)
+app.use('/api/dbviewer',     dbviewerRoutes)
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', app: 'Malta POS Backend', time: new Date().toISOString() })
