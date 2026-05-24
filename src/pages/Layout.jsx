@@ -124,8 +124,8 @@ export default function Layout() {
         {/* Brand */}
         <div className="px-5 py-4 border-b border-white/10">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 shadow-lg shadow-indigo-900/50 ring-1 ring-white/20 bg-white">
-              <img src={shopLogo} alt="Logo" className="w-full h-full object-contain p-0.5" />
+            <div className="w-9 h-9 rounded-xl overflow-hidden flex-shrink-0 shadow-md shadow-blue-900/40 ring-1 ring-white/20">
+              <img src={shopLogo} alt="Logo" className="w-full h-full object-cover" />
             </div>
             <div className="min-w-0 flex-1">
               <div className="text-sm font-bold text-white truncate leading-tight">{company.name}</div>

@@ -61,10 +61,10 @@ export default function Login() {
 
           {/* Logo */}
           <div className="text-center mb-7">
-            <div className="relative w-28 h-28 mx-auto mb-5">
-              <div className="absolute inset-0 rounded-3xl bg-indigo-500/25 blur-2xl scale-125 pointer-events-none" />
-              <div className="relative w-28 h-28 rounded-3xl overflow-hidden shadow-2xl shadow-indigo-900/50 border-2 border-white/20 bg-white">
-                <img src={shopLogo} alt="Bella Vista Malta" className="w-full h-full object-contain p-1.5" />
+            <div className="relative w-20 h-20 mx-auto mb-5">
+              <div className="absolute inset-0 rounded-2xl bg-blue-500/20 blur-xl scale-110 pointer-events-none" />
+              <div className="relative w-20 h-20 rounded-2xl overflow-hidden shadow-xl shadow-blue-900/40 ring-1 ring-white/20">
+                <img src={shopLogo} alt="Dar Is-Sajjied" className="w-full h-full object-cover" />
               </div>
             </div>
             <h1 className="text-xl font-extrabold text-gray-900 dark:text-white tracking-tight">{company.name}</h1>
