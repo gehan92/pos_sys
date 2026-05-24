@@ -3,3 +3,11 @@ dist
 .env
 .DS_Store
 *.local
+
+# Local SQLite database (data stays on machine, not in git)
+*.db
+*.db-shm
+*.db-wal
+
+# Backend node_modules
+backend/node_modules

@@ -22,6 +22,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "backend": "cd backend && node server.js",
+    "backend:dev": "cd backend && npx nodemon server.js",
+    "backend:install": "cd backend && npm install",
+    "start": "concurrently \"npm run dev\" \"npm run backend\""
   }
 }
