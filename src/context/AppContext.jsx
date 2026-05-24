@@ -89,7 +89,17 @@ export function AppProvider({ children }) {
   const [navPermissions, setNavPermissionsState] = useState(() => {
     try {
       const stored = localStorage.getItem('maltapos_nav_permissions')
-      return stored ? JSON.parse(stored) : { ...ROLE_NAV }
+      if (!stored) return { ...ROLE_NAV }
+      const parsed = JSON.parse(stored)
+      // Merge: any new nav items added to ROLE_NAV are always included
+      const merged = {}
+      Object.keys(ROLE_NAV).forEach(role => {
+        const defaults = ROLE_NAV[role]
+        const saved    = parsed[role] || []
+        const newItems = defaults.filter(item => !saved.includes(item))
+        merged[role]   = [...saved, ...newItems]
+      })
+      return merged
     } catch { return { ...ROLE_NAV } }
   })
 
