@@ -68,7 +68,7 @@ export function AppProvider({ children }) {
   const [menuCategories, setMenuCategories] = useState(MENU_CATEGORIES)
   const [inventoryItems, setInventoryItems] = useState(INVENTORY_ITEMS)
   const [customers, setCustomers] = useState(INITIAL_CUSTOMERS)
-  const [company, setCompany] = useState({ name: 'Bella Vista Malta', address: '123 Republic Street, Valletta', currency: 'EUR', vat_rate: 18, receipt_footer: 'Thank you — Grazzi — Grazie' })
+  const [company, setCompany] = useState({ name: 'Dar Is-Sajjied', address: '123 Republic Street, Valletta', currency: 'EUR', vat_rate: 18, receipt_footer: 'Thank you — Grazzi — Grazie' })
   const [openBills, setOpenBills] = useState([]) // { id, tableId, tableLabel, waiter, orderIds, items, extraItems, status:'open', completedAt }
   const [orderHistory, setOrderHistory] = useState([
     { id:'hist_1', order_number:41, table_label:'Table 2', waiter:'Maria Waiter', cashier:'John Cashier', items:[{name_en:'Grilled Sea Bass',price:18.50,qty:2,discount_pct:0},{name_en:'House Wine (Glass)',price:5.00,qty:2,discount_pct:0}], subtotal:47.00, vat:8.46, total:55.46, total_savings:0, pay_method:'card', cash_given:0, change:0, note:'', paid_at: new Date(Date.now()-3600000*2) },

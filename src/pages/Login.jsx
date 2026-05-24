@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext'
 import { t } from '../i18n/translations'
 import { Btn, Input } from '../components/UI'
 import { ShieldCheck, UtensilsCrossed, Hash, KeyRound } from 'lucide-react'
+import shopLogo from '../img/shopLogo_icon.jpeg'
 
 export default function Login() {
   const { login, lang, setLang, company } = useApp()
@@ -60,8 +61,11 @@ export default function Login() {
 
           {/* Logo */}
           <div className="text-center mb-7">
-            <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-2xl flex items-center justify-center mx-auto mb-4 text-white text-xl font-extrabold shadow-lg shadow-indigo-500/40 select-none">
-              {initials}
+            <div className="relative w-28 h-28 mx-auto mb-5">
+              <div className="absolute inset-0 rounded-3xl bg-indigo-500/25 blur-2xl scale-125 pointer-events-none" />
+              <div className="relative w-28 h-28 rounded-3xl overflow-hidden shadow-2xl shadow-indigo-900/50 border-2 border-white/20 bg-white">
+                <img src={shopLogo} alt="Bella Vista Malta" className="w-full h-full object-contain p-1.5" />
+              </div>
             </div>
             <h1 className="text-xl font-extrabold text-gray-900 dark:text-white tracking-tight">{company.name}</h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1.5 flex items-center justify-center gap-1.5">

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useApp, ROLES, ROLE_NAV } from '../context/AppContext'
 import { t } from '../i18n/translations'
 import { Avatar } from '../components/UI'
+import shopLogo from '../img/shopLogo_icon.jpeg'
 import {
   LayoutDashboard, Building2, Users as UsersIcon, BarChart3, Settings as SettingsIcon, ShieldCheck,
   Grid3x3, ClipboardList, CreditCard, Package, BookOpen, Receipt, Eye,
@@ -94,7 +95,6 @@ export default function Layout() {
   }, [nav])
   const PageComponent = PAGE_MAP[page] || Dashboard
   const roleInfo = ROLES[user?.role]
-  const companyInitials = company.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
 
   function navTo(p, ctx = null) {
     if (ctx) setOrderContext(ctx)
@@ -124,8 +124,8 @@ export default function Layout() {
         {/* Brand */}
         <div className="px-5 py-4 border-b border-white/10">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-xl flex items-center justify-center text-white font-bold text-sm flex-shrink-0 shadow-lg shadow-indigo-900/40">
-              {companyInitials}
+            <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 shadow-lg shadow-indigo-900/50 ring-1 ring-white/20 bg-white">
+              <img src={shopLogo} alt="Logo" className="w-full h-full object-contain p-0.5" />
             </div>
             <div className="min-w-0 flex-1">
               <div className="text-sm font-bold text-white truncate leading-tight">{company.name}</div>

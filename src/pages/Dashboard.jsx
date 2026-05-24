@@ -760,9 +760,8 @@ function ActiveOrdersCard({ liveOrders, setLiveOrders, setReprintModal, setOrder
 
 // ─── Tables ───────────────────────────────────────────────────────────────────
 export function Tables({ navTo, setOrderContext }) {
-  const { user, liveOrders, setLiveOrders, users, company, openBills, transferOrder, mergeOrder, unmergeOrder, othRecords, pushNotif, clockRecords } = useApp()
+  const { user, liveOrders, setLiveOrders, users, company, openBills, transferOrder, mergeOrder, unmergeOrder, othRecords, pushNotif } = useApp()
   const [tables, setTables] = useState(TABLES)
-  const [assignModal, setAssignModal] = useState(null)    // table object
   const [guestModal, setGuestModal] = useState(null)      // { table, mode: 'open'|'edit' }
   const [actionModal, setActionModal] = useState(null)    // { table, order }
   const [transferModal, setTransferModal] = useState(null) // { fromTable }
@@ -2296,12 +2295,8 @@ export function Tables({ navTo, setOrderContext }) {
           <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-sky-500" />Reserved</span>
           <span className="flex items-center gap-1.5"><span className="text-base">🎁</span><span className="font-semibold text-amber-600 dark:text-amber-400">T0 — On the House</span></span>
           <span className="flex items-center gap-1.5 ml-auto">
-            <span className="w-4 h-4 rounded-full border border-gray-300 dark:border-gray-500 flex items-center justify-center bg-white dark:bg-gray-700 font-bold text-[10px]">+</span>
-            Assign waiter
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-4 h-4 rounded-full border border-gray-300 dark:border-gray-500 flex items-center justify-center bg-white dark:bg-gray-700 font-bold text-[10px]">G</span>
-            Update guests
+            <span className="w-4 h-4 rounded-full border border-gray-300 dark:border-gray-500 flex items-center justify-center bg-white dark:bg-gray-700 font-bold text-[10px]">2</span>
+            Guests
           </span>
           <span className="flex items-center gap-1.5">
             <span className="w-4 h-4 rounded-full border border-gray-300 dark:border-gray-500 flex items-center justify-center bg-white dark:bg-gray-700 text-[9px] shadow-sm">📅</span>
@@ -2309,52 +2304,6 @@ export function Tables({ navTo, setOrderContext }) {
           </span>
         </div>
       </Card>
-
-      {/* ── Active Staff on Shift ── */}
-      {(() => {
-        const todayStr = new Date().toDateString()
-        const onShift = clockRecords.filter(r => r.clockOut === null && r.clockIn.toDateString() === todayStr)
-        if (onShift.length === 0) return null
-        function shiftDuration(clockIn) {
-          const mins = Math.floor((Date.now() - clockIn) / 60000)
-          return `${Math.floor(mins / 60)}h ${mins % 60 < 10 ? '0' : ''}${mins % 60}m`
-        }
-        const ROLE_COLOR = {
-          waiter:     'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-300',
-          cashier:    'bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-300',
-          cook:       'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300',
-          bartender:  'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300',
-          supervisor: 'bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300',
-          manager:    'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300',
-          admin:      'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',
-          owner:      'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300',
-        }
-        return (
-          <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700/60 rounded-2xl px-4 py-3 shadow-sm">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
-              <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Active Staff on Shift</span>
-              <span className="ml-auto text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800/40">{onShift.length} on duty</span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {onShift.map(r => (
-                <div key={r.id} className="flex items-center gap-2 bg-gray-50 dark:bg-gray-700/40 border border-gray-100 dark:border-gray-700 rounded-xl px-3 py-2">
-                  <div className="w-7 h-7 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center text-xs font-extrabold text-indigo-600 dark:text-indigo-400 flex-shrink-0">
-                    {r.userName?.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold text-gray-800 dark:text-gray-100 leading-none">{r.userName}</div>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${ROLE_COLOR[r.role] || 'bg-gray-100 dark:bg-gray-700 text-gray-500'}`}>{r.role}</span>
-                      <span className="text-[10px] text-gray-400">{shiftDuration(r.clockIn)}</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )
-      })()}
 
       {/* ── Add Table Modal ── */}
       {showAddTableModal && (
@@ -5782,6 +5731,45 @@ export function Shifts() {
           </div>
         </div>
       )}
+
+      {/* Active Staff on Shift panel (management only) */}
+      {isManagement && activeNow.length > 0 && (() => {
+        const ROLE_COLOR = {
+          waiter:     'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-300',
+          cashier:    'bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-300',
+          cook:       'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300',
+          bartender:  'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300',
+          supervisor: 'bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300',
+          manager:    'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300',
+          admin:      'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',
+          owner:      'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300',
+        }
+        return (
+          <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700/60 rounded-2xl px-4 py-3 shadow-sm">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
+              <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Active Staff on Shift</span>
+              <span className="ml-auto text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800/40">{activeNow.length} on duty</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {activeNow.map(r => (
+                <div key={r.id} className="flex items-center gap-2 bg-gray-50 dark:bg-gray-700/40 border border-gray-100 dark:border-gray-700 rounded-xl px-3 py-2">
+                  <div className="w-7 h-7 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center text-xs font-extrabold text-indigo-600 dark:text-indigo-400 flex-shrink-0">
+                    {r.userName?.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-gray-800 dark:text-gray-100 leading-none">{r.userName}</div>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${ROLE_COLOR[r.role] || 'bg-gray-100 dark:bg-gray-700 text-gray-500'}`}>{r.role}</span>
+                      <span className="text-[10px] text-gray-400">{fmtDuration(r.clockIn, null)}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Tabs */}
       <div className="flex gap-2">
