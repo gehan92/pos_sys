@@ -5622,12 +5622,15 @@ export function Supervisor() {
 
 // ─── Shifts ───────────────────────────────────────────────────────────────────
 export function Shifts() {
-  const { clockRecords, user, clockIn, clockOut, isClockedIn, adminClockOut } = useApp()
+  const { clockRecords, user, users, clockIn, clockOut, isClockedIn, adminClockOut } = useApp()
   const [tab, setTab] = useState('today')
   const [now, setNow] = useState(new Date())
   const [histSearch, setHistSearch] = useState('')
   const [histDate, setHistDate] = useState('')
-  const [forceOutConfirm, setForceOutConfirm] = useState(null) // record id
+  const [forceOutConfirm, setForceOutConfirm] = useState(null)
+  const [clockModal, setClockModal] = useState(null) // 'in' | 'out' | null
+  const [clockPassword, setClockPassword] = useState('')
+  const [clockError, setClockError] = useState('')
 
   const isManagement = ['superadmin','admin','owner','manager','supervisor'].includes(user?.role)
 
@@ -5675,6 +5678,22 @@ export function Shifts() {
     return date.toLocaleDateString([], { weekday: 'short', day: '2-digit', month: 'short' })
   }
 
+  function openClockModal() {
+    setClockModal(isClockedIn ? 'out' : 'in')
+    setClockPassword('')
+    setClockError('')
+  }
+
+  function handleClockConfirm() {
+    const found = users.find(u => u.id === user.id && u.password === clockPassword)
+    if (!found) { setClockError('Incorrect password. Please try again.'); return }
+    if (clockModal === 'in') clockIn()
+    else clockOut()
+    setClockModal(null)
+    setClockPassword('')
+    setClockError('')
+  }
+
   // Total hours worked today (completed shifts only)
   const totalMinsToday = doneToday.reduce((s, r) => s + Math.round((r.clockOut - r.clockIn) / 60000), 0)
   const totalHoursToday = `${Math.floor(totalMinsToday / 60)}h ${totalMinsToday % 60}m`
@@ -5703,7 +5722,7 @@ export function Shifts() {
           </div>
         </div>
         <button
-          onClick={isClockedIn ? clockOut : clockIn}
+          onClick={openClockModal}
           className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all shadow-sm ${
             isClockedIn
               ? 'bg-rose-500 hover:bg-rose-600 text-white'
@@ -5946,6 +5965,59 @@ export function Shifts() {
               </table>
             </div>
           </Card>
+        </div>
+      )}
+
+      {/* Clock In / Out Confirmation Modal */}
+      {clockModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setClockModal(null)}>
+          <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className={`px-6 py-5 ${clockModal === 'in' ? 'bg-emerald-500' : 'bg-rose-500'}`}>
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 bg-white/20 rounded-2xl flex items-center justify-center flex-shrink-0 text-xl">
+                  {clockModal === 'in' ? '▶' : '⏹'}
+                </div>
+                <div>
+                  <div className="text-white font-extrabold text-lg leading-tight">{clockModal === 'in' ? 'Clock In' : 'Clock Out'}</div>
+                  <div className="text-white/70 text-xs mt-0.5">{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · {new Date().toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })}</div>
+                </div>
+              </div>
+            </div>
+            <div className="px-6 py-5">
+              <div className="flex items-center gap-3 bg-gray-50 dark:bg-gray-800 rounded-2xl px-4 py-3 mb-5">
+                <Avatar name={user?.full_name} size="sm" />
+                <div>
+                  <div className="text-sm font-bold text-gray-900 dark:text-white">{user?.full_name}</div>
+                  <div className="text-xs text-gray-400 capitalize">{user?.role}</div>
+                </div>
+              </div>
+              <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">Enter your password to confirm</label>
+              <input
+                type="password"
+                value={clockPassword}
+                onChange={e => { setClockPassword(e.target.value); setClockError('') }}
+                onKeyDown={e => e.key === 'Enter' && handleClockConfirm()}
+                placeholder="••••••••"
+                autoFocus
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+              />
+              {clockError && (
+                <div className="mt-2 flex items-center gap-1.5 text-xs text-rose-500 font-medium">
+                  <span className="w-4 h-4 rounded-full bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center font-bold flex-shrink-0">!</span>
+                  {clockError}
+                </div>
+              )}
+              <div className="flex gap-3 mt-5">
+                <button onClick={() => setClockModal(null)} className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-sm font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">Cancel</button>
+                <button
+                  onClick={handleClockConfirm}
+                  className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-colors ${clockModal === 'in' ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-rose-500 hover:bg-rose-600'}`}
+                >
+                  {clockModal === 'in' ? '▶ Clock In' : '⏹ Clock Out'}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

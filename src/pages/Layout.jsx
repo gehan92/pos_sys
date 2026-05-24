@@ -77,13 +77,16 @@ const NAV_ICONS_LUCIDE = {
 }
 
 export default function Layout() {
-  const { user, logout, lang, setLang, theme, setTheme, company, unreadCount, clockIn, clockOut, isClockedIn, navPermissions } = useApp()
+  const { user, users, logout, lang, setLang, theme, setTheme, company, unreadCount, clockIn, clockOut, isClockedIn, navPermissions } = useApp()
   const [page, setPage] = useState(() => {
     const nav = navPermissions[user?.role] || ['dashboard']
     return nav[0]
   })
   const [orderContext, setOrderContext] = useState({ tableId: null, tableNumber: null, isTakeaway: false })
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [clockModal, setClockModal] = useState(null) // 'in' | 'out' | null
+  const [clockPassword, setClockPassword] = useState('')
+  const [clockError, setClockError] = useState('')
 
   const nav = navPermissions[user?.role] || []
 
@@ -99,7 +102,23 @@ export default function Layout() {
   function navTo(p, ctx = null) {
     if (ctx) setOrderContext(ctx)
     setPage(p)
-    setSidebarOpen(false) // close sidebar on mobile after navigation
+    setSidebarOpen(false)
+  }
+
+  function openClockModal() {
+    setClockModal(isClockedIn ? 'out' : 'in')
+    setClockPassword('')
+    setClockError('')
+  }
+
+  function handleClockConfirm() {
+    const found = users.find(u => u.id === user.id && u.password === clockPassword)
+    if (!found) { setClockError('Incorrect password. Please try again.'); return }
+    if (clockModal === 'in') clockIn()
+    else clockOut()
+    setClockModal(null)
+    setClockPassword('')
+    setClockError('')
   }
 
   return (
@@ -236,7 +255,7 @@ export default function Layout() {
           <div className="flex items-center gap-1.5">
             {/* Clock In / Out button */}
             <button
-              onClick={isClockedIn ? clockOut : clockIn}
+              onClick={openClockModal}
               title={isClockedIn ? 'Clock Out' : 'Clock In'}
               className={`flex items-center gap-1.5 px-2 lg:px-3 py-2 rounded-xl text-xs font-bold border transition-all ${
                 isClockedIn
@@ -276,6 +295,73 @@ export default function Layout() {
           <PageComponent navTo={navTo} orderContext={orderContext} setOrderContext={setOrderContext} />
         </main>
       </div>
+
+      {/* Clock In / Out Confirmation Modal */}
+      {clockModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setClockModal(null)}>
+          <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+
+            {/* Header */}
+            <div className={`px-6 py-5 ${clockModal === 'in' ? 'bg-emerald-500' : 'bg-rose-500'}`}>
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 bg-white/20 rounded-2xl flex items-center justify-center flex-shrink-0">
+                  {clockModal === 'in' ? <LogIn size={20} className="text-white" /> : <LogOutIcon size={20} className="text-white" />}
+                </div>
+                <div>
+                  <div className="text-white font-extrabold text-lg leading-tight">{clockModal === 'in' ? 'Clock In' : 'Clock Out'}</div>
+                  <div className="text-white/70 text-xs mt-0.5">{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · {new Date().toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="px-6 py-5">
+              <div className="flex items-center gap-3 bg-gray-50 dark:bg-gray-800 rounded-2xl px-4 py-3 mb-5">
+                <Avatar name={user?.full_name} size="sm" />
+                <div>
+                  <div className="text-sm font-bold text-gray-900 dark:text-white">{user?.full_name}</div>
+                  <div className="text-xs text-gray-400 capitalize">{roleInfo?.label}</div>
+                </div>
+              </div>
+
+              <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">Enter your password to confirm</label>
+              <input
+                type="password"
+                value={clockPassword}
+                onChange={e => { setClockPassword(e.target.value); setClockError('') }}
+                onKeyDown={e => e.key === 'Enter' && handleClockConfirm()}
+                placeholder="••••••••"
+                autoFocus
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+              />
+              {clockError && (
+                <div className="mt-2 flex items-center gap-1.5 text-xs text-rose-500 font-medium">
+                  <span className="w-4 h-4 rounded-full bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center text-rose-500 font-bold flex-shrink-0">!</span>
+                  {clockError}
+                </div>
+              )}
+
+              <div className="flex gap-3 mt-5">
+                <button
+                  onClick={() => setClockModal(null)}
+                  className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-sm font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleClockConfirm}
+                  className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-colors flex items-center justify-center gap-2 ${
+                    clockModal === 'in' ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-rose-500 hover:bg-rose-600'
+                  }`}
+                >
+                  {clockModal === 'in' ? <LogIn size={14} /> : <LogOutIcon size={14} />}
+                  {clockModal === 'in' ? 'Clock In' : 'Clock Out'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
