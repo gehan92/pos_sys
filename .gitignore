@@ -11,3 +11,7 @@ dist
 
 # Backend node_modules
 backend/node_modules
+
+# Local analysis and documentation files (not for commit)
+PROJECT_ANALYSIS.md
+CHANGELOG.md
