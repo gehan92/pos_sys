@@ -8,11 +8,11 @@ import {
   Bell, BellOff, Lock, Info,
 } from 'lucide-react'
 
-export default function Profile({ navTo }) {
+export default function Profile({ navTo: _navTo }) {
   const {
     user, updateUser, logout,
     clockRecords, isClockedIn,
-    orderHistory, liveOrders,
+    orderHistory,
     lang, setLang, theme, setTheme,
   } = useApp()
 

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useApp, ROLES, ROLE_NAV } from '../context/AppContext'
+import { useApp, ROLES } from '../context/AppContext'
 import { t } from '../i18n/translations'
 import { Avatar } from '../components/UI'
 import shopLogo from '../img/shopLogo_icon.jpeg'
@@ -95,9 +95,9 @@ export default function Layout() {
 
   // If nav changes and current page was removed, redirect to first available
   // Note: do NOT include `page` in deps — that would cancel navTo() for pages not in sidebar nav
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (nav.length > 0 && !nav.includes(page)) setPage(nav[0])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nav])
   const PageComponent = PAGE_MAP[page] || Dashboard
   const roleInfo = ROLES[user?.role]

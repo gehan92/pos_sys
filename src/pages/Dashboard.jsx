@@ -2,13 +2,13 @@
 import { useState, useRef, useEffect } from 'react'
 import { useApp, ROLES, ROLE_NAV } from '../context/AppContext'
 import { t } from '../i18n/translations'
-import { Card, StatCard, Badge, Table, TR, TD, Btn, Avatar, Divider, SectionLabel, statusColor, Input, Select, Textarea } from '../components/UI'
-import { SAMPLE_USERS, SAMPLE_ORDERS, INVENTORY_ITEMS, TABLES, MENU_CATEGORIES, MENU_ITEMS, SAMPLE_INVOICES, SUPPLIER_INVOICES } from '../lib/mockData'
+import { Card, StatCard, Badge, Table, TR, TD, Btn, Avatar, Divider, statusColor, Input, Select, Textarea } from '../components/UI'
+import { INVENTORY_ITEMS, TABLES } from '../lib/mockData'
 import { can } from '../lib/permissions'
 import { AlertTriangle, Timer, GitMerge, ArrowRight, CheckCircle2, Flame, Activity, Printer, Play, AlertCircle, Wine, ChefHat } from 'lucide-react'
 
 export function Dashboard({ navTo }) {
-  const { user, lang, users, approveUser } = useApp()
+  const { user, users, approveUser } = useApp()
   const isManagement = ['superadmin','admin','owner','manager','supervisor'].includes(user?.role)
   const canApprove = ['superadmin','admin'].includes(user?.role)
   const pendingUsers = users.filter(u => u.status === 'pending')
@@ -83,7 +83,7 @@ export function Dashboard({ navTo }) {
 
 // ─── Users ────────────────────────────────────────────────────────────────────
 export function Users() {
-  const { lang, user: currentUser, users, createUser, approveUser, deactivateUser } = useApp()
+  const { user: currentUser, users, createUser, approveUser, deactivateUser } = useApp()
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ full_name:'', username:'', role:'waiter', password:'' })
   const [confirmDeactivate, setConfirmDeactivate] = useState(null)
@@ -479,15 +479,7 @@ export function Waiters() {
 }
 
 // ─── Active Orders Card (expandable) ─────────────────────────────────────────
-const STATUS_CFG_DASH = {
-  pending:   { label: 'Pending',  bg: 'bg-amber-100 dark:bg-amber-900/30', text: 'text-amber-700 dark:text-amber-400', dot: 'bg-amber-400' },
-  cooking:   { label: 'Cooking',  bg: 'bg-blue-100 dark:bg-blue-900/30',   text: 'text-blue-700 dark:text-blue-400',   dot: 'bg-blue-500' },
-  ready:     { label: 'Ready',    bg: 'bg-green-100 dark:bg-green-900/30', text: 'text-green-700 dark:text-green-400', dot: 'bg-green-500' },
-  served:    { label: 'Served',   bg: 'bg-indigo-100 dark:bg-indigo-900/30', text: 'text-indigo-700 dark:text-indigo-400', dot: 'bg-indigo-500' },
-  completed: { label: 'Done',     bg: 'bg-gray-100 dark:bg-gray-700', text: 'text-gray-600 dark:text-gray-300', dot: 'bg-gray-400' },
-}
-
-function ActiveOrdersCard({ liveOrders, setLiveOrders, setReprintModal, setOrderContext, navTo }) {
+function ActiveOrdersCard({ liveOrders, setLiveOrders, setReprintModal, setOrderContext: _setOrderContext, navTo }) {
   const { user } = useApp()
   const [expanded, setExpanded] = useState(null)
   const [preCompDialog, setPreCompDialog] = useState(null) // { orderId, itemIdx, itemName, price, qty }
@@ -521,6 +513,7 @@ function ActiveOrdersCard({ liveOrders, setLiveOrders, setReprintModal, setOrder
       if (o.id !== orderId) return o
       const items = o.items.map((item, idx) => {
         if (idx !== itemIdx) return item
+        // eslint-disable-next-line no-unused-vars
         const { comped, compReason, compApprovedBy, ...rest } = item
         return rest
       })
@@ -542,7 +535,6 @@ function ActiveOrdersCard({ liveOrders, setLiveOrders, setReprintModal, setOrder
       ) : (
         <div className="space-y-2">
           {active.map(o => {
-            const cfg = STATUS_CFG_DASH[o.status] || STATUS_CFG_DASH.pending
             const total = (o.items || []).reduce((s, i) => s + i.price * i.qty, 0)
             const isOpen = expanded === o.id
             const allItems = (o.items || []).map((item, idx) => ({ ...item, origIdx: idx }))
@@ -760,7 +752,7 @@ function ActiveOrdersCard({ liveOrders, setLiveOrders, setReprintModal, setOrder
 
 // ─── Tables ───────────────────────────────────────────────────────────────────
 export function Tables({ navTo, setOrderContext }) {
-  const { user, liveOrders, setLiveOrders, users, company, openBills, transferOrder, mergeOrder, unmergeOrder, othRecords, pushNotif } = useApp()
+  const { user, liveOrders, setLiveOrders, openBills, transferOrder, mergeOrder, unmergeOrder, othRecords, pushNotif } = useApp()
   const [tables, setTables] = useState(TABLES)
   const [guestModal, setGuestModal] = useState(null)      // { table, mode: 'open'|'edit' }
   const [actionModal, setActionModal] = useState(null)    // { table, order }
@@ -824,8 +816,6 @@ export function Tables({ navTo, setOrderContext }) {
     if (mins < 60) return `${mins}m`
     return `${Math.floor(mins / 60)}h ${mins % 60}m`
   }
-
-  const activeWaiters = users.filter(u => u.role === 'waiter' && u.status === 'active')
 
   // Get the active order for a table (non-paid)
   function tableOrder(tableId) {
@@ -2794,8 +2784,8 @@ export function Tables({ navTo, setOrderContext }) {
 }
 
 // ─── Orders ───────────────────────────────────────────────────────────────────
-export function Orders({ navTo, orderContext, setOrderContext }) {
-  const { lang, user, liveOrders, setLiveOrders, nextOrderNum, setNextOrderNum, markOrderServed, completeProcess, menuItems, menuCategories, deductInventory, pushNotif } = useApp()
+export function Orders({ navTo, orderContext, setOrderContext: _setOrderContext }) {
+  const { user, liveOrders, setLiveOrders, nextOrderNum, setNextOrderNum, menuItems, menuCategories, deductInventory, pushNotif } = useApp()
   const [reprintModal, setReprintModal] = useState(null)
   const [newItems, setNewItems] = useState([])
   const [cat, setCat] = useState('cat1')
@@ -2840,6 +2830,7 @@ export function Orders({ navTo, orderContext, setOrderContext }) {
       if (o.id !== existingOrder.id) return o
       const items = o.items.map((item, idx) => {
         if (idx !== itemIdx) return item
+        // eslint-disable-next-line no-unused-vars
         const { comped, compReason, compApprovedBy, ...rest } = item
         return rest
       })
@@ -2887,14 +2878,6 @@ export function Orders({ navTo, orderContext, setOrderContext }) {
   const existingSubtotal = existingItems.reduce((a, i) => a + i.price * i.qty, 0)
   const newSubtotal = newItems.reduce((a, i) => a + i.price * i.qty, 0)
   const grandTotal = existingSubtotal + newSubtotal
-
-  function addItem(item) {
-    setNewItems(p => {
-      const ex = p.find(i => i.id === item.id)
-      if (ex) return p.map(i => i.id === item.id ? { ...i, qty: i.qty + 1 } : i)
-      return [...p, { ...item, qty: 1 }]
-    })
-  }
 
   function changeQty(key, delta) {
     setNewItems(p => p.map(i => (i.cartKey || i.id) === key ? { ...i, qty: i.qty + delta } : i).filter(i => i.qty > 0))
@@ -3769,7 +3752,7 @@ export function Bar() {
 
 // ─── Billing ──────────────────────────────────────────────────────────────────
 export function Billing({ orderContext }) {
-  const { lang, user, company, liveOrders, setLiveOrders, openBills, finalizeBill, addToHistory, menuItems, menuCategories, addOthRecords } = useApp()
+  const { user, company, setLiveOrders, openBills, finalizeBill, addToHistory, menuItems, menuCategories, addOthRecords } = useApp()
   const vatRate = company.vat_rate / 100
 
   // ── Cart state ──────────────────────────────────────────────────────────────
@@ -3878,48 +3861,6 @@ export function Billing({ orderContext }) {
     return matchCat && matchSearch
   })
 
-  // ── Load an open bill into the cashier view ─────────────────────────────────
-  function loadBillIntoCart(bill) {
-    // Store original bill items separately (cannot be removed, for display)
-    setBillItems(bill.items.map(i => ({
-      id: i.id || `bill-${i.name || i.name_en}-${Math.random()}`,
-      name_en: i.name || i.name_en,
-      price: i.price,
-      qty: i.qty,
-      discount_pct: i.discount_pct || 0,
-      fromBill: true,
-    })))
-    setCart([])  // cashier extras start empty
-    setLoadedBillId(bill.id)
-  }
-
-  // ── Load a takeaway (or any) liveOrder directly into billing ───────────────
-  function loadTakeawayOrder(order) {
-    setBillItems(order.items.map(i => ({
-      id: i.id || `bill-${i.name || i.name_en}-${Math.random()}`,
-      name_en: i.name || i.name_en,
-      price: i.price,
-      qty: i.qty,
-      discount_pct: 0,
-      fromBill: true,
-      round: i.round || 1,
-    })))
-    const preComps = {}
-    order.items.forEach((item, idx) => {
-      if (item.comped) {
-        preComps[itemKey('bill', idx)] = { reason: item.comped_reason || 'Pre-flagged', approvedBy: '—' }
-      }
-    })
-    setCompItems(preComps)
-    setCart([])
-    setLoadedBillId(null)
-    setPreloadOrderId(order.id)
-    setPreloadLabel(order.order_type === 'takeaway'
-      ? `🥡 ${order.customer_name || 'Walk-in'} — #${order.order_number}`
-      : `🍽️ Table ${order.table_number} — #${order.order_number}`)
-    setMobileBillTab('cart')
-  }
-
   // ── Preload order when navigated from OrderList ─────────────────────────────
   useEffect(() => {
     const order = orderContext?.preloadOrder
@@ -3984,15 +3925,6 @@ export function Billing({ orderContext }) {
     setBillItemModal(null)
   }
 
-  function addToCart(item) {
-    setCart(p => {
-      const ex = p.find(i => i.id === item.id)
-      if (ex) return p.map(i => i.id === item.id ? { ...i, qty: i.qty + 1 } : i)
-      return [...p, { ...item, qty: 1 }]
-    })
-    setMobileBillTab('cart')
-  }
-
   function changeQty(id, delta) {
     setCart(p => p.map(i => i.id === id ? { ...i, qty: i.qty + delta } : i).filter(i => i.qty > 0))
   }
@@ -4007,10 +3939,6 @@ export function Billing({ orderContext }) {
 
   function removeBillItem(index) {
     setBillItems(p => p.filter((_, i) => i !== index))
-  }
-
-  function setExtraNote(id, note) {
-    setCart(p => p.map(i => i.id === id ? { ...i, extraNote: note } : i))
   }
 
   // ── Totals (bill items + cashier extras) ────────────────────────────────────
@@ -5291,47 +5219,7 @@ export function Inventory() {
 }
 
 // ─── Reports ──────────────────────────────────────────────────────────────────
-export function Reports() {
-  const bars = [65,80,45,90,70,110,85,95,60,100,75,88,92,78]
-  const maxBar = Math.max(...bars)
-  return (
-    <div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-        <StatCard label="This month" value="€48,200" sub="+8% vs last month" />
-        <StatCard label="Total orders" value="1,284" sub="avg €37.50 each" />
-        <StatCard label="Top seller" value="Pasta Carbonara" sub="312 sold" />
-        <StatCard label="Staff active" value="14" sub="All shifts covered" />
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
-          <h2 className="font-medium text-gray-900 dark:text-white mb-4">Daily sales — April</h2>
-          <div className="flex items-end gap-1 h-28">
-            {bars.map((h, i) => (
-              <div key={i} className="flex-1 bg-blue-500 dark:bg-blue-600 rounded-t opacity-70 hover:opacity-100 transition-opacity cursor-pointer min-w-0"
-                style={{ height: `${(h / maxBar) * 100}%` }} title={`Apr ${i+1}: €${(h*40).toFixed(0)}`} />
-            ))}
-          </div>
-          <div className="flex justify-between mt-1">
-            <span className="text-xs text-gray-400">Apr 1</span>
-            <span className="text-xs text-gray-400">Apr 14</span>
-          </div>
-        </Card>
-        <Card>
-          <h2 className="font-medium text-gray-900 dark:text-white mb-3">Top items this month</h2>
-          {[['Pasta Carbonara',312,'€4,524'],['Grilled Sea Bass',198,'€4,356'],['Margherita Pizza',245,'€2,940'],['Tiramisu',289,'€2,023'],['House Wine',401,'€2,406']].map(([name,count,rev]) => (
-            <div key={name} className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700 last:border-0">
-              <span className="text-sm text-gray-700 dark:text-gray-300">{name}</span>
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-gray-400">{count}x</span>
-                <span className="text-sm font-medium text-blue-600">{rev}</span>
-              </div>
-            </div>
-          ))}
-        </Card>
-      </div>
-    </div>
-  )
-}
+export { Reports } from './Reports'
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
 // ── Nav Permission Manager ────────────────────────────────────────────────────
@@ -5517,108 +5405,11 @@ export function Settings() {
   )
 }
 
-// ─── Company (Super Admin) ────────────────────────────────────────────────────
-export function Company() {
-  return (
-    <Card>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="font-medium text-gray-900 dark:text-white">All restaurants</h2>
-        <Btn variant="primary" size="sm">+ Add Restaurant</Btn>
-      </div>
-      <Table headers={['Name','Location','Admin','Status','Action']}>
-        {[['Bella Vista Malta','Valletta','admin@bellavista.mt','active'],['Sea View Bistro','Sliema','admin@seaview.mt','active'],['Gozo Kitchen','Victoria','admin@gozo.mt','pending']].map(([name,loc,admin,status]) => (
-          <TR key={name}>
-            <TD className="font-medium">{name}</TD>
-            <TD>{loc}</TD>
-            <TD className="text-blue-600">{admin}</TD>
-            <TD><Badge color={statusColor(status)}>{status}</Badge></TD>
-            <TD><Btn size="sm">Manage</Btn></TD>
-          </TR>
-        ))}
-      </Table>
-    </Card>
-  )
-}
-
-// ─── Audit ────────────────────────────────────────────────────────────────────
-export function Audit() {
-  const logs = [
-    {time:'14:32',user:'Maria G.',role:'waiter',action:'Created order #047',module:'Orders'},
-    {time:'14:28',user:'John C.',role:'cashier',action:'Printed invoice #312',module:'Billing'},
-    {time:'14:15',user:'Anna B.',role:'manager',action:'Created user account',module:'Users'},
-    {time:'13:55',user:'Tony S.',role:'supplier',action:'Updated stock levels',module:'Inventory'},
-    {time:'13:40',user:'Owner',role:'owner',action:'Approved 2 users',module:'Users'},
-    {time:'13:20',user:'Sam V.',role:'supervisor',action:'Generated shift report',module:'Reports'},
-  ]
-  return (
-    <Card>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="font-medium text-gray-900 dark:text-white">Audit log</h2>
-        <input placeholder="Search logs..." className="px-3 py-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white w-40" />
-      </div>
-      <Table headers={['Time','User','Role','Action','Module']}>
-        {logs.map((log,i) => (
-          <TR key={i}>
-            <TD>{log.time}</TD>
-            <TD>{log.user}</TD>
-            <TD><Badge color="gray">{log.role}</Badge></TD>
-            <TD>{log.action}</TD>
-            <TD>{log.module}</TD>
-          </TR>
-        ))}
-      </Table>
-    </Card>
-  )
-}
-
-// ─── Notifications ────────────────────────────────────────────────────────────
-export function Notifications() {
-  const { notifications, markAllRead } = useApp()
-  const typeColor = { warning:'yellow', error:'red', info:'blue', success:'green' }
-  return (
-    <Card>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="font-medium text-gray-900 dark:text-white">Notifications</h2>
-        <Btn size="sm" onClick={markAllRead}>Mark all read</Btn>
-      </div>
-      {notifications.map(n => (
-        <div key={n.id} className={`flex items-start gap-3 py-3 border-b border-gray-100 dark:border-gray-700 last:border-0 ${!n.is_read ? '' : 'opacity-60'}`}>
-          <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${n.is_read ? 'bg-gray-300' : typeColor[n.type]==='yellow'?'bg-amber-400':typeColor[n.type]==='red'?'bg-red-500':'bg-blue-500'}`} />
-          <div className="flex-1">
-            <div className="text-sm text-gray-800 dark:text-gray-200">{n.message_en}</div>
-            <div className="text-xs text-gray-400 mt-1">{n.module}</div>
-          </div>
-        </div>
-      ))}
-    </Card>
-  )
-}
-
-// ─── Supervisor ───────────────────────────────────────────────────────────────
-export function Supervisor() {
-  return (
-    <div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-        <StatCard label="Staff on duty" value="8" sub="All present" />
-        <StatCard label="Orders today" value="47" sub="8 active" />
-        <StatCard label="Avg order time" value="18m" sub="Target: 20m" />
-        <StatCard label="Issues flagged" value="1" sub="Late order T5" subColor="text-amber-500" />
-      </div>
-      <Card>
-        <h2 className="font-medium text-gray-900 dark:text-white mb-3">Staff performance today</h2>
-        <Table headers={['Name','Role','Orders','Avg time','Status']}>
-          {[['Maria Galea','Waiter',12,'16m','on-duty'],['John Camilleri','Cashier',18,'4m','on-duty'],['Tony Farrugia','Cook',31,'14m','on-duty'],['Sam Vella','Waiter',9,'19m','break']].map(([n,r,o,time,s]) => (
-            <TR key={n}>
-              <TD><div className="flex items-center gap-2"><Avatar name={n} />{n}</div></TD>
-              <TD>{r}</TD><TD>{o}</TD><TD>{time}</TD>
-              <TD><Badge color={statusColor(s)}>{s}</Badge></TD>
-            </TR>
-          ))}
-        </Table>
-      </Card>
-    </div>
-  )
-}
+// ─── Company / Audit / Notifications / Supervisor ─────────────────────────────
+export { Company }      from './Company'
+export { Audit }        from './Audit'
+export { Notifications } from './Notifications'
+export { Supervisor }   from './Supervisor'
 
 // ─── Shifts ───────────────────────────────────────────────────────────────────
 export function Shifts() {
@@ -6053,66 +5844,9 @@ export function Shifts() {
   )
 }
 
-// ─── Receipts ─────────────────────────────────────────────────────────────────
-export function Receipts() {
-  return (
-    <Card>
-      <h2 className="font-medium text-gray-900 dark:text-white mb-4">Receipt history</h2>
-      <div className="overflow-x-auto -mx-1">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b-2 border-gray-100 dark:border-gray-700">
-              <th className="text-left px-4 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Receipt #</th>
-              <th className="text-left px-4 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider hidden sm:table-cell">Table</th>
-              <th className="text-left px-4 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider hidden sm:table-cell">Type</th>
-              <th className="text-left px-4 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Total</th>
-              <th className="text-left px-4 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider hidden md:table-cell">Payment</th>
-              <th className="text-left px-4 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider hidden md:table-cell">Time</th>
-              <th className="text-left px-4 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {SAMPLE_INVOICES.map(inv => (
-              <tr key={inv.id} className="border-b border-gray-100 dark:border-gray-700/40 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                <td className="px-4 py-3 font-medium text-blue-600">RCP-{inv.invoice_number}</td>
-                <td className="px-4 py-3 hidden sm:table-cell">{inv.table}</td>
-                <td className="px-4 py-3 hidden sm:table-cell"><Badge color={inv.type==='takeaway'?'orange':'blue'}>{inv.type==='takeaway'?'Takeaway':'Dine-in'}</Badge></td>
-                <td className="px-4 py-3 font-medium">€{inv.total.toFixed(2)}</td>
-                <td className="px-4 py-3 hidden md:table-cell">{inv.payment_method}</td>
-                <td className="px-4 py-3 hidden md:table-cell">{inv.created_at}</td>
-                <td className="px-4 py-3"><Btn size="sm" onClick={() => alert('Reprinting...')}>Reprint</Btn></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </Card>
-  )
-}
-
-// ─── Supplier Invoices ────────────────────────────────────────────────────────
-export function Invoices() {
-  return (
-    <Card>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="font-medium text-gray-900 dark:text-white">Supplier invoices</h2>
-        <Btn variant="primary" size="sm">+ Submit Invoice</Btn>
-      </div>
-      <Table headers={['Invoice #','Supplier','Items','Total','Status','Date']}>
-        {SUPPLIER_INVOICES.map(inv => (
-          <TR key={inv.id}>
-            <TD className="font-medium text-blue-600">{inv.invoice_ref}</TD>
-            <TD>{inv.supplier}</TD>
-            <TD className="text-gray-500 text-xs">{inv.items}</TD>
-            <TD className="font-medium">€{inv.total.toFixed(2)}</TD>
-            <TD><Badge color={statusColor(inv.status)}>{inv.status}</Badge></TD>
-            <TD>{inv.date}</TD>
-          </TR>
-        ))}
-      </Table>
-    </Card>
-  )
-}
+// ─── Receipts / Invoices ──────────────────────────────────────────────────────
+export { Receipts } from './Receipts'
+export { Invoices } from './Invoices'
 
 // ─── Customers ────────────────────────────────────────────────────────────────
 export function Customers() {
@@ -6808,7 +6542,7 @@ export function History() {
 }
 
 export function OTH() {
-  const { othRecords, company } = useApp()
+  const { othRecords } = useApp()
   const [search, setSearch] = useState('')
   const [dateFilter, setDateFilter] = useState('today')
   const [reasonFilter, setReasonFilter] = useState('all')

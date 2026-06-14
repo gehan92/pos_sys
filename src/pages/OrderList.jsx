@@ -87,7 +87,7 @@ function TakeawayLabel({ order }) {
 // ── Item modifier / add modal ──────────────────────────────────────────────────
 const OTH_REASONS = ['Incorrect Order', 'Customer Complaint', 'VIP / Loyalty', 'Quality Issue', 'Manager Decision', 'Other']
 
-function OrderDetailModal({ order, onClose, navTo, tab }) {
+function OrderDetailModal({ order, onClose, navTo: _navTo, tab }) {
   const { setLiveOrders, menuItems, menuCategories, addOthRecords, user, users } = useApp()
   const [items, setItems] = useState(() => order ? [...order.items] : [])
   const [newItems, setNewItems] = useState([])  // items added this session
@@ -101,6 +101,17 @@ function OrderDetailModal({ order, onClose, navTo, tab }) {
   const [itemModalOth, setItemModalOth] = useState(false)
   const [itemModalOthReason, setItemModalOthReason] = useState('')
 
+  // Comp dialog
+  const [compDialog, setCompDialog] = useState(null)
+  const [compReason, setCompReason] = useState('')
+  const [compApprover, setCompApprover] = useState('')
+
+  // Delete auth dialog
+  const [deleteDialog, setDeleteDialog] = useState(null)
+  const [deleteAuthVal, setDeleteAuthVal] = useState('')
+  const [deleteAuthErr, setDeleteAuthErr] = useState('')
+
+  // All hooks must be called before any early return
   if (!order) return null
 
   const total  = items.reduce((s, i) => s + i.price * i.qty, 0)
@@ -161,15 +172,6 @@ function OrderDetailModal({ order, onClose, navTo, tab }) {
     setItemModalOth(false)
     setItemModalOthReason('')
   }
-
-  const [compDialog, setCompDialog] = useState(null)   // { index, item }
-  const [compReason, setCompReason] = useState('')
-  const [compApprover, setCompApprover] = useState('')
-
-  // ── Delete auth dialog ───────────────────────────────────────────
-  const [deleteDialog, setDeleteDialog] = useState(null) // { index, item }
-  const [deleteAuthVal, setDeleteAuthVal] = useState('')
-  const [deleteAuthErr, setDeleteAuthErr] = useState('')
 
   const ALLOWED_DELETE_ROLES = ['superadmin', 'admin', 'owner', 'manager']
 
@@ -240,8 +242,6 @@ function OrderDetailModal({ order, onClose, navTo, tab }) {
     setCompDialog(null)
   }
 
-  const updatedOrder = { ...order, items }
-
   function toggleMod(group, choice) {
     setItemModalSelections(prev => {
       const current = prev[group.label] || []
@@ -310,7 +310,7 @@ function OrderDetailModal({ order, onClose, navTo, tab }) {
           <div className="grid grid-cols-2 gap-2.5">
             {[
               ['Waiter', order.waiter || '—'],
-              ['Guests', guests != null && guests > 0 ? `${guests} guest${guests !== 1 ? 's' : ''}` : '—'],
+              ['Guests', guests !== null && guests > 0 ? `${guests} guest${guests !== 1 ? 's' : ''}` : '—'],
               ['Start Time', order.created_at || '—'],
               ['Elapsed', <ElapsedBadge key="el" timeStr={order.created_at} />],
             ].map(([label, val]) => (
@@ -680,7 +680,7 @@ function printStationTicket(o, items, stationLabel) {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function OrderList({ navTo }) {
-  const { liveOrders, setLiveOrders, user } = useApp()
+  const { liveOrders, user } = useApp()
 
   const isWaiter     = user?.role === 'waiter'
   const isCook       = user?.role === 'cook'
@@ -695,24 +695,6 @@ export default function OrderList({ navTo }) {
     if (isBartender) return 'bar'
     return 'all'
   })
-
-  function markCooking(orderId) {
-    const now = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' })
-    setLiveOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'cooking', started_at: now } : o))
-  }
-
-  function markReady(orderId) {
-    const now = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' })
-    setLiveOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'ready', ready_at: now } : o))
-  }
-
-  function startOrder(order) {
-    const kitchenItems = order.items.filter(i => (i.station || 'kitchen') !== 'bar')
-    const barItems     = order.items.filter(i => i.station === 'bar')
-    if (kitchenItems.length > 0) printStationTicket(order, kitchenItems, 'Kitchen')
-    if (barItems.length > 0) setTimeout(() => printStationTicket(order, barItems, 'Bar'), 400)
-    markCooking(order.id)
-  }
 
   const allActive = (isWaiter
     ? liveOrders.filter(o => o.waiter?.toLowerCase().includes(user.full_name?.split(' ')[0]?.toLowerCase() || ''))
@@ -825,7 +807,6 @@ export default function OrderList({ navTo }) {
               const barItems     = order.items.filter(i => i.station === 'bar')
               const stationItems = tab === 'kitchen' ? kitchenItems : tab === 'bar' ? barItems : order.items
               const cfg          = getPayCfg(order)
-              const isUrgent     = (getElapsedMin(order.created_at) || 0) > 20
 
               return (
                 <div

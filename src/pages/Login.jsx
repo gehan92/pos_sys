@@ -40,8 +40,6 @@ export default function Login() {
     setError('')
   }
 
-  const initials = company.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
-
   return (
     <div className="min-h-screen relative flex items-center justify-center p-4 overflow-hidden bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900">
 

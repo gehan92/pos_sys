@@ -1,14 +1,27 @@
-const express = require('express')
-const bcrypt  = require('bcryptjs')
-const { getDb } = require('../database')
-const { signToken } = require('../middleware/auth')
-const { authMiddleware } = require('../middleware/auth')
+const express    = require('express')
+const bcrypt     = require('bcryptjs')
+const { body, validationResult } = require('express-validator')
+const { getDb }  = require('../database')
+const { signToken, authMiddleware } = require('../middleware/auth')
 const { permit } = require('../middleware/permit')
 
 const router = express.Router()
 
+const validate = rules => [
+  ...rules,
+  (req, res, next) => {
+    const errors = validationResult(req)
+    if (!errors.isEmpty())
+      return res.status(400).json({ error: errors.array()[0].msg })
+    next()
+  },
+]
+
 // POST /api/auth/login — public
-router.post('/login', (req, res) => {
+router.post('/login', validate([
+  body('username').trim().notEmpty().withMessage('Username is required'),
+  body('password').notEmpty().withMessage('Password is required'),
+]), (req, res) => {
   const { username, password } = req.body
   if (!username || !password)
     return res.status(400).json({ error: 'Username and password required' })
@@ -39,7 +52,7 @@ router.get('/me', authMiddleware, (req, res) => {
 })
 
 // GET /api/auth/users — management only
-router.get('/users', authMiddleware, permit('viewStaff'), (req, res) => {
+router.get('/users', authMiddleware, permit('viewStaff'), (_req, res) => {
   const db    = getDb()
   const users = db.prepare(
     'SELECT id, full_name, username, role, status, created_at, last_login FROM users ORDER BY full_name'
